@@ -65,3 +65,11 @@
 - Reject invalid request value types through validation and never normalize array-shaped input as strings.
 - Keep activation, deactivation, manual locking and temporary login locking as distinct lifecycle transitions.
 - Security-sensitive session revocation must fail closed unless the database session driver is active.
+- Treat `products.current_stock` as a transactionally maintained snapshot of the immutable inventory movement ledger.
+- Perform every stock mutation through an explicit domain action using a database transaction and `SELECT ... FOR UPDATE` row lock.
+- Calculate stock balances, price comparisons and low-stock state server-side with fixed-precision decimal arithmetic; never use floating-point arithmetic for persisted inventory or money values.
+- Keep inventory movement quantities signed, record before/after balances, and never update or delete movement history.
+- Permit stock-affecting input only as an adjustment type, quantity and reason; derive the signed change, performer and resulting balance on the server.
+- Keep cost prices restricted to Administrators and Managers in policies, controllers and views.
+- Treat `inventory_movements` and `audit_logs` as append-only records; normal application code must never update or delete them.
+- Retain `audit_logs` as long-lived business and accounting history. Do not apply the short operational `security_events` retention window to business audit records; use a reviewed archive/export policy before any future removal.

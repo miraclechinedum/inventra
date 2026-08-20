@@ -6,6 +6,9 @@
     "keywords": ["inventra", "laravel", "trade"],
     "license": "proprietary",
     "require": {
+        "ext-bcmath": "*",
+        "ext-mbstring": "*",
+        "ext-pdo_mysql": "*",
         "php": "^8.3",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",

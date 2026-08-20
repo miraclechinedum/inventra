@@ -13,12 +13,13 @@
             <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-6">
                 <div class="flex items-center gap-8">
                     <a href="{{ route('dashboard') }}" class="font-bold text-[#0b56c9]">Inventra</a>
-                    @if (auth()->user()->role === \App\Enums\UserRole::Admin)
-                        <nav class="flex items-center gap-1 text-sm font-semibold text-slate-600">
-                            <a href="{{ route('dashboard') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">Dashboard</a>
+                    <nav class="flex items-center gap-1 text-sm font-semibold text-slate-600">
+                        <a href="{{ route('dashboard') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">Dashboard</a>
+                        <a href="{{ route('inventory.index') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">{{ auth()->user()->role === \App\Enums\UserRole::SalesRep ? 'Products' : 'Inventory' }}</a>
+                        @if (auth()->user()->role === \App\Enums\UserRole::Admin)
                             <a href="{{ route('staff.index') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">Staff</a>
-                        </nav>
-                    @endif
+                        @endif
+                    </nav>
                 </div>
                 <div class="flex items-center gap-4">
                     <div class="text-right">

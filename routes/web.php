@@ -6,6 +6,8 @@ use App\Http\Controllers\Auth\PasswordOnboardingController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\QuickPinOnboardingController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Inventory\CategoryController;
+use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\StaffController;
 use Illuminate\Support\Facades\Route;
 
@@ -50,6 +52,26 @@ Route::middleware('auth')->group(function () {
             Route::get('/dashboard', DashboardController::class)
                 ->middleware('pin.completed')
                 ->name('dashboard');
+
+            Route::middleware('pin.completed')->prefix('inventory')->name('inventory.')->group(function () {
+                Route::get('/', [ProductController::class, 'index'])->name('index');
+                Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+                Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+                Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
+                Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
+                Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+                Route::post('/products/{product}/adjust-stock', [ProductController::class, 'adjust'])->name('products.adjust');
+                Route::post('/products/{product}/activate', [ProductController::class, 'activate'])->name('products.activate');
+                Route::post('/products/{product}/deactivate', [ProductController::class, 'deactivate'])->name('products.deactivate');
+                Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+                Route::get('/products/{product}/movements', [ProductController::class, 'movements'])->name('products.movements');
+
+                Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+                Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+                Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+                Route::post('/categories/{category}/activate', [CategoryController::class, 'activate'])->name('categories.activate');
+                Route::post('/categories/{category}/deactivate', [CategoryController::class, 'deactivate'])->name('categories.deactivate');
+            });
 
             Route::middleware(['pin.completed', 'role:admin'])->group(function () {
                 Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');

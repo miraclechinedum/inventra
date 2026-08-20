@@ -13,7 +13,7 @@ Inventra Smart Trade is an internal business application built as a Laravel mono
 
 ## Local setup
 
-Prerequisites are PHP 8.3 or newer, Composer 2, Node.js 22.13 or newer, npm, and MySQL. Local development currently uses MySQL 9.6.
+Prerequisites are PHP 8.3 or newer with BCMath, mbstring and PDO MySQL, Composer 2, Node.js 22.13 or newer, npm, and MySQL. Local development currently uses MySQL 9.6. Verify that the production host provides these PHP extensions before deployment.
 
 ```bash
 composer install
@@ -23,6 +23,8 @@ npm install
 ```
 
 Set local values in `.env`. Never commit that file or place credentials in `.env.example`.
+
+The example uses `APP_URL=http://localhost:8000`. Keep that value when using `php artisan serve`, or change it to the exact local HTTPS or virtual-host origin you actually use. The configured host is enforced, so browsing through a different hostname is rejected.
 
 Create the first administrator interactively after migrating:
 
@@ -41,6 +43,16 @@ Staff marked for first-login setup must replace their temporary password before 
 There is no public registration route. Later domain modules must use Laravel Policies in addition to the reusable `role` middleware.
 
 Staff security events use `actor_id` for the initiating account and `subject_user_id` for the affected account. The original `user_id` column remains for historical compatibility only and must not be used as the target identity by new Staff Management code. Account activation, deactivation, manual locking, and temporary login lockouts are separate transitions; unlocking is permitted only for a manually locked account and clears its temporary failure state.
+
+## Inventory foundation
+
+Phase 1 inventory provides product categories, products, low-stock visibility and an append-only stock movement ledger. Product quantities use `DECIMAL(15,3)` and prices use `DECIMAL(15,2)`; supported units are piece, pair, set, pack, box and litre. Low stock is derived whenever `current_stock` is less than or equal to `reorder_level`. Database constraints also reject negative current stock and reorder levels.
+
+`products.current_stock` is the current snapshot. Every product receives an opening movement, including a zero-value opening balance. Every later stock change is performed inside a transaction after locking and revalidating the active product row, and records a signed movement with its before and after balances. Initial stock, restocks, adjustments, damage, loss and corrections are supported. Inventory history must not be edited or deleted.
+
+Administrators and Managers can maintain catalog data and adjust stock. Sales Representatives can browse active products but cannot see cost prices or movement history. Only Administrators can archive products. Product and category changes also write separate, allowlisted business audit records without credentials or other secrets.
+
+Security events use the configured short operational retention window. Business `audit_logs` are long-lived accounting and operational history and are not automatically pruned. A reviewed archive/export strategy must exist before any future destructive retention process is introduced.
 
 ## Database
 
