@@ -8,14 +8,20 @@ use Illuminate\Http\Request;
 
 class SecurityEventRecorder
 {
-    private const ALLOWED_METADATA_KEYS = ['channel', 'reason', 'route'];
+    private const ALLOWED_METADATA_KEYS = ['channel', 'reason', 'route', 'from_role', 'to_role', 'changed_fields'];
 
-    public function record(string $event, ?User $user = null, array $metadata = []): void
-    {
+    public function record(
+        string $event,
+        ?User $subject = null,
+        array $metadata = [],
+        ?User $actor = null,
+    ): void {
         $request = app()->bound('request') ? request() : null;
 
         SecurityEvent::query()->create([
-            'user_id' => $user?->getKey(),
+            'user_id' => $subject?->getKey(),
+            'actor_id' => $actor?->getKey(),
+            'subject_user_id' => $subject?->getKey(),
             'event' => $event,
             'ip_address' => $request instanceof Request ? $request->ip() : null,
             'user_agent' => $request instanceof Request

@@ -25,6 +25,9 @@
                 <p class="text-sm font-semibold uppercase tracking-[0.2em] text-[#0b56c9]">Access ready</p>
                 <h1 class="mt-3 text-3xl font-bold">Welcome, {{ $user->name }}</h1>
                 <p class="mt-4 max-w-2xl text-slate-600">Your {{ strtolower($user->role->label()) }} account is authenticated. Business dashboards will be introduced in a later phase.</p>
+                @if ($user->role === \App\Enums\UserRole::Admin)
+                    <a href="{{ route('staff.index') }}" class="mt-6 inline-flex rounded-xl bg-[#0b56c9] px-5 py-3 font-semibold text-white">Manage staff accounts</a>
+                @endif
             </div>
         </main>
         @livewireScriptConfig

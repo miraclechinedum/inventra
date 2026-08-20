@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use InvalidArgumentException;
+use LogicException;
 use Tests\TestCase;
 
 class AuthenticationBoundaryTest extends TestCase
@@ -21,14 +22,16 @@ class AuthenticationBoundaryTest extends TestCase
 
     public function test_only_the_configured_host_is_accepted(): void
     {
-        $this->get('http://attacker.example/login')->assertBadRequest();
+        $this->get('http://attacker.example/login')
+            ->assertBadRequest()
+            ->assertHeader('X-Frame-Options', 'DENY');
 
         $this->get(rtrim(config('app.url'), '/').'/login')->assertOk();
     }
 
     public function test_external_and_scheme_relative_intended_redirects_are_rejected(): void
     {
-        foreach (['https://attacker.example/phish', '//attacker.example/phish'] as $intended) {
+        foreach (['https://attacker.example/phish', '//attacker.example/phish', '/\\attacker.example', '/%5Cattacker.example'] as $intended) {
             $user = User::factory()->create();
 
             $this->withSession(['url.intended' => $intended])->post('/login', [
@@ -38,6 +41,15 @@ class AuthenticationBoundaryTest extends TestCase
 
             auth()->logout();
         }
+    }
+
+    public function test_malformed_app_url_fails_loudly(): void
+    {
+        config()->set('app.url', 'not-an-absolute-url');
+        $this->withoutExceptionHandling();
+        $this->expectException(LogicException::class);
+
+        $this->get('/login');
     }
 
     public function test_same_origin_intended_redirect_is_preserved(): void

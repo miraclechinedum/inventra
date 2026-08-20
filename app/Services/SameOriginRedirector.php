@@ -16,7 +16,13 @@ class SameOriginRedirector
 
     private function safeTarget(?string $intended, string $fallback): string
     {
-        if ($intended === null || $intended === '' || str_starts_with($intended, '//')) {
+        $decoded = rawurldecode($intended ?? '');
+
+        if ($intended === null
+            || $intended === ''
+            || str_starts_with($intended, '//')
+            || str_contains($intended, '\\')
+            || str_contains($decoded, '\\')) {
             return $fallback;
         }
 

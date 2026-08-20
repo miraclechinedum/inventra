@@ -58,3 +58,10 @@
 - Redirect authenticated users only to same-origin destinations derived from server-owned configuration.
 - Keep security-event metadata scalar, allowlisted and free of credentials or other secrets.
 - Keep auth lifecycle changes covered by MySQL integration tests, including session revocation and role/status refresh.
+- Implement privileged Staff mutations as explicit, transactional state-transition actions.
+- Enforce Admin-subject protections server-side; Staff Management must not mutate another Administrator.
+- Never transport one-time plaintext secrets through persistent sessions, logs, URLs or database storage.
+- In security events, `actor_id` identifies the initiator and `subject_user_id` identifies the target; `user_id` is legacy compatibility only.
+- Reject invalid request value types through validation and never normalize array-shaped input as strings.
+- Keep activation, deactivation, manual locking and temporary login locking as distinct lifecycle transitions.
+- Security-sensitive session revocation must fail closed unless the database session driver is active.

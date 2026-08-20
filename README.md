@@ -30,7 +30,7 @@ Create the first administrator interactively after migrating:
 php artisan inventra:create-admin
 ```
 
-The command prompts securely for a password, refuses to create a second initial administrator, and does not expose a public registration route.
+The command prompts securely for a password, refuses to create a second initial administrator, and does not expose a public registration route. It is the exclusive bootstrap path for the initial Administrator. The Staff Management UI can create only Manager and Sales Representative accounts and cannot create or promote another Administrator.
 
 ## Identity and access
 
@@ -39,6 +39,8 @@ Phase 1 provides session authentication for `admin`, `manager`, and `sales_rep` 
 Staff marked for first-login setup must replace their temporary password before accessing protected routes, then may set or skip an optional four-digit Quick PIN. Quick PINs are hashed and are not a password replacement. Password reset uses Laravel's expiring, throttled reset-token broker and requires a working production mail configuration. The safe local placeholder uses the non-logging `array` mailer so reset tokens are not written to application logs.
 
 There is no public registration route. Later domain modules must use Laravel Policies in addition to the reusable `role` middleware.
+
+Staff security events use `actor_id` for the initiating account and `subject_user_id` for the affected account. The original `user_id` column remains for historical compatibility only and must not be used as the target identity by new Staff Management code. Account activation, deactivation, manual locking, and temporary login lockouts are separate transitions; unlocking is permitted only for a manually locked account and clears its temporary failure state.
 
 ## Database
 

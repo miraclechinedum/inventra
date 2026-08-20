@@ -88,12 +88,13 @@ class SecurityHeadersTest extends TestCase
     public function test_hsts_is_sent_only_for_secure_production_requests(): void
     {
         $this->app->detectEnvironment(fn (): string => 'production');
+        $host = parse_url(config('app.url'), PHP_URL_HOST);
 
-        $this->get('http://localhost/')
+        $this->get("http://{$host}/")
             ->assertOk()
             ->assertHeaderMissing('Strict-Transport-Security');
 
-        $this->get('https://localhost/')
+        $this->get("https://{$host}/")
             ->assertOk()
             ->assertHeader('Strict-Transport-Security', 'max-age=31536000');
     }
