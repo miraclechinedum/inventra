@@ -1,0 +1,60 @@
+# Engineering Contract
+
+- Follow Laravel conventions, PSR-12 and clean domain-oriented naming.
+- Code must read like senior production code.
+- Do not mention AI, generated code or assistants anywhere in source comments, docs or commit messages.
+- Prefer clear code over excessive comments.
+- Comments should explain non-obvious reasoning, not narrate syntax.
+- Treat all browser input as untrusted.
+- Perform authentication, authorization, validation and authoritative calculations server-side.
+- Never trust client-submitted prices, totals, roles, permissions, ownership IDs, stock quantities or privileged fields.
+- Never use `$request->all()` or equivalent mass-assignment patterns for trusted domain writes.
+- Use validated or explicitly whitelisted fields only.
+- Enforce record access through Laravel Policies and query scoping.
+- UI visibility is not authorization.
+- Use database transactions for stock-affecting operations and critical sales operations.
+- Use row locking where concurrent inventory changes are possible.
+- MySQL is the only supported database engine for development, testing and production.
+- Automated tests must resolve to the local `inventra_test` MySQL database before destructive test helpers can run.
+- Avoid unnecessary MySQL 9.6-specific features until the production hosting version is verified.
+- Never commit credentials, tokens, passwords or API keys.
+- Use `.env` for secrets and `.env.example` for documented placeholders.
+- Never log passwords, PINs, access tokens, API secrets or database credentials.
+- Hash passwords and Quick PINs using Laravel hashing.
+- Encrypt only sensitive data that genuinely requires reversible storage.
+- Protect state-changing browser requests with CSRF.
+- Use secure session handling.
+- Regenerate sessions after authentication.
+- Support revoking or invalidating sessions after password or security changes where appropriate.
+- Rate-limit authentication and password-reset endpoints.
+- Account lockout after 5 failed login attempts will be required.
+- Avoid user enumeration in password-reset flows.
+- Validate all input server-side.
+- Use Eloquent, the query builder or parameterized queries.
+- Escape untrusted output.
+- Never render raw user HTML unless explicitly sanitized using an allowlist.
+- Whitelist upload types and MIME types.
+- Limit upload sizes.
+- Randomize uploaded filenames.
+- Store uploads outside executable application paths.
+- Keep API and Livewire responses minimal.
+- Hide sensitive model attributes.
+- Use restrictive CORS.
+- Require HTTPS in production.
+- Add production security headers.
+- HSTS should only be enabled once HTTPS is correctly configured.
+- Deferred security controls must document the reason, activation condition and required production end state.
+- Do not weaken CSP with broad wildcards, `unsafe-inline` or `unsafe-eval` to make frontend code work.
+- Document and verify production proxy and HTTPS assumptions during deployment.
+- Disable directory listing in production.
+- No hidden admin, debug or backdoor routes.
+- Record important security and business events in audit logs without recording secrets.
+- External webhook processing must verify authenticity and be idempotent.
+- WhatsApp failures must never roll back a successfully committed sale.
+- Write automated tests for authentication, authorization, transactions, inventory consistency, ownership rules and security-sensitive flows.
+- Do not introduce architecture changes silently; report any conflict before implementing it.
+- Authentication responses must not disclose whether an account exists or is eligible.
+- Canonicalize emails and Nigerian phone identifiers before lookup, uniqueness checks and throttling.
+- Redirect authenticated users only to same-origin destinations derived from server-owned configuration.
+- Keep security-event metadata scalar, allowlisted and free of credentials or other secrets.
+- Keep auth lifecycle changes covered by MySQL integration tests, including session revocation and role/status refresh.
