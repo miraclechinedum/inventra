@@ -13,9 +13,11 @@ class AuditLogger
         'category_id', 'name', 'sku', 'description', 'cost_price', 'selling_price', 'current_stock', 'reorder_level', 'unit',
         'customer_code', 'first_name', 'last_name', 'phone', 'email', 'city', 'is_active', 'whatsapp_opt_in',
         'whatsapp_opt_in_at', 'whatsapp_opt_out_at',
+        'sale_number', 'customer_id', 'subtotal', 'discount_amount', 'total_amount', 'amount_paid', 'balance_due',
+        'payment_method', 'payment_status', 'status', 'voided_at', 'void_reason',
     ];
 
-    private const SAFE_METADATA = ['sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after', 'reason'];
+    private const SAFE_METADATA = ['sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after', 'reason', 'item_count'];
 
     public function record(
         string $action,

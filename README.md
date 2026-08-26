@@ -64,6 +64,16 @@ Customers are deactivated rather than deleted so future sales retain stable refe
 
 Long-lived business audit logs deliberately retain selected customer name, phone, email, and city changes. Address and notes remain excluded. Customer PII in audit history must be included in the future archive, export, privacy, and retention strategy; these records must never be pruned using the 90-day security-event rule.
 
+## Sales foundation
+
+Completed sales are created in one transaction after locking the active Customer and every active, non-archived Product. Duplicate cart lines are aggregated and unique Product IDs are locked in ascending order. Prices, totals, payment state, Customer snapshots, Product snapshots, seller-name snapshot, inventory movements, stock balances, and audit data are calculated from authoritative server records. Sale money uses `DECIMAL(15,2)`, quantities use `DECIMAL(15,3)`, and Phase 1 payment methods are cash, transfer, and POS. Discounts and price overrides are not accepted in this phase.
+
+Phase 1 Sales require a registered Customer. Do not create synthetic walk-in Customers or use fake or placeholder phone numbers to bypass Customer registration. Partial and unpaid Sales represent outstanding balances, but later settlement and payment history are deferred to a future audited payment-ledger module. For cash Sales, the current amount records only the amount applied to the Sale; tender and change tracking are deferred. Discounts remain unsupported.
+
+Sales Representatives can create and view only their own sales. Administrators and Managers can view all sales; only Administrators may void. Voiding never deletes history: it locks the Sale and referenced Products, appends `sale_void` inventory movements, restores stock, records the void actor/reason, and writes mandatory business audit data atomically. Receipt identity comes exclusively from immutable Customer and Product snapshots. WhatsApp delivery, payment gateways, reporting, returns, and accounting exports remain deferred.
+
+The next WhatsApp receipt-delivery module must use immutable Sale and SaleItem snapshots for receipt content while resolving recipient eligibility and destination from a locked live Customer. Immediately before delivery it must require `customer.is_active = true`, `customer.whatsapp_opt_in = true`, and `customer.whatsapp_opt_out_at IS NULL`. Delivery history must be append-oriented and record at minimum `sale_id`, `customer_id`, `destination_phone`, `consent_checked_at`, `consent_opt_in_at_snapshot`, `requested_at`, `sent_at`, `delivered_at`, `failed_at`, `provider_message_id`, `status`, `failure_reason`, and `attempt`.
+
 ## Database
 
 MySQL is the only supported database engine. Local development uses MySQL 9.6 and the `inventra` database. Configure local credentials in `.env`, then run `php artisan migrate`. Database sessions and queues use the tables included in the default migrations.

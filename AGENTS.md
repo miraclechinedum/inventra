@@ -80,3 +80,12 @@
 - Immediately before any future WhatsApp delivery, enforce `customer.is_active AND customer.whatsapp_opt_in AND customer.whatsapp_opt_out_at IS NULL` server-side and record the actual destination used.
 - Future Sales must snapshot the authoritative customer code, name and phone alongside `customer_id`; historical receipts render snapshots rather than mutable Customer fields.
 - Restrict customer address, notes and customer-specific audit history to Administrators and Managers.
+- Aggregate duplicate sale product lines, sort unique Product IDs ascending, and acquire every Product row lock in that deterministic order before validating or changing stock.
+- Completed Sales and SaleItems are immutable snapshots; corrections use explicit audited void transitions that restore stock through `sale_void` ledger movements.
+- Future receipts and messages render Customer and Product snapshots captured from locked authoritative rows, never current mutable records or browser-submitted labels and prices.
+- Phase 1 Sales require a registered Customer; never create synthetic walk-in Customers or use fake or placeholder phone numbers to bypass registration.
+- Derive persisted Sales payment status from authoritative total, amount-paid and balance values; partial and unpaid balances require a future audited payment ledger for settlement history.
+- Cash amount-paid records the amount applied to the Sale; tender and change tracking are deferred, and discounts remain unsupported.
+- Preserve the immutable seller-name snapshot on historical receipts while retaining `sold_by` as the relational Staff reference.
+- Future WhatsApp delivery records are append-oriented and must capture Sale, Customer, destination, consent snapshots and check time, lifecycle timestamps, provider identity, status, failure reason and attempt number.
+- Future WhatsApp receipt content comes from immutable Sale and SaleItem snapshots, while recipient eligibility and destination come from a locked live Customer immediately before delivery.

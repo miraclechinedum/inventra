@@ -6,6 +6,17 @@ use InvalidArgumentException;
 
 final class Money
 {
+    public static function round(string $amount): string
+    {
+        if (! preg_match('/^-?\d+(?:\.\d+)?$/', $amount)) {
+            throw new InvalidArgumentException('Money rounding requires a canonical decimal string.');
+        }
+
+        $roundingIncrement = str_starts_with($amount, '-') ? '-0.005' : '0.005';
+
+        return bcadd($amount, $roundingIncrement, 2);
+    }
+
     public static function format(string $amount): string
     {
         if (! preg_match('/^(?<sign>-?)(?<whole>\d+)(?:\.(?<fraction>\d{1,2}))?$/', $amount, $matches)) {

@@ -1,0 +1,18 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Component 1" clip-path="url(#clip0_0_125)">
+<path id="Vector" d="M10 8.33333C9.55797 8.33333 9.13405 8.50893 8.82149 8.82149C8.50893 9.13405 8.33333 9.55797 8.33333 10C8.33333 10.85 8.25 12.0917 8.11667 13.3333" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_2" d="M11.6667 10.9333C11.6667 12.9167 11.6667 16.25 10.8333 18.3333" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_3" d="M14.4083 17.5167C14.5083 17.0167 14.7667 15.6 14.825 15" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_4" d="M1.66667 10C1.66667 8.25098 2.21698 6.54629 3.23965 5.12741C4.26232 3.70853 5.7055 2.64739 7.36477 2.09431C9.02404 1.54122 10.8153 1.52422 12.4847 2.04572C14.1542 2.56722 15.6173 3.60078 16.6667 5" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_5" d="M1.66667 13.3333H1.675" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_6" d="M18.1667 13.3333C18.3333 11.6667 18.2758 8.87167 18.1667 8.33333" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_7" d="M4.16667 16.25C4.58333 15 5 12.5 5 10C4.99916 9.43239 5.09497 8.86878 5.28333 8.33333" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_8" d="M7.20833 18.3333C7.38333 17.7833 7.58333 17.2333 7.68333 16.6667" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_9" d="M7.5 5.66667C8.26033 5.22769 9.12285 4.99665 10.0008 4.99679C10.8788 4.99693 11.7412 5.22825 12.5014 5.66747C13.2616 6.10669 13.8927 6.73833 14.3313 7.49888C14.7699 8.25942 15.0006 9.12204 15 10V11.6667" stroke="#1D4ED8" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<clipPath id="clip0_0_125">
+<rect width="20" height="20" fill="white"/>
+</clipPath>
+</defs>
+</svg>

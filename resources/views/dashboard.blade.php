@@ -1,35 +1,13 @@
-<!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="csrf-token" content="{{ csrf_token() }}">
-        <title>Dashboard · {{ config('app.name') }}</title>
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
-    </head>
-    <body class="min-h-screen bg-slate-100 font-sans text-slate-950 antialiased">
-        <header class="border-b border-slate-200 bg-white">
-            <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-                <div>
-                    <p class="font-bold text-[#0b56c9]">Inventra</p>
-                    <p class="text-xs text-slate-500">{{ $user->role->label() }}</p>
-                </div>
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50">Sign out</button>
-                </form>
-            </div>
-        </header>
-        <main class="mx-auto max-w-6xl px-6 py-16">
-            <div class="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-[#0b56c9]">Access ready</p>
-                <h1 class="mt-3 text-3xl font-bold">Welcome, {{ $user->name }}</h1>
-                <p class="mt-4 max-w-2xl text-slate-600">Your {{ strtolower($user->role->label()) }} account is authenticated. Business dashboards will be introduced in a later phase.</p>
-                @if ($user->role === \App\Enums\UserRole::Admin)
-                    <a href="{{ route('staff.index') }}" class="mt-6 inline-flex rounded-xl bg-[#0b56c9] px-5 py-3 font-semibold text-white">Manage staff accounts</a>
-                @endif
-            </div>
-        </main>
-        @livewireScriptConfig
-    </body>
-</html>
+<x-app-layout title="Dashboard">
+    <section class="inventra-kpi-grid">
+        <article class="inventra-kpi"><span class="inventra-kpi-icon">▣</span><p>{{ $inventoryValue === null ? 'Products Available' : 'Total Inventory Value' }}</p><strong>{{ $inventoryValue === null ? \App\Models\Product::query()->active()->count() : '₦'.\App\Support\Money::format($inventoryValue) }}</strong></article>
+        <article class="inventra-kpi"><span class="inventra-kpi-icon is-green">▤</span><p>Sales Today</p><strong>₦{{ \App\Support\Money::format($salesToday) }}</strong></article>
+        <article class="inventra-kpi"><span class="inventra-kpi-icon is-amber">△</span><p>Low-Stock Products</p><strong>{{ $lowStockCount }}</strong></article>
+        <article class="inventra-kpi"><span class="inventra-kpi-icon is-muted">◷</span><p>Pending Follow-Ups</p><strong>0</strong></article>
+    </section>
+    <section class="inventra-dashboard-split">
+        <article class="inventra-panel inventra-dashboard-main">@if($recentSales->isEmpty())<div class="inventra-empty"><span>▥</span><h2>No sales yet</h2><p>Record your first sale to see your dashboard come to life.</p><a href="{{ route('sales.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Record Sale</a></div>@else<div class="inventra-panel-head"><h2>Sales overview</h2><a href="{{ route('sales.index') }}">View all</a></div><div class="inventra-mini-chart">@foreach([48,62,54,78,69,92] as $height)<i style="--bar-height: {{ $height }}%"></i>@endforeach</div>@endif</article>
+        <article class="inventra-panel"><div class="inventra-panel-head"><h2>Low on stock</h2><a href="{{ route('inventory.index', ['stock' => 'low']) }}">View all</a></div>@if($lowStockProducts->isEmpty())<div class="inventra-empty is-compact"><span>◇</span><h2>Your inventory is empty</h2><p>Add your first product to start tracking stock.</p>@can('create', \App\Models\Product::class)<a href="{{ route('inventory.products.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Add Product</a>@endcan</div>@else<ul class="inventra-low-stock">@foreach($lowStockProducts as $product)<li><span><b>{{ $product->name }}</b><small>{{ $product->sku }}</small></span><strong>{{ $product->current_stock }} {{ $product->unit->value }}</strong></li>@endforeach</ul>@endif</article>
+    </section>
+    <section class="inventra-panel inventra-recent-sales"><div class="inventra-panel-head"><h2>Recent sales</h2><a href="{{ route('sales.index') }}">View all</a></div><div class="overflow-x-auto"><table class="inventra-table"><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th class="text-right">Amount</th><th>Status</th><th></th></tr></thead><tbody>@forelse($recentSales as $sale)<tr><td>{{ $sale->created_at->format('d M, Y') }}</td><td><b>{{ $sale->customer_name_snapshot }}</b><small>{{ $sale->sale_number }}</small></td><td>{{ $sale->items_count }}</td><td class="text-right">₦{{ \App\Support\Money::format($sale->total_amount) }}</td><td><span class="inventra-pill inventra-pill-{{ $sale->payment_status->value }}">{{ ucfirst($sale->payment_status->value) }}</span></td><td><a href="{{ route('sales.show', $sale) }}">•••</a></td></tr>@empty<tr><td colspan="6"><div class="inventra-empty is-table"><span>▥</span><h2>No sales recorded yet</h2><p>Your sales history will show up here.</p><a href="{{ route('sales.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Record Sale</a></div></td></tr>@endforelse</tbody></table></div></section>
+</x-app-layout>

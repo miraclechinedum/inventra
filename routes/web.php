@@ -9,6 +9,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
+use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StaffController;
 use Illuminate\Support\Facades\Route;
 
@@ -85,6 +86,16 @@ Route::middleware('auth')->group(function () {
                 Route::post('/{customer}/deactivate', [CustomerController::class, 'deactivate'])->name('deactivate');
                 Route::post('/{customer}/whatsapp-consent', [CustomerController::class, 'consent'])->name('consent');
                 Route::get('/{customer}/activity', [CustomerController::class, 'activity'])->name('activity');
+            });
+
+            Route::middleware('pin.completed')->prefix('sales')->name('sales.')->group(function () {
+                Route::get('/', [SaleController::class, 'index'])->name('index');
+                Route::get('/create', [SaleController::class, 'create'])->name('create');
+                Route::post('/', [SaleController::class, 'store'])->name('store');
+                Route::get('/{sale}', [SaleController::class, 'show'])->name('show');
+                Route::get('/{sale}/receipt', [SaleController::class, 'receipt'])->name('receipt');
+                Route::post('/{sale}/void', [SaleController::class, 'void'])->name('void');
+                Route::get('/{sale}/activity', [SaleController::class, 'activity'])->name('activity');
             });
 
             Route::middleware(['pin.completed', 'role:admin'])->group(function () {

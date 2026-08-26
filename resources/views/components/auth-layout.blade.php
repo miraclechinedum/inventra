@@ -1,36 +1,12 @@
-@props(['title', 'eyebrow' => 'Inventra Smart Trade'])
-
+@props(['title', 'eyebrow' => null, 'subtitle' => null])
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="csrf-token" content="{{ csrf_token() }}">
-        <title>{{ $title }} · {{ config('app.name') }}</title>
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
-    </head>
-    <body class="min-h-screen bg-slate-50 font-sans text-slate-950 antialiased">
-        <main class="grid min-h-screen lg:grid-cols-2">
-            <section class="relative hidden overflow-hidden bg-[#0b3b8f] p-12 text-white lg:flex lg:flex-col lg:justify-between">
-                <div class="absolute -right-32 -top-32 size-96 rounded-full bg-blue-400/20"></div>
-                <div class="absolute -bottom-48 -left-24 size-[30rem] rounded-full bg-cyan-300/15"></div>
-                <a href="{{ route('login') }}" class="relative text-xl font-bold tracking-tight">Inventra</a>
-                <div class="relative max-w-lg">
-                    <p class="text-sm font-semibold uppercase tracking-[0.25em] text-blue-200">Smart trade operations</p>
-                    <h1 class="mt-5 text-5xl font-semibold leading-tight">Secure access to the tools that keep business moving.</h1>
-                    <p class="mt-6 text-lg leading-8 text-blue-100">A focused workspace for trusted staff, protected by role-aware access and secure account controls.</p>
-                </div>
-                <p class="relative text-sm text-blue-200">Internal business system</p>
-            </section>
-
-            <section class="flex items-center justify-center px-6 py-12 sm:px-12">
-                <div class="w-full max-w-md">
-                    <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[#0b56c9]">{{ $eyebrow }}</p>
-                    <h2 class="mt-3 text-3xl font-bold tracking-tight">{{ $title }}</h2>
-                    <div class="mt-8">{{ $slot }}</div>
-                </div>
-            </section>
-        </main>
-        @livewireScriptConfig
-    </body>
-</html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>{{ $title }} · {{ config('app.name') }}</title>@vite(['resources/css/app.css', 'resources/js/app.js'])</head>
+<body class="inventra-auth-page"><main class="inventra-auth-shell">
+<section class="inventra-auth-brand"><span class="inventra-auth-orb inventra-auth-orb-top"></span><span class="inventra-auth-orb inventra-auth-orb-bottom"></span>
+    <div class="inventra-auth-logo"><span><img src="{{ asset('images/figma/auth-logo-mark.png') }}" alt=""></span><strong>inventra</strong></div>
+    <div class="inventra-auth-copy"><h1>Inventory, sales &amp; customers —<br>in one place.</h1><p>Built for modern traders. Track stock in real time,<br>record a sale in under a minute, and keep customers<br>close.</p><ul><li><span><img src="{{ asset('images/figma/auth-check.svg') }}" alt=""></span>Live stock levels &amp; low-stock alerts</li><li><span><img src="{{ asset('images/figma/auth-check.svg') }}" alt=""></span>One-minute sales recording</li><li><span><img src="{{ asset('images/figma/auth-check.svg') }}" alt=""></span>Automated WhatsApp follow-ups</li></ul></div>
+    <div class="inventra-sales-card"><span>Sales today <b>↗ 12%</b></span><strong>₦186,400</strong><i><b></b><b></b><b></b><b></b><b></b><b></b></i></div>
+</section>
+<section class="inventra-auth-form"><div class="inventra-auth-form-inner">@if($eyebrow)<p class="inventra-auth-eyebrow">{{ $eyebrow }}</p>@endif<h2>{{ $title }}</h2>@if($subtitle)<p class="inventra-auth-subtitle">{{ $subtitle }}</p>@endif<div class="inventra-auth-slot">{{ $slot }}</div></div></section>
+</main>@livewireScriptConfig</body></html>
