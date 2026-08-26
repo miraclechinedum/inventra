@@ -73,3 +73,10 @@
 - Keep cost prices restricted to Administrators and Managers in policies, controllers and views.
 - Treat `inventory_movements` and `audit_logs` as append-only records; normal application code must never update or delete them.
 - Retain `audit_logs` as long-lived business and accounting history. Do not apply the short operational `security_events` retention window to business audit records; use a reviewed archive/export policy before any future removal.
+- Treat canonical Nigerian E.164 customer phone numbers and server-generated customer codes as permanent unique identities; never derive codes from row counts or accept them from browser input.
+- Record WhatsApp consent as an explicit audited transition with server-generated timestamps; a phone number alone never implies consent.
+- Preserve inactive customer records for future sales history and exclude them from Sales Representative lookup by default.
+- WhatsApp consent belongs to the Customer's current canonical phone number; changing that phone must atomically reset consent and its current-state timestamps.
+- Immediately before any future WhatsApp delivery, enforce `customer.is_active AND customer.whatsapp_opt_in AND customer.whatsapp_opt_out_at IS NULL` server-side and record the actual destination used.
+- Future Sales must snapshot the authoritative customer code, name and phone alongside `customer_id`; historical receipts render snapshots rather than mutable Customer fields.
+- Restrict customer address, notes and customer-specific audit history to Administrators and Managers.

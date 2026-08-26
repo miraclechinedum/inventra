@@ -16,6 +16,7 @@
                     <nav class="flex items-center gap-1 text-sm font-semibold text-slate-600">
                         <a href="{{ route('dashboard') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">Dashboard</a>
                         <a href="{{ route('inventory.index') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">{{ auth()->user()->role === \App\Enums\UserRole::SalesRep ? 'Products' : 'Inventory' }}</a>
+                        <a href="{{ route('customers.index') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">Customers</a>
                         @if (auth()->user()->role === \App\Enums\UserRole::Admin)
                             <a href="{{ route('staff.index') }}" class="rounded-lg px-3 py-2 hover:bg-slate-100">Staff</a>
                         @endif

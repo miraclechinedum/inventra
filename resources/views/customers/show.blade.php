@@ -1,0 +1,22 @@
+<x-app-layout :title="$customer->full_name">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div><a href="{{ route('customers.index') }}" class="text-sm font-semibold text-[#0b56c9]">← Customers</a><h1 class="mt-3 text-3xl font-bold">{{ $customer->full_name }}</h1><p class="mt-1 font-mono text-slate-500">{{ $customer->customer_code }}</p></div>
+        @can('update', $customer)<a href="{{ route('customers.edit', $customer) }}" class="rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold">Edit</a>@endcan
+    </div>
+    <div class="mt-6 grid gap-6 lg:grid-cols-3">
+        <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+            <h2 class="text-lg font-bold">Customer details</h2>
+            <dl class="mt-5 grid gap-5 sm:grid-cols-2">
+                @foreach(['Phone' => $customer->phone, 'Email' => $customer->email ?: '—', 'City' => $customer->city ?: '—', 'Status' => $customer->is_active ? 'Active' : 'Inactive', 'WhatsApp' => $customer->whatsapp_opt_in ? 'Opted in' : 'Not opted in', 'Created' => $customer->created_at->format('M j, Y g:i A'), 'Updated' => $customer->updated_at->format('M j, Y g:i A')] as $label => $value)<div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $label }}</dt><dd class="mt-1">{{ $value }}</dd></div>@endforeach
+                @if($canViewInternalDetails)@foreach(['Address' => $customer->address ?: '—', 'Created by' => $customer->creator?->name ?? 'System', 'Updated by' => $customer->updater?->name ?? 'Not updated'] as $label => $value)<div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $label }}</dt><dd class="mt-1">{{ $value }}</dd></div>@endforeach @endif
+            </dl>
+            @if($canViewInternalDetails && $customer->notes)<div class="mt-6 border-t pt-5"><p class="text-xs font-semibold uppercase text-slate-500">Notes</p><p class="mt-2 whitespace-pre-wrap text-slate-700">{{ $customer->notes }}</p></div>@endif
+        </section>
+        <section class="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div><h2 class="font-bold">WhatsApp consent</h2><p class="mt-2 text-sm text-slate-600">Consent is explicit. No messages are sent by this module.</p>@can('changeConsent', $customer)@if($customer->is_active || $customer->whatsapp_opt_in)<form method="POST" action="{{ route('customers.consent', $customer) }}" class="mt-4">@csrf<input type="hidden" name="opt_in" value="{{ $customer->whatsapp_opt_in ? '0' : '1' }}"><button class="w-full rounded-lg px-3 py-2 font-semibold text-white {{ $customer->whatsapp_opt_in ? 'bg-slate-700' : 'bg-emerald-600' }}">{{ $customer->whatsapp_opt_in ? 'Opt out' : 'Record opt-in' }}</button></form>@endif @endcan</div>
+            @can('changeStatus', $customer)<div class="border-t pt-5"><h2 class="mb-3 font-bold">Customer status</h2>@if($customer->is_active)<x-confirm-action :action="route('customers.deactivate', $customer)" label="Deactivate" message="Keep this customer in history but exclude them from active customer lookup." destructive />@else<x-confirm-action :action="route('customers.activate', $customer)" label="Activate" message="Restore this customer to active lookup." />@endif</div>@endcan
+            @can('viewAudit', $customer)<div class="border-t pt-5"><a href="{{ route('customers.activity', $customer) }}" class="font-semibold text-[#0b56c9]">View activity history</a></div>@endcan
+        </section>
+    </div>
+    <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 class="font-bold">Sales history</h2><p class="mt-6 text-center text-slate-500">No sales recorded yet.</p></section>
+</x-app-layout>

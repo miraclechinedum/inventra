@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordOnboardingController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\QuickPinOnboardingController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
@@ -71,6 +72,19 @@ Route::middleware('auth')->group(function () {
                 Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
                 Route::post('/categories/{category}/activate', [CategoryController::class, 'activate'])->name('categories.activate');
                 Route::post('/categories/{category}/deactivate', [CategoryController::class, 'deactivate'])->name('categories.deactivate');
+            });
+
+            Route::middleware('pin.completed')->prefix('customers')->name('customers.')->group(function () {
+                Route::get('/', [CustomerController::class, 'index'])->name('index');
+                Route::get('/create', [CustomerController::class, 'create'])->name('create');
+                Route::post('/', [CustomerController::class, 'store'])->name('store');
+                Route::get('/{customer}', [CustomerController::class, 'show'])->name('show');
+                Route::get('/{customer}/edit', [CustomerController::class, 'edit'])->name('edit');
+                Route::put('/{customer}', [CustomerController::class, 'update'])->name('update');
+                Route::post('/{customer}/activate', [CustomerController::class, 'activate'])->name('activate');
+                Route::post('/{customer}/deactivate', [CustomerController::class, 'deactivate'])->name('deactivate');
+                Route::post('/{customer}/whatsapp-consent', [CustomerController::class, 'consent'])->name('consent');
+                Route::get('/{customer}/activity', [CustomerController::class, 'activity'])->name('activity');
             });
 
             Route::middleware(['pin.completed', 'role:admin'])->group(function () {

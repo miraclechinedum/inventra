@@ -9,9 +9,13 @@ use Illuminate\Http\Request;
 
 class AuditLogger
 {
-    private const SAFE_FIELDS = ['category_id', 'name', 'sku', 'description', 'cost_price', 'selling_price', 'current_stock', 'reorder_level', 'unit', 'is_active'];
+    private const SAFE_FIELDS = [
+        'category_id', 'name', 'sku', 'description', 'cost_price', 'selling_price', 'current_stock', 'reorder_level', 'unit',
+        'customer_code', 'first_name', 'last_name', 'phone', 'email', 'city', 'is_active', 'whatsapp_opt_in',
+        'whatsapp_opt_in_at', 'whatsapp_opt_out_at',
+    ];
 
-    private const SAFE_METADATA = ['sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after'];
+    private const SAFE_METADATA = ['sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after', 'reason'];
 
     public function record(
         string $action,

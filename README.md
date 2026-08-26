@@ -54,6 +54,16 @@ Administrators and Managers can maintain catalog data and adjust stock. Sales Re
 
 Security events use the configured short operational retention window. Business `audit_logs` are long-lived accounting and operational history and are not automatically pruned. A reviewed archive/export strategy must exist before any future destructive retention process is introduced.
 
+## Customer foundation
+
+Customer phone numbers are stored as unique canonical Nigerian E.164 identifiers. Customer codes are generated transactionally from the persisted row ID and are never accepted from browser input or reused. Administrators and Managers can manage customer lifecycle and view customer audit history; Sales Representatives can maintain active contact profiles for future sale execution but cannot change status or view audit history.
+
+WhatsApp consent is an explicit audited preference with server-generated opt-in and opt-out timestamps. A phone number never implies consent, and changing the canonical phone number invalidates and resets all current consent state. Future delivery must recheck `customer.is_active AND customer.whatsapp_opt_in AND customer.whatsapp_opt_out_at IS NULL` immediately before sending and record the destination number actually used. This foundation performs no WhatsApp API calls.
+
+Customers are deactivated rather than deleted so future sales retain stable references. A future Sale must store `customer_id` plus server-populated `customer_code_snapshot`, `customer_name_snapshot`, and `customer_phone_snapshot`. Customer history and navigation use the relational ID, while immutable receipts render these snapshots rather than later Customer edits.
+
+Long-lived business audit logs deliberately retain selected customer name, phone, email, and city changes. Address and notes remain excluded. Customer PII in audit history must be included in the future archive, export, privacy, and retention strategy; these records must never be pruned using the 90-day security-event rule.
+
 ## Database
 
 MySQL is the only supported database engine. Local development uses MySQL 9.6 and the `inventra` database. Configure local credentials in `.env`, then run `php artisan migrate`. Database sessions and queues use the tables included in the default migrations.
