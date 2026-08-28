@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Sale\CreateSale;
 use App\Actions\Sale\VoidSale;
+use App\Contracts\WhatsAppClient;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\SaleStatus;
@@ -18,6 +19,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class SaleController extends Controller
@@ -89,12 +91,20 @@ class SaleController extends Controller
         return redirect()->route('sales.show', $sale)->with('status', 'Sale recorded successfully.');
     }
 
-    public function show(Sale $sale): View
+    public function show(Request $request, Sale $sale, WhatsAppClient $client): View
     {
         Gate::authorize('view', $sale);
+        $sale->load(['items', 'voider:id,name', 'customer:id,phone,is_active,whatsapp_opt_in,whatsapp_opt_in_at,whatsapp_opt_out_at']);
+        $sendToken = (string) Str::uuid();
+        $request->session()->put('whatsapp.send.'.$sale->id, $sendToken);
 
         return view('sales.show', [
-            'sale' => $sale->load(['items', 'voider:id,name']),
+            'sale' => $sale,
+            'whatsappDeliveries' => $sale->whatsappDeliveries()->latest()->limit(5)->get(),
+            'whatsappConfigured' => $client->isConfigured(),
+            'whatsappEligible' => $sale->customer->is_active && $sale->customer->whatsapp_opt_in
+                && $sale->customer->whatsapp_opt_in_at !== null && $sale->customer->whatsapp_opt_out_at === null,
+            'whatsappSendToken' => $sendToken,
         ]);
     }
 

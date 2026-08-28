@@ -11,11 +11,18 @@ use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StaffController;
+use App\Http\Controllers\WhatsAppDeliveryController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])->name('webhooks.whatsapp.verify');
+Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])
+    ->middleware(['whatsapp.webhook.size', 'throttle:whatsapp-webhook'])
+    ->name('webhooks.whatsapp.handle');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -96,6 +103,15 @@ Route::middleware('auth')->group(function () {
                 Route::get('/{sale}/receipt', [SaleController::class, 'receipt'])->name('receipt');
                 Route::post('/{sale}/void', [SaleController::class, 'void'])->name('void');
                 Route::get('/{sale}/activity', [SaleController::class, 'activity'])->name('activity');
+                Route::post('/{sale}/whatsapp/send', [WhatsAppDeliveryController::class, 'send'])->name('whatsapp.send');
+                Route::post('/{sale}/whatsapp/retry/{delivery}', [WhatsAppDeliveryController::class, 'retry'])->name('whatsapp.retry');
+            });
+
+            Route::middleware('pin.completed')->prefix('whatsapp')->name('whatsapp.')->group(function () {
+                Route::get('/deliveries', [WhatsAppDeliveryController::class, 'index'])->name('deliveries.index');
+                Route::get('/deliveries/{delivery}', [WhatsAppDeliveryController::class, 'show'])->name('deliveries.show');
+                Route::post('/deliveries/{delivery}/resolve-unknown', [WhatsAppDeliveryController::class, 'resolveUnknown'])
+                    ->name('deliveries.resolve-unknown');
             });
 
             Route::middleware(['pin.completed', 'role:admin'])->group(function () {

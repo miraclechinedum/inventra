@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Contracts\WhatsAppClient;
+use App\Services\MetaWhatsAppClient;
 use App\Services\TimingSafePasswordVerifier;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(TimingSafePasswordVerifier::class);
+        $this->app->bind(WhatsAppClient::class, MetaWhatsAppClient::class);
     }
 
     /**
@@ -54,6 +57,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('pin-setup', fn (Request $request) => Limit::perMinute(
             config('auth_security.pin.max_attempts')
         )->by('pin-setup:'.$request->user()?->getAuthIdentifier().'|'.$request->ip()));
+
+        RateLimiter::for('whatsapp-webhook', fn (Request $request) => Limit::perMinute(600)
+            ->by('whatsapp-webhook:'.$request->ip()));
 
         Model::shouldBeStrict(! $this->app->isProduction());
         DB::prohibitDestructiveCommands($this->app->isProduction());

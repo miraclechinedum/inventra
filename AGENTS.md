@@ -89,3 +89,7 @@
 - Preserve the immutable seller-name snapshot on historical receipts while retaining `sold_by` as the relational Staff reference.
 - Future WhatsApp delivery records are append-oriented and must capture Sale, Customer, destination, consent snapshots and check time, lifecycle timestamps, provider identity, status, failure reason and attempt number.
 - Future WhatsApp receipt content comes from immutable Sale and SaleItem snapshots, while recipient eligibility and destination come from a locked live Customer immediately before delivery.
+- Prepare each WhatsApp attempt in a committed transaction that locks and revalidates the live Customer; never hold that transaction open during a provider network call, and record the provider outcome in a separate controlled transition.
+- Treat WhatsApp timeouts and malformed success responses without a provider message ID as ambiguous outcomes that cannot be webhook-reconciled; never blindly resend them. Only an Administrator may close such an attempt as terminal unresolved after manual investigation, and unresolved attempts are not retryable.
+- Keep WhatsApp webhook state progression monotonic and idempotent, authenticate the exact raw request body, and never retain raw webhook payloads or provider secrets.
+- The repository's default/example Meta Graph version is not proof of production support. Before Meta activation, verify the currently supported version through current official Meta sources and configure `WHATSAPP_GRAPH_VERSION` accordingly.

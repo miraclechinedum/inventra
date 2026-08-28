@@ -55,6 +55,11 @@ class Sale extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    public function whatsappDeliveries(): HasMany
+    {
+        return $this->hasMany(WhatsAppDelivery::class);
+    }
+
     protected function casts(): array
     {
         return [

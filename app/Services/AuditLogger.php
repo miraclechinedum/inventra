@@ -15,9 +15,14 @@ class AuditLogger
         'whatsapp_opt_in_at', 'whatsapp_opt_out_at',
         'sale_number', 'customer_id', 'subtotal', 'discount_amount', 'total_amount', 'amount_paid', 'balance_due',
         'payment_method', 'payment_status', 'status', 'voided_at', 'void_reason',
+        'sale_id', 'customer_id', 'destination_phone', 'consent_checked_at', 'consent_opt_in_at_snapshot',
+        'requested_at', 'provider_message_id', 'attempt', 'failure_code', 'failure_reason',
     ];
 
-    private const SAFE_METADATA = ['sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after', 'reason', 'item_count'];
+    private const SAFE_METADATA = [
+        'sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after', 'reason', 'item_count',
+        'delivery_id', 'sale_id', 'attempt',
+    ];
 
     public function record(
         string $action,
