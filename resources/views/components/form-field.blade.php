@@ -5,7 +5,7 @@
     <input
         type="{{ $type }}"
         name="{{ $name }}"
-        value="{{ $type === 'password' ? '' : old($name, $value) }}"
+        value="{{ $type === 'password' ? '' : \App\Support\OldInput::scalar($name, $value) }}"
         @if ($autocomplete) autocomplete="{{ $autocomplete }}" @endif
         {{ $attributes->class([
             'inventra-input',

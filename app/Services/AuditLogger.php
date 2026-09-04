@@ -9,6 +9,11 @@ use Illuminate\Http\Request;
 
 class AuditLogger
 {
+    private const EXPENSE_SAFE_FIELDS = [
+        'expense_number', 'expense_category_id', 'category_code_snapshot', 'category_name_snapshot',
+        'amount', 'payment_method', 'incurred_at', 'recorded_by', 'recorded_by_name_snapshot',
+    ];
+
     private const SAFE_FIELDS = [
         'category_id', 'name', 'sku', 'description', 'cost_price', 'selling_price', 'current_stock', 'reorder_level', 'unit',
         'customer_code', 'first_name', 'last_name', 'phone', 'email', 'city', 'is_active', 'whatsapp_opt_in',
@@ -22,12 +27,16 @@ class AuditLogger
         'supplier_code', 'contact_person', 'purchase_number', 'supplier_id',
         'supplier_code_snapshot', 'supplier_name_snapshot', 'supplier_phone_snapshot', 'reference_number',
         'received_by', 'received_by_name_snapshot', 'received_at',
+        'category_code', 'expense_number', 'expense_category_id', 'category_code_snapshot',
+        'category_name_snapshot', 'payee', 'recorded_by_name_snapshot', 'incurred_at',
     ];
 
     private const SAFE_METADATA = [
         'sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after', 'reason', 'item_count',
         'delivery_id', 'sale_id', 'attempt',
         'purchase_id', 'purchase_number', 'supplier_id', 'supplier_code_snapshot', 'total_amount',
+        'expense_id', 'expense_number', 'expense_category_id', 'category_code_snapshot', 'amount',
+        'payment_method', 'incurred_at',
     ];
 
     public function record(
@@ -44,8 +53,9 @@ class AuditLogger
         $log->action = $action;
         $log->auditable_type = $auditable->getMorphClass();
         $log->auditable_id = $auditable->getKey();
-        $log->old_values = $this->sanitize($oldValues, self::SAFE_FIELDS);
-        $log->new_values = $this->sanitize($newValues, self::SAFE_FIELDS);
+        $safeFields = $action === 'expense_recorded' ? self::EXPENSE_SAFE_FIELDS : self::SAFE_FIELDS;
+        $log->old_values = $this->sanitize($oldValues, $safeFields);
+        $log->new_values = $this->sanitize($newValues, $safeFields);
         $log->metadata = $this->sanitize($metadata, self::SAFE_METADATA);
         $log->ip_address = $request instanceof Request ? $request->ip() : null;
         $log->user_agent = $request instanceof Request ? mb_substr((string) $request->userAgent(), 0, 512) : null;

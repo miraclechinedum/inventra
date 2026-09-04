@@ -7,6 +7,8 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\QuickPinOnboardingController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\PurchaseController;
@@ -117,6 +119,19 @@ Route::middleware('auth')->group(function () {
                 ->name('sale-payments.index');
 
             Route::middleware(['pin.completed', 'role:admin,manager'])->group(function () {
+                Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+                Route::get('/expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
+                Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+                Route::get('/expenses/{expense}', [ExpenseController::class, 'show'])->name('expenses.show');
+                Route::get('/expenses/{expense}/receipt', [ExpenseController::class, 'receipt'])->name('expenses.receipt');
+                Route::get('/expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense-categories.index');
+                Route::get('/expense-categories/create', [ExpenseCategoryController::class, 'create'])->name('expense-categories.create');
+                Route::post('/expense-categories', [ExpenseCategoryController::class, 'store'])->name('expense-categories.store');
+                Route::get('/expense-categories/{expense_category}', [ExpenseCategoryController::class, 'show'])->name('expense-categories.show');
+                Route::get('/expense-categories/{expense_category}/edit', [ExpenseCategoryController::class, 'edit'])->name('expense-categories.edit');
+                Route::put('/expense-categories/{expense_category}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
+                Route::post('/expense-categories/{expense_category}/activate', [ExpenseCategoryController::class, 'activate'])->name('expense-categories.activate');
+                Route::post('/expense-categories/{expense_category}/deactivate', [ExpenseCategoryController::class, 'deactivate'])->name('expense-categories.deactivate');
                 Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
                 Route::get('/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
                 Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');

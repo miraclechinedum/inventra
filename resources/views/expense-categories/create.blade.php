@@ -1,0 +1,1 @@
+<x-app-layout title="New Expense Category"><div class="mx-auto max-w-2xl"><h2 class="text-2xl font-bold">New Expense Category</h2><form class="mt-6 grid gap-5 rounded-2xl border bg-white p-6" method="POST" action="{{ route('expense-categories.store') }}">@csrf @include('expense-categories._form')</form></div></x-app-layout>

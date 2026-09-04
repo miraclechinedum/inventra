@@ -12,6 +12,8 @@
     if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'sale-payments.index', 'match' => 'sale-payments.*', 'label' => 'Payments', 'icon' => 'sales'];
     if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'purchases.index', 'match' => 'purchases.*', 'label' => 'Purchases', 'icon' => 'inventory'];
     if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'suppliers.index', 'match' => 'suppliers.*', 'label' => 'Suppliers', 'icon' => 'customers'];
+    if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'expenses.index', 'match' => 'expenses.*', 'label' => 'Expenses', 'icon' => 'sales'];
+    if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'expense-categories.index', 'match' => 'expense-categories.*', 'label' => 'Expense Categories', 'icon' => 'inventory'];
     if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'whatsapp.deliveries.index', 'match' => 'whatsapp.*', 'label' => 'WhatsApp Logs', 'icon' => 'whatsapp'];
 @endphp
 <!DOCTYPE html><html lang="{{ str_replace('_', '-', app()->getLocale()) }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>{{ $title }} · {{ config('app.name') }}</title>@vite(['resources/css/app.css', 'resources/js/app.js'])</head>

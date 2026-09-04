@@ -1,0 +1,1 @@
+<x-app-layout title="Edit Expense Category"><div class="mx-auto max-w-2xl"><h2 class="text-2xl font-bold">Edit {{ $category->category_code }}</h2><form class="mt-6 grid gap-5 rounded-2xl border bg-white p-6" method="POST" action="{{ route('expense-categories.update', $category) }}">@csrf @method('PUT') @include('expense-categories._form')</form></div></x-app-layout>

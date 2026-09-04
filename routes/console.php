@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ExpenseRequest;
 use App\Models\PurchaseRequest;
 use App\Models\SecurityEvent;
 use Illuminate\Foundation\Inspiring;
@@ -16,4 +17,8 @@ Schedule::command('model:prune', ['--model' => SecurityEvent::class])
 
 Schedule::command('model:prune', ['--model' => PurchaseRequest::class])
     ->dailyAt('02:15')
+    ->withoutOverlapping();
+
+Schedule::command('model:prune', ['--model' => ExpenseRequest::class])
+    ->dailyAt('02:30')
     ->withoutOverlapping();

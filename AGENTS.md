@@ -100,3 +100,9 @@
 - Do not update `products.cost_price` during receiving until an explicit costing policy is approved. Restrict all Supplier, Purchase, and acquisition-cost surfaces to Administrators and Managers.
 - Purchase submissions require a hashed, actor-bound, session-bound, expiring, database-backed single-use token whose replay resolves to the original Purchase without duplicating stock or ledger history.
 - Prune Purchase request records only when expired, unused, and not linked to a Purchase. Retain consumed and result-linked records for replay idempotency.
+- Treat Expenses as immutable, paid non-inventory operating-cost evidence; Purchases remain the only stock-receiving workflow and never create Expenses automatically.
+- Generate EXP and EXPCAT identifiers from persisted IDs, preserve category and recorder snapshots, and restrict all Expense data to Administrators and Managers.
+- Expense request tokens remain hash-only, actor/session-bound and replayable; prune only expired, unused, unlinked requests.
+- Evaluate Expense business dates using the configured business timezone while retaining UTC technical timestamps.
+- Every committed Expense and its linked request must retain reciprocal restrictive foreign keys so neither financial evidence row can be deleted independently.
+- Expense corrections, reversals, attachments, approvals, accounting ledgers, inventory valuation and external delivery are deferred designs.

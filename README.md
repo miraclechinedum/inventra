@@ -155,3 +155,13 @@ Suppliers use immutable, persisted-ID-based `SUP-` codes and an active/inactive 
 Purchase history has no edit/delete/reversal path in Phase 1. `PurchaseItem.unit_cost` is the authoritative acquisition-cost snapshot. Receiving does not update `Product.cost_price` because no approved latest-cost or inventory-valuation policy exists; weighted average, FIFO/LIFO, COGS, returns, supplier payments, and Accounts Payable remain deferred. Sales Representatives cannot access Supplier or Purchase surfaces or purchase-cost data.
 
 Expired Purchase request tokens are pruned only while unused and not linked to a Purchase. Consumed or result-linked request records are retained because replay idempotency depends on them.
+
+## Business expenses
+
+Expenses record completed, paid non-inventory operating costs. A Purchase receives resale stock and is never automatically converted to an Expense; Expenses never affect Products, inventory movements, Sales, Sale Payments, Customers, or WhatsApp delivery.
+
+Expense Categories are editable and deactivatable but cannot be deleted. Expenses are immutable and retain category and recorder snapshots. `EXPCAT-xxxxxx` and `EXP-xxxxxx` identifiers are generated from persisted IDs. `incurred_at` is a required date, may be historically backdated, and cannot be future-dated. Supported payment methods are cash, transfer, and POS.
+
+Business-date validation and Expense form dates use `BUSINESS_TIMEZONE` (`Africa/Lagos` by default), while technical timestamps remain UTC. Every committed Expense and its retained request row reference each other through restrictive foreign keys, preventing direct deletion of either half of the idempotency evidence.
+
+Only Administrators and Managers can access Expense records, summaries, vouchers, and categories. Creation uses hash-only, actor/session-bound expiring request tokens. Only expired, unused, unlinked request rows are pruned; consumed and Expense-linked rows remain for replay idempotency. Rollback refuses to destroy Category or Expense history. Corrections/reversals, approvals, attachments, accounting ledgers, reimbursements, recurring Expenses, and external integrations are deferred.
