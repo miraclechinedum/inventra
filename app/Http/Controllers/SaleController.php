@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Sale\CreateSale;
+use App\Actions\Sale\IssueSalePaymentRequest;
 use App\Actions\Sale\VoidSale;
 use App\Contracts\WhatsAppClient;
 use App\Enums\PaymentMethod;
@@ -91,12 +92,17 @@ class SaleController extends Controller
         return redirect()->route('sales.show', $sale)->with('status', 'Sale recorded successfully.');
     }
 
-    public function show(Request $request, Sale $sale, WhatsAppClient $client): View
+    public function show(Request $request, Sale $sale, WhatsAppClient $client, IssueSalePaymentRequest $issuePaymentRequest): View
     {
         Gate::authorize('view', $sale);
-        $sale->load(['items', 'voider:id,name', 'customer:id,phone,is_active,whatsapp_opt_in,whatsapp_opt_in_at,whatsapp_opt_out_at']);
+        $sale->load(['items', 'payments', 'voider:id,name', 'customer:id,phone,is_active,whatsapp_opt_in,whatsapp_opt_in_at,whatsapp_opt_out_at']);
         $sendToken = (string) Str::uuid();
         $request->session()->put('whatsapp.send.'.$sale->id, $sendToken);
+        $paymentToken = Gate::allows('recordPayment', $sale)
+            && $sale->status === SaleStatus::Completed
+            && $sale->payment_status !== PaymentStatus::Paid
+            ? $issuePaymentRequest->execute($sale, $request->user(), $request->session())
+            : null;
 
         return view('sales.show', [
             'sale' => $sale,
@@ -105,6 +111,8 @@ class SaleController extends Controller
             'whatsappEligible' => $sale->customer->is_active && $sale->customer->whatsapp_opt_in
                 && $sale->customer->whatsapp_opt_in_at !== null && $sale->customer->whatsapp_opt_out_at === null,
             'whatsappSendToken' => $sendToken,
+            'paymentToken' => $paymentToken,
+            'paymentMethods' => PaymentMethod::cases(),
         ]);
     }
 
@@ -112,7 +120,7 @@ class SaleController extends Controller
     {
         Gate::authorize('view', $sale);
 
-        return view('sales.receipt', ['sale' => $sale->load('items')]);
+        return view('sales.receipt', ['sale' => $sale->load(['items', 'payments'])]);
     }
 
     public function void(VoidSaleRequest $request, Sale $sale, VoidSale $action): RedirectResponse

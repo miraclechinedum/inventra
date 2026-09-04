@@ -138,3 +138,12 @@ The frontend uses Livewire's CSP-compatible Alpine runtime. CSP enforcement rema
 `TRUSTED_PROXIES` is intentionally empty by default. If production terminates HTTPS at a reverse proxy, set it to the proxy's verified IP address or CIDR ranges as a comma-separated list. Never use a trust-all value. Confirm secure-cookie behaviour, generated HTTPS URLs, and HSTS after deployment; leave it empty when Namecheap passes requests directly to the application.
 
 For Namecheap shared hosting, point the web root at `public/`, keep `.env` and writable storage outside publicly executable paths, disable directory listing in the hosting configuration, and cache production configuration only after all environment values are set.
+## Sale payments
+
+Initial and later Sale payments are preserved in the immutable `sale_payments` ledger. Sale payment totals and status are derived transactionally under a row lock; overpayments are rejected and payment entries cannot be edited or deleted. Browser submissions use server-issued, session-bound, single-use confirmation tokens.
+
+Refunds, payment reversals, customer credit, split tender, and overpayment/change handling are not implemented. A Sale with a later settlement payment cannot be voided until an audited reversal or refund workflow is available.
+
+Expired unused settlement-request tokens may be pruned by a future reviewed maintenance process. Consumed tokens and any token linked to a payment must be retained because HTTP replay idempotency depends on them.
+
+The Sale payment and WhatsApp forms currently both use the conventional field name `request_token`, but they post to separate endpoints and are validated against separate server-side token stores.

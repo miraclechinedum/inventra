@@ -12,6 +12,8 @@ use App\Http\Requests\Customer\StoreCustomerRequest;
 use App\Http\Requests\Customer\UpdateCustomerRequest;
 use App\Models\AuditLog;
 use App\Models\Customer;
+use App\Models\Sale;
+use App\Models\SalePayment;
 use App\Support\CanonicalLoginIdentifier;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
@@ -80,9 +82,22 @@ class CustomerController extends Controller
     {
         Gate::authorize('view', $customer);
 
+        $sales = Sale::query()->where('customer_id', $customer->id)
+            ->when(auth()->user()->role === UserRole::SalesRep, fn ($query) => $query->where('sold_by', auth()->id()));
+        $saleIds = (clone $sales)->pluck('id');
+        $recentPayments = SalePayment::query()->whereIn('sale_id', $saleIds)->with('sale:id,sale_number')
+            ->latest('paid_at')->limit(5)->get();
+
         return view('customers.show', [
             'customer' => $customer->load(['creator:id,name', 'updater:id,name']),
             'canViewInternalDetails' => Gate::allows('viewInternalDetails', $customer),
+            'receivables' => [
+                'sales_total' => bcadd((string) (clone $sales)->sum('total_amount'), '0', 2),
+                'paid_total' => bcadd((string) (clone $sales)->sum('amount_paid'), '0', 2),
+                'outstanding_total' => bcadd((string) (clone $sales)->sum('balance_due'), '0', 2),
+                'open_count' => (clone $sales)->whereIn('payment_status', ['unpaid', 'partial'])->count(),
+            ],
+            'recentPayments' => $recentPayments,
         ]);
     }
 

@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SalePaymentController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\WhatsAppDeliveryController;
 use App\Http\Controllers\WhatsAppWebhookController;
@@ -101,11 +102,17 @@ Route::middleware('auth')->group(function () {
                 Route::post('/', [SaleController::class, 'store'])->name('store');
                 Route::get('/{sale}', [SaleController::class, 'show'])->name('show');
                 Route::get('/{sale}/receipt', [SaleController::class, 'receipt'])->name('receipt');
+                Route::post('/{sale}/payments', [SalePaymentController::class, 'store'])->name('payments.store');
+                Route::get('/{sale}/payments/{payment}', [SalePaymentController::class, 'show'])->name('payments.show');
+                Route::get('/{sale}/payments/{payment}/receipt', [SalePaymentController::class, 'receipt'])->name('payments.receipt');
                 Route::post('/{sale}/void', [SaleController::class, 'void'])->name('void');
                 Route::get('/{sale}/activity', [SaleController::class, 'activity'])->name('activity');
                 Route::post('/{sale}/whatsapp/send', [WhatsAppDeliveryController::class, 'send'])->name('whatsapp.send');
                 Route::post('/{sale}/whatsapp/retry/{delivery}', [WhatsAppDeliveryController::class, 'retry'])->name('whatsapp.retry');
             });
+
+            Route::middleware('pin.completed')->get('/sale-payments', [SalePaymentController::class, 'index'])
+                ->name('sale-payments.index');
 
             Route::middleware('pin.completed')->prefix('whatsapp')->name('whatsapp.')->group(function () {
                 Route::get('/deliveries', [WhatsAppDeliveryController::class, 'index'])->name('deliveries.index');

@@ -25,6 +25,12 @@ class VoidSale
                 throw ValidationException::withMessages(['sale' => 'Only a completed sale can be voided.']);
             }
 
+            if ($lockedSale->payments()->where('payment_type', 'settlement')->exists()) {
+                throw ValidationException::withMessages([
+                    'sale' => 'A Sale with later settlement payments requires a payment reversal or refund workflow before it can be voided.',
+                ]);
+            }
+
             $items = $lockedSale->items()->orderBy('product_id')->get();
             $productIds = $items->pluck('product_id')->unique()->sort()->values();
             $products = Product::withTrashed()

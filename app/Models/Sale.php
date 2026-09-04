@@ -17,12 +17,17 @@ class Sale extends Model
     /** @use HasFactory<SaleFactory> */
     use HasFactory;
 
+    private bool $paymentAggregateTransition = false;
+
     protected $guarded = ['*'];
 
     protected static function booted(): void
     {
         static::updating(function (Sale $sale): void {
             $allowed = ['status', 'voided_by', 'voided_at', 'void_reason', 'updated_at'];
+            if ($sale->paymentAggregateTransition) {
+                $allowed = [...$allowed, 'amount_paid', 'balance_due', 'payment_status'];
+            }
             $dirty = array_keys($sale->getDirty());
             $initialNumberAssignment = str_starts_with((string) $sale->getOriginal('sale_number'), 'PENDING-')
                 && in_array('sale_number', $dirty, true)
@@ -58,6 +63,25 @@ class Sale extends Model
     public function whatsappDeliveries(): HasMany
     {
         return $this->hasMany(WhatsAppDelivery::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SalePayment::class);
+    }
+
+    public function synchronizePaymentAggregates(string $amountPaid, string $balanceDue, PaymentStatus $status): void
+    {
+        $this->paymentAggregateTransition = true;
+
+        try {
+            $this->amount_paid = $amountPaid;
+            $this->balance_due = $balanceDue;
+            $this->payment_status = $status;
+            $this->save();
+        } finally {
+            $this->paymentAggregateTransition = false;
+        }
     }
 
     protected function casts(): array

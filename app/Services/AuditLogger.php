@@ -17,6 +17,8 @@ class AuditLogger
         'payment_method', 'payment_status', 'status', 'voided_at', 'void_reason',
         'sale_id', 'customer_id', 'destination_phone', 'consent_checked_at', 'consent_opt_in_at_snapshot',
         'requested_at', 'provider_message_id', 'attempt', 'failure_code', 'failure_reason',
+        'payment_id', 'payment_number', 'amount', 'payment_type', 'recorded_by', 'recorded_by_name_snapshot',
+        'paid_at', 'cumulative_paid_after', 'balance_after', 'payment_status_after', 'resulting_payment_status',
     ];
 
     private const SAFE_METADATA = [

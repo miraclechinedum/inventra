@@ -93,3 +93,5 @@
 - Treat WhatsApp timeouts and malformed success responses without a provider message ID as ambiguous outcomes that cannot be webhook-reconciled; never blindly resend them. Only an Administrator may close such an attempt as terminal unresolved after manual investigation, and unresolved attempts are not retryable.
 - Keep WhatsApp webhook state progression monotonic and idempotent, authenticate the exact raw request body, and never retain raw webhook payloads or provider secrets.
 - The repository's default/example Meta Graph version is not proof of production support. Before Meta activation, verify the currently supported version through current official Meta sources and configure `WHATSAPP_GRAPH_VERSION` accordingly.
+- Treat `sale_payments` as an immutable payment ledger. Synchronize Sale payment aggregates transactionally from locked ledger state, never accept overpayment, and never edit or delete payment evidence.
+- Later Sale settlements require database-backed single-use request identity. Sales with settlement payments cannot be voided until a reviewed reversal/refund ledger exists.

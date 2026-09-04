@@ -5,15 +5,18 @@ namespace App\Actions\Sale;
 use App\Enums\InventoryMovementType;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Enums\SalePaymentType;
 use App\Enums\SaleStatus;
 use App\Models\Customer;
 use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\Money;
+use App\Support\PaymentNumber;
 use App\Support\SaleNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -138,6 +141,29 @@ class CreateSale
                 $product->current_stock = $line['after'];
                 $product->updated_by = $actor->id;
                 $product->save();
+            }
+
+            if (bccomp($amountPaid, '0.00', 2) > 0) {
+                $payment = new SalePayment;
+                $payment->payment_number = 'PENDING-'.Str::random(20);
+                $payment->sale_id = $sale->id;
+                $payment->customer_id = $customer->id;
+                $payment->amount = $amountPaid;
+                $payment->payment_method = $sale->payment_method;
+                $payment->payment_type = SalePaymentType::Initial;
+                $payment->recorded_by = $actor->id;
+                $payment->recorded_by_name_snapshot = $actor->name;
+                $payment->paid_at = $sale->created_at;
+                $payment->note = null;
+                $payment->cumulative_paid_after = $amountPaid;
+                $payment->balance_after = $balance;
+                $payment->payment_status_after = $paymentStatus;
+                $payment->initial_sale_guard = $sale->id;
+                $payment->save();
+                $payment->payment_number = PaymentNumber::fromId($payment->id);
+                $payment->save();
+
+                $this->audit->record('sale_initial_payment_recorded', $payment, $actor, newValues: $payment->getAttributes());
             }
 
             $this->audit->record('sale_created', $sale, $actor, newValues: $sale->getAttributes(), metadata: [

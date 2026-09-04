@@ -24,6 +24,12 @@ class SalePolicy
         return in_array($user->role, [UserRole::Admin, UserRole::Manager, UserRole::SalesRep], true);
     }
 
+    public function recordPayment(User $user, Sale $sale): bool
+    {
+        return in_array($user->role, [UserRole::Admin, UserRole::Manager], true)
+            || ($user->role === UserRole::SalesRep && $sale->sold_by === $user->id);
+    }
+
     public function void(User $user, Sale $sale): bool
     {
         return $user->role === UserRole::Admin;
