@@ -19,11 +19,15 @@ class AuditLogger
         'requested_at', 'provider_message_id', 'attempt', 'failure_code', 'failure_reason',
         'payment_id', 'payment_number', 'amount', 'payment_type', 'recorded_by', 'recorded_by_name_snapshot',
         'paid_at', 'cumulative_paid_after', 'balance_after', 'payment_status_after', 'resulting_payment_status',
+        'supplier_code', 'contact_person', 'purchase_number', 'supplier_id',
+        'supplier_code_snapshot', 'supplier_name_snapshot', 'supplier_phone_snapshot', 'reference_number',
+        'received_by', 'received_by_name_snapshot', 'received_at',
     ];
 
     private const SAFE_METADATA = [
         'sku', 'adjustment_type', 'quantity_change', 'quantity_before', 'quantity_after', 'reason', 'item_count',
         'delivery_id', 'sale_id', 'attempt',
+        'purchase_id', 'purchase_number', 'supplier_id', 'supplier_code_snapshot', 'total_amount',
     ];
 
     public function record(

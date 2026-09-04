@@ -95,3 +95,8 @@
 - The repository's default/example Meta Graph version is not proof of production support. Before Meta activation, verify the currently supported version through current official Meta sources and configure `WHATSAPP_GRAPH_VERSION` accordingly.
 - Treat `sale_payments` as an immutable payment ledger. Synchronize Sale payment aggregates transactionally from locked ledger state, never accept overpayment, and never edit or delete payment evidence.
 - Later Sale settlements require database-backed single-use request identity. Sales with settlement payments cannot be voided until a reviewed reversal/refund ledger exists.
+- Treat a Purchase as completed stock receiving: lock and revalidate the active Supplier and eligible Products, lock unique Product IDs in ascending order, and create the Purchase, immutable item/cost snapshots, positive `purchase` movements, stock changes, audit event, and token consumption in one transaction.
+- Supplier and Purchase numbers come from persisted IDs and are immutable. Suppliers use deactivation, never hard deletion; Purchases and PurchaseItems have no edit, delete, or reversal path until a reviewed stock-and-cost correction workflow exists.
+- Do not update `products.cost_price` during receiving until an explicit costing policy is approved. Restrict all Supplier, Purchase, and acquisition-cost surfaces to Administrators and Managers.
+- Purchase submissions require a hashed, actor-bound, session-bound, expiring, database-backed single-use token whose replay resolves to the original Purchase without duplicating stock or ledger history.
+- Prune Purchase request records only when expired, unused, and not linked to a Purchase. Retain consumed and result-linked records for replay idempotency.

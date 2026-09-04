@@ -147,3 +147,11 @@ Refunds, payment reversals, customer credit, split tender, and overpayment/chang
 Expired unused settlement-request tokens may be pruned by a future reviewed maintenance process. Consumed tokens and any token linked to a payment must be retained because HTTP replay idempotency depends on them.
 
 The Sale payment and WhatsApp forms currently both use the conventional field name `request_token`, but they post to separate endpoints and are validated against separate server-side token stores.
+
+## Suppliers and received purchases
+
+Suppliers use immutable, persisted-ID-based `SUP-` codes and an active/inactive lifecycle; they are never hard-deleted. A Purchase is a completed stock-receiving transaction, not a purchase order or payable. Receiving is restricted to Administrators and Managers and atomically locks the active Supplier and eligible Products, creates immutable Purchase and PurchaseItem snapshots, increases `products.current_stock`, adds positive `purchase` inventory movements, records business audit history, and consumes a hashed actor/session-bound expiring request token.
+
+Purchase history has no edit/delete/reversal path in Phase 1. `PurchaseItem.unit_cost` is the authoritative acquisition-cost snapshot. Receiving does not update `Product.cost_price` because no approved latest-cost or inventory-valuation policy exists; weighted average, FIFO/LIFO, COGS, returns, supplier payments, and Accounts Payable remain deferred. Sales Representatives cannot access Supplier or Purchase surfaces or purchase-cost data.
+
+Expired Purchase request tokens are pruned only while unused and not linked to a Purchase. Consumed or result-linked request records are retained because replay idempotency depends on them.

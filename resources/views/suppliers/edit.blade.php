@@ -1,0 +1,1 @@
+<x-app-layout title="Edit Supplier"><div class="mx-auto max-w-4xl rounded-2xl border bg-white p-6"><h2 class="mb-6 text-2xl font-bold">Edit {{ $supplier->name }}</h2><form method="POST" action="{{ route('suppliers.update', $supplier) }}">@include('suppliers._form')</form></div></x-app-layout>

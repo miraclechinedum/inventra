@@ -9,9 +9,11 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
+use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalePaymentController;
 use App\Http\Controllers\StaffController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WhatsAppDeliveryController;
 use App\Http\Controllers\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -113,6 +115,22 @@ Route::middleware('auth')->group(function () {
 
             Route::middleware('pin.completed')->get('/sale-payments', [SalePaymentController::class, 'index'])
                 ->name('sale-payments.index');
+
+            Route::middleware(['pin.completed', 'role:admin,manager'])->group(function () {
+                Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+                Route::get('/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
+                Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+                Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
+                Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
+                Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+                Route::post('/suppliers/{supplier}/activate', [SupplierController::class, 'activate'])->name('suppliers.activate');
+                Route::post('/suppliers/{supplier}/deactivate', [SupplierController::class, 'deactivate'])->name('suppliers.deactivate');
+                Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
+                Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
+                Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
+                Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])->name('purchases.show');
+                Route::get('/purchases/{purchase}/receipt', [PurchaseController::class, 'receipt'])->name('purchases.receipt');
+            });
 
             Route::middleware('pin.completed')->prefix('whatsapp')->name('whatsapp.')->group(function () {
                 Route::get('/deliveries', [WhatsAppDeliveryController::class, 'index'])->name('deliveries.index');
