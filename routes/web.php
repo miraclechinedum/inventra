@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordOnboardingController;
@@ -180,6 +181,8 @@ Route::middleware('auth')->group(function () {
             });
 
             Route::middleware(['pin.completed', 'role:admin'])->group(function () {
+                Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');
+                Route::get('/audit/{audit}', [AuditController::class, 'show'])->name('audit.show');
                 Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
                 Route::get('/staff/create', [StaffController::class, 'create'])->name('staff.create');
                 Route::post('/staff', [StaffController::class, 'store'])->name('staff.store');

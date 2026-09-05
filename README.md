@@ -201,3 +201,40 @@ Administrators and Managers see the full operational picture. Sales Representati
 Operational alerts are read-only observations with three visual severities and no persistence, acknowledgement, or delivery: ledger-integrity mismatches, zero-stock and low-stock active Products, Sales with outstanding balances, Sales holding refundable credit, and locked or inactive staff accounts. The integrity alert reuses the same read-only detector as Reporting, comparing `sales.amount_paid`, `returned_amount`, and `refunded_amount` against the payment, return, and refund ledgers; it states plainly that no records were changed and never reconciles. Alert lists and recent-activity lists are bounded at five rows and link to the authoritative detail page. Outstanding Sales are ordered oldest first; refundable-credit Sales are ordered largest credit first. Low stock reuses the single shared definition, `active` Products at or below `reorder_level`.
 
 The previous dashboard's "Total Inventory Value" card (`SUM(current_stock * cost_price)`) and its hardcoded placeholder chart were removed: the first is inventory valuation, which is explicitly outside this module's non-accounting scope, and the second displayed invented figures that were never derived from data.
+
+## Audit Trail & Activity History
+
+`audit_logs` is the single append-only business audit system. Every audited business mutation is
+written by `App\Services\AuditLogger` inside the same database transaction as the mutation itself, so
+the change and its evidence commit or roll back together.
+
+- **The one exception** is the pair of WhatsApp provider outcomes, `whatsapp_receipt_accepted` and
+  `whatsapp_receipt_failed`. A database transaction must never be held open across the provider
+  network call, so `TransitionWhatsAppDelivery` commits the status change and the audit row is written
+  immediately afterwards, outside it. A delivery outcome can therefore in principle commit without its
+  audit row. This is accepted: the `whatsapp_deliveries` record is itself the authoritative lifecycle
+  evidence, and the request-side event (`whatsapp_receipt_requested` / `_retried`) is transactional.
+
+- **Boundary.** `security_events` covers authentication and account-security incidents and is pruned
+  after `SECURITY_EVENT_RETENTION_DAYS` (90 by default). `audit_logs` covers business mutations and is
+  never pruned. Staff lifecycle changes are recorded in both: the security event is the incident, the
+  audit row is the permanent business record that outlives the retention window.
+- **Snapshots.** Each row stores `actor_name_snapshot`, `actor_role_snapshot` and
+  `subject_label_snapshot`, so history stays readable after a User is renamed or deleted and after a
+  subject record changes. Rows written before this was introduced keep NULL snapshots and fall back to
+  the live actor relation, which the index eager-loads so the fallback stays a constant cost rather
+  than one query per legacy row. They are not backfilled, because a User's current name is not evidence
+  of the name they had at the time. The subject fallback needs no relation: it reads
+  `auditable_type`/`auditable_id` as columns and renders a dash when the label is absent.
+- **Immutability.** The model rejects updates and deletes, is fully guarded against mass assignment,
+  and only two read-only routes exist (`GET /audit`, `GET /audit/{audit}`). There is no edit, delete or
+  acknowledgement path. Protection is application-layer by deliberate decision — there are no database
+  triggers, because the shared-hosting target cannot be relied on to grant the `TRIGGER` privilege.
+  Model events do not fire for query-builder mass writes, so `AuditLog::query()->update()/delete()`,
+  `DB::table('audit_logs')` and raw SQL would bypass the guard. No production code uses them, and none
+  may be added.
+- **Access.** Administrator only. Managers and Sales Representatives keep their existing per-entity
+  activity views and receive 403 on the cross-domain trail.
+- **Growth.** The table grows with business volume and is never trimmed. At roughly one row per audited
+  mutation, a shop recording 200 mutations a day accumulates about 73,000 rows a year; listings are
+  paginated at 25 and every filter path is index-backed.

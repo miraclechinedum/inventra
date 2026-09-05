@@ -4,13 +4,17 @@ namespace App\Actions\Staff;
 
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\SecurityEventRecorder;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class UnlockStaff
 {
-    public function __construct(private readonly SecurityEventRecorder $events) {}
+    public function __construct(
+        private readonly SecurityEventRecorder $events,
+        private readonly AuditLogger $audit,
+    ) {}
 
     public function execute(User $actor, User $subject): void
     {
@@ -27,6 +31,8 @@ class UnlockStaff
             ])->save();
 
             $this->events->record('staff_unlocked', $subject, actor: $actor);
+            $this->audit->record('staff_unlocked', $subject, $actor,
+                oldValues: ['status' => UserStatus::Locked->value], newValues: ['status' => UserStatus::Active->value]);
         });
     }
 }

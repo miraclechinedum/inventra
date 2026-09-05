@@ -144,6 +144,7 @@ class SaleController extends Controller
                 ->where('auditable_id', $sale->id)
                 ->with('actor:id,name')
                 ->latest('created_at')
+                ->latest('id')
                 ->paginate(20),
         ]);
     }

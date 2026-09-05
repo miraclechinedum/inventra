@@ -16,10 +16,12 @@ use App\Http\Requests\Staff\ChangeStaffRoleRequest;
 use App\Http\Requests\Staff\StoreStaffRequest;
 use App\Http\Requests\Staff\UpdateStaffRequest;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\SecurityEventRecorder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -107,17 +109,26 @@ class StaffController extends Controller
         UpdateStaffRequest $request,
         User $user,
         SecurityEventRecorder $events,
+        AuditLogger $audit,
     ): RedirectResponse {
         $validated = $request->validated();
-        $changedFields = collect(['name', 'email', 'phone'])
+        $fields = ['name', 'email', 'phone'];
+        $oldValues = $user->only($fields);
+        $changedFields = collect($fields)
             ->filter(fn (string $field): bool => $user->{$field} !== $validated[$field])
             ->implode(',');
+        $actor = $request->user();
 
         try {
-            $user->name = $validated['name'];
-            $user->email = $validated['email'];
-            $user->phone = $validated['phone'];
-            $user->save();
+            DB::transaction(function () use ($user, $validated, $fields, $oldValues, $changedFields, $actor, $events, $audit): void {
+                $user->name = $validated['name'];
+                $user->email = $validated['email'];
+                $user->phone = $validated['phone'];
+                $user->save();
+
+                $events->record('staff_profile_updated', $user, ['changed_fields' => $changedFields], $actor);
+                $audit->record('staff_profile_updated', $user, $actor, oldValues: $oldValues, newValues: $user->only($fields));
+            });
         } catch (QueryException $exception) {
             if (($exception->errorInfo[0] ?? null) !== '23000') {
                 throw $exception;
@@ -127,8 +138,6 @@ class StaffController extends Controller
                 'email' => 'An account with that email address or phone number already exists.',
             ]);
         }
-
-        $events->record('staff_profile_updated', $user, ['changed_fields' => $changedFields], $request->user());
 
         return redirect()->route('staff.show', $user)->with('status', 'Staff profile updated.');
     }
@@ -206,6 +215,7 @@ class StaffController extends Controller
         $events = $user->securityEvents()
             ->with('actor:id,name')
             ->latest('created_at')
+            ->latest('id')
             ->paginate(20);
 
         return view('staff.activity', ['staffMember' => $user, 'events' => $events]);

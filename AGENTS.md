@@ -124,3 +124,12 @@
 - Separate dashboard period metrics from current-state metrics explicitly, and never net Refunds off Collections or let Returns reduce Gross Sales.
 - Scope the Sales Representative dashboard in the query layer by `sold_by`, never by hiding cards in Blade.
 - Keep dashboard queries in the dashboard service with bounded, database-side aggregates; reuse Reporting helpers rather than restating financial logic.
+- Keep `audit_logs` the single business audit system; do not introduce a parallel audit table, and keep `security_events` for authentication and account-security incidents.
+- Record business audit evidence through `AuditLogger` only, inside the same transaction as the mutation it describes, and never swallow an audit failure.
+- The sole documented exception is the WhatsApp provider outcome pair (`whatsapp_receipt_accepted`, `whatsapp_receipt_failed`), recorded after the delivery transition commits because a database transaction must never be held across the provider network call. Do not extend this exception to any other event, and never wrap an external request in a transaction to remove it.
+- Never mutate `audit_logs` through the query builder or raw SQL. Eloquent model events guard instance update and delete, and `$guarded = ['*']` blocks mass assignment, but `AuditLog::query()->update()/delete()`, `DB::table('audit_logs')` and raw statements bypass those guards entirely. Immutability is enforced at the application layer by decision; database triggers are deliberately not used because the shared-hosting target may withhold the `TRIGGER` privilege.
+- Persist actor and subject snapshots on every audit row so attribution survives renaming, deactivation and deletion of the User or subject it references.
+- Restrict cross-domain audit history to Administrators; per-entity activity views keep their existing role rules.
+- Audit metadata stays a bounded server-side allowlist; never record request tokens, token hashes, session identifiers, credentials, PINs or private notes.
+- Retain business audit history indefinitely: `audit_logs` has no pruning schedule and must not be added to one without an explicit retention decision.
+- Order audit listings by `created_at` then `id`, and paginate; audit reads must never create audit or domain writes.

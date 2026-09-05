@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\SecurityEvent;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\SecurityEventRecorder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -291,8 +292,8 @@ class StaffManagementTest extends TestCase
         $locked = User::factory()->create(['status' => UserStatus::Locked, 'failed_login_attempts' => 5]);
 
         foreach ([
-            [new ActivateStaff($events), $inactive],
-            [new UnlockStaff($events), $locked],
+            [new ActivateStaff($events, app(AuditLogger::class)), $inactive],
+            [new UnlockStaff($events, app(AuditLogger::class)), $locked],
         ] as [$action, $subject]) {
             try {
                 $action->execute($this->admin, $subject);

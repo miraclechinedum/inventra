@@ -159,6 +159,7 @@ class CustomerController extends Controller
                 ->where('auditable_id', $customer->id)
                 ->with('actor:id,name')
                 ->latest('created_at')
+                ->latest('id')
                 ->paginate(20),
         ]);
     }
