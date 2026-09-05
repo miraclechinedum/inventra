@@ -31,6 +31,10 @@ class VoidSale
                 ]);
             }
 
+            if ($lockedSale->returns()->exists() || $lockedSale->refunds()->exists()) {
+                throw ValidationException::withMessages(['sale' => 'A Sale with Return or Refund history cannot be voided.']);
+            }
+
             $items = $lockedSale->items()->orderBy('product_id')->get();
             $productIds = $items->pluck('product_id')->unique()->sort()->values();
             $products = Product::withTrashed()

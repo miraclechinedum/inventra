@@ -29,6 +29,8 @@ class AuditLogger
         'received_by', 'received_by_name_snapshot', 'received_at',
         'category_code', 'expense_number', 'expense_category_id', 'category_code_snapshot',
         'category_name_snapshot', 'payee', 'recorded_by_name_snapshot', 'incurred_at',
+        'return_id', 'return_number', 'refund_id', 'refund_number', 'merchandise_value', 'receivable_reduction',
+        'returned_at', 'refunded_at', 'method',
     ];
 
     private const SAFE_METADATA = [

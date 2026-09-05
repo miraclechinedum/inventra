@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\Money;
 use App\Support\PaymentNumber;
+use App\Support\SaleFinancials;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -50,8 +51,8 @@ class RecordSalePayment
                 throw ValidationException::withMessages(['sale' => 'The Sale customer relationship is invalid.']);
             }
 
-            $ledgerTotal = (string) $lockedSale->payments()->lockForUpdate()->sum('amount');
-            $ledgerTotal = Money::round($ledgerTotal);
+            $financials = SaleFinancials::lockedState($lockedSale);
+            $ledgerTotal = $financials['payments'];
             if (bccomp($ledgerTotal, $lockedSale->amount_paid, 2) !== 0) {
                 throw ValidationException::withMessages(['sale' => 'Payment history does not match the Sale balance.']);
             }
@@ -65,7 +66,8 @@ class RecordSalePayment
             }
 
             $cumulative = bcadd($ledgerTotal, $amount, 2);
-            $balance = bcsub($lockedSale->total_amount, $cumulative, 2);
+            $netCash = bcsub($cumulative, $financials['refunds'], 2);
+            $balance = bcsub($financials['obligation'], $netCash, 2);
             $status = bccomp($balance, '0.00', 2) === 0 ? PaymentStatus::Paid : PaymentStatus::Partial;
 
             $payment = new SalePayment;
@@ -87,7 +89,7 @@ class RecordSalePayment
             $payment->payment_number = PaymentNumber::fromId($payment->id);
             $payment->save();
 
-            $lockedSale->synchronizePaymentAggregates($cumulative, $balance, $status);
+            $lockedSale->synchronizeReturnFinancials(SaleFinancials::lockedState($lockedSale));
             $request->used_at = now();
             $request->sale_payment_id = $payment->id;
             $request->save();

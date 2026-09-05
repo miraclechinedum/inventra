@@ -13,4 +13,5 @@ enum InventoryMovementType: string
     case Sale = 'sale';
     case SaleVoid = 'sale_void';
     case Purchase = 'purchase';
+    case SaleReturn = 'sale_return';
 }

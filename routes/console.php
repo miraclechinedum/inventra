@@ -2,6 +2,8 @@
 
 use App\Models\ExpenseRequest;
 use App\Models\PurchaseRequest;
+use App\Models\SaleRefundRequest;
+use App\Models\SaleReturnRequest;
 use App\Models\SecurityEvent;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -21,4 +23,12 @@ Schedule::command('model:prune', ['--model' => PurchaseRequest::class])
 
 Schedule::command('model:prune', ['--model' => ExpenseRequest::class])
     ->dailyAt('02:30')
+    ->withoutOverlapping();
+
+Schedule::command('model:prune', ['--model' => SaleReturnRequest::class])
+    ->dailyAt('02:45')
+    ->withoutOverlapping();
+
+Schedule::command('model:prune', ['--model' => SaleRefundRequest::class])
+    ->dailyAt('02:50')
     ->withoutOverlapping();

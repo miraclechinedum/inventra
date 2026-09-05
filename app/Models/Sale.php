@@ -26,7 +26,7 @@ class Sale extends Model
         static::updating(function (Sale $sale): void {
             $allowed = ['status', 'voided_by', 'voided_at', 'void_reason', 'updated_at'];
             if ($sale->paymentAggregateTransition) {
-                $allowed = [...$allowed, 'amount_paid', 'balance_due', 'payment_status'];
+                $allowed = [...$allowed, 'amount_paid', 'balance_due', 'payment_status', 'returned_amount', 'refunded_amount', 'refundable_credit'];
             }
             $dirty = array_keys($sale->getDirty());
             $initialNumberAssignment = str_starts_with((string) $sale->getOriginal('sale_number'), 'PENDING-')
@@ -70,6 +70,16 @@ class Sale extends Model
         return $this->hasMany(SalePayment::class);
     }
 
+    public function returns(): HasMany
+    {
+        return $this->hasMany(SaleReturn::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(SaleRefund::class);
+    }
+
     public function synchronizePaymentAggregates(string $amountPaid, string $balanceDue, PaymentStatus $status): void
     {
         $this->paymentAggregateTransition = true;
@@ -78,6 +88,22 @@ class Sale extends Model
             $this->amount_paid = $amountPaid;
             $this->balance_due = $balanceDue;
             $this->payment_status = $status;
+            $this->save();
+        } finally {
+            $this->paymentAggregateTransition = false;
+        }
+    }
+
+    public function synchronizeReturnFinancials(array $state): void
+    {
+        $this->paymentAggregateTransition = true;
+        try {
+            $this->amount_paid = $state['payments'];
+            $this->returned_amount = $state['returns'];
+            $this->refunded_amount = $state['refunds'];
+            $this->balance_due = $state['balance'];
+            $this->refundable_credit = $state['credit'];
+            $this->payment_status = $state['status'];
             $this->save();
         } finally {
             $this->paymentAggregateTransition = false;
@@ -93,8 +119,11 @@ class Sale extends Model
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'total_amount' => 'decimal:2',
+            'returned_amount' => 'decimal:2',
             'amount_paid' => 'decimal:2',
             'balance_due' => 'decimal:2',
+            'refunded_amount' => 'decimal:2',
+            'refundable_credit' => 'decimal:2',
             'voided_at' => 'datetime',
         ];
     }

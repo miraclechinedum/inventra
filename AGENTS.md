@@ -105,4 +105,18 @@
 - Expense request tokens remain hash-only, actor/session-bound and replayable; prune only expired, unused, unlinked requests.
 - Evaluate Expense business dates using the configured business timezone while retaining UTC technical timestamps.
 - Every committed Expense and its linked request must retain reciprocal restrictive foreign keys so neither financial evidence row can be deleted independently.
+- Keep operational Reports read-only and restricted to Administrators and Managers; report views must never create audit or domain writes.
+- Distinguish completed Sale value from actual Sale Payment collections, current receivable balances, inventory Purchases, and non-inventory Expenses in every aggregate and label.
+- Apply inclusive report ranges in the configured business timezone, use historical snapshots, paginate details, and calculate full filtered summaries independently of pagination.
+- Treat Receivables as all current outstanding completed Sales, not a period or historical as-of reconstruction.
+- Include every immutable Sale Payment receipt in global Collections, including payments on later-voided Sales; limit Customer and Staff performance collections to completed Sales until a refund ledger exists.
+- Never label Sales less Expenses or Collections less Purchases as profit, and do not calculate COGS, inventory valuation, tax, or formal accounting statements without an approved accounting design.
+- Keep Sale Void, customer Return, inventory restock disposition, and customer Refund as distinct transitions; block whole-Sale void after Return or Refund evidence exists.
+- Preserve original Sale/SaleItem and SalePayment history. Derive Return value from immutable SaleItem pricing, cap cumulative returned quantities under the Sale lock, and restore stock only for explicit restock disposition.
+- Serialize Return, Refund, and Sale Payment transitions through the locked Sale; synchronize return-aware receivable aggregates while retaining original Sale total and actual payment totals.
+- Treat Sale Refunds as an immutable cash-out ledger, never as negative Sale Payments or Expenses, and never refund beyond server-derived refundable customer credit.
+- Retain linked Return/Refund request identities and result evidence through reciprocal restrictive foreign keys; prune only expired, unused, unlinked request rows.
+- Surface rejected Return/Refund submissions with the shared validation-error component; never render request tokens, token hashes, session identifiers, private notes, or database errors to operators.
+- Reject non-positive Refund amounts in the action before MySQL, and keep the DB CHECK as defense in depth.
+- Report, never repair, divergence between Sale aggregates and the payment, return, and refund ledgers.
 - Expense corrections, reversals, attachments, approvals, accounting ledgers, inventory valuation and external delivery are deferred designs.

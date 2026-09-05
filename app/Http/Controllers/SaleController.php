@@ -96,6 +96,9 @@ class SaleController extends Controller
     {
         Gate::authorize('view', $sale);
         $sale->load(['items', 'payments', 'voider:id,name', 'customer:id,phone,is_active,whatsapp_opt_in,whatsapp_opt_in_at,whatsapp_opt_out_at']);
+        if (in_array($request->user()->role, [UserRole::Admin, UserRole::Manager], true)) {
+            $sale->load(['returns.items', 'refunds']);
+        }
         $sendToken = (string) Str::uuid();
         $request->session()->put('whatsapp.send.'.$sale->id, $sendToken);
         $paymentToken = Gate::allows('recordPayment', $sale)

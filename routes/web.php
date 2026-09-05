@@ -12,8 +12,10 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SalePaymentController;
+use App\Http\Controllers\SaleReturnController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\WhatsAppDeliveryController;
@@ -119,6 +121,29 @@ Route::middleware('auth')->group(function () {
                 ->name('sale-payments.index');
 
             Route::middleware(['pin.completed', 'role:admin,manager'])->group(function () {
+                Route::get('/returns', [SaleReturnController::class, 'index'])->name('returns.index');
+                Route::get('/returns/{return}', [SaleReturnController::class, 'show'])->name('returns.show');
+                Route::get('/returns/{return}/receipt', [SaleReturnController::class, 'receipt'])->name('returns.receipt');
+                Route::get('/refunds', [SaleReturnController::class, 'refundIndex'])->name('refunds.index');
+                Route::get('/refunds/{refund}', [SaleReturnController::class, 'refundShow'])->name('refunds.show');
+                Route::get('/refunds/{refund}/receipt', [SaleReturnController::class, 'refundReceipt'])->name('refunds.receipt');
+                Route::get('/sales/{sale}/returns/create', [SaleReturnController::class, 'create'])->name('sales.returns.create');
+                Route::post('/sales/{sale}/returns', [SaleReturnController::class, 'store'])->name('sales.returns.store');
+                Route::get('/sales/{sale}/refunds/create', [SaleReturnController::class, 'refundCreate'])->name('sales.refunds.create');
+                Route::post('/sales/{sale}/refunds', [SaleReturnController::class, 'refundStore'])->name('sales.refunds.store');
+                Route::prefix('reports')->name('reports.')->group(function () {
+                    Route::get('/', [ReportController::class, 'index'])->name('index');
+                    Route::get('/sales', [ReportController::class, 'sales'])->name('sales');
+                    Route::get('/collections', [ReportController::class, 'collections'])->name('collections');
+                    Route::get('/receivables', [ReportController::class, 'receivables'])->name('receivables');
+                    Route::get('/expenses', [ReportController::class, 'expenses'])->name('expenses');
+                    Route::get('/purchases', [ReportController::class, 'purchases'])->name('purchases');
+                    Route::get('/inventory', [ReportController::class, 'inventory'])->name('inventory');
+                    Route::get('/products', [ReportController::class, 'products'])->name('products');
+                    Route::get('/customers', [ReportController::class, 'customers'])->name('customers');
+                    Route::get('/staff', [ReportController::class, 'staff'])->name('staff');
+                    Route::get('/business-summary', [ReportController::class, 'summary'])->name('summary');
+                });
                 Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
                 Route::get('/expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
                 Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
