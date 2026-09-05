@@ -8,7 +8,7 @@
 </head>
 <body class="mx-auto max-w-4xl p-10 text-slate-800">
     <button type="button" data-print-page class="mb-6 rounded-lg bg-[#0b56c9] px-4 py-2 font-semibold text-white print:hidden">Print</button>
-    <h1 class="text-3xl font-bold">Inventra Stock Receiving Record</h1>
+    <x-receipt-letterhead document="Stock Receiving Record" />
     <h2 class="mt-2 font-mono text-xl">{{ $purchase->purchase_number }}</h2>
     <div class="mt-6 border-y py-4">
         <p>Supplier: {{ $purchase->supplier_name_snapshot }} ({{ $purchase->supplier_code_snapshot }})</p>

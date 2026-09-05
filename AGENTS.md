@@ -133,3 +133,12 @@
 - Audit metadata stays a bounded server-side allowlist; never record request tokens, token hashes, session identifiers, credentials, PINs or private notes.
 - Retain business audit history indefinitely: `audit_logs` has no pruning schedule and must not be added to one without an explicit retention decision.
 - Order audit listings by `created_at` then `id`, and paginate; audit reads must never create audit or domain writes.
+- Keep `business_settings` a single typed row: `singleton_key` is UNIQUE with a CHECK constraint pinning it to one literal, so a second business record is impossible at the database level.
+- Bootstrap the business settings row in its migration. Reads must never create it; a missing row is an incomplete installation and must fail loudly.
+- Read business identity only through `App\Settings\BusinessSettings`, which is a container singleton memoised for the request. Never scatter `BusinessSetting::first()` through controllers or views.
+- Invalidate that memo in the write action, after the transaction commits — never inside it, never on a rollback, never on a no-op. A read path must not be able to serve a value that was never committed.
+- The memo is request-scoped only because PHP-FPM gives each request a fresh container. Octane, RoadRunner or any long-lived worker that renders business identity would need explicit forget/refresh semantics at the request boundary; do not adopt one without adding them.
+- Currency and business timezone are fixed for this installation and are not editable settings. No table snapshots a currency and historical business dates were evaluated in the configured timezone, so making either editable would retroactively reinterpret existing records.
+- Business Settings must never expose numbering prefixes, sequence counters or padding, and must never store credentials, tokens, webhook secrets or any other secret.
+- Receipts render live business identity, not a transaction-time snapshot. Renaming the business changes historical receipt letterheads; it must never change a stored identifier, amount or snapshot.
+- Restrict Business Settings to Administrators in policy and route middleware; Manager and Sales Representative are denied both reading and updating.

@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordOnboardingController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\QuickPinOnboardingController;
+use App\Http\Controllers\BusinessSettingController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseCategoryController;
@@ -181,6 +182,8 @@ Route::middleware('auth')->group(function () {
             });
 
             Route::middleware(['pin.completed', 'role:admin'])->group(function () {
+                Route::get('/settings/business', [BusinessSettingController::class, 'edit'])->name('settings.business.edit');
+                Route::put('/settings/business', [BusinessSettingController::class, 'update'])->name('settings.business.update');
                 Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');
                 Route::get('/audit/{audit}', [AuditController::class, 'show'])->name('audit.show');
                 Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');

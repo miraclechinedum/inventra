@@ -306,7 +306,8 @@ class AuditTrailTest extends TestCase
         $this->app->bind(AuditLogger::class, fn () => new class extends AuditLogger
         {
             public function record(string $action, Model $auditable, ?User $actor,
-                array $oldValues = [], array $newValues = [], array $metadata = []): void
+                array $oldValues = [], array $newValues = [], array $metadata = [],
+                bool $explicitDiff = false): void
             {
                 throw new RuntimeException('audit unavailable');
             }

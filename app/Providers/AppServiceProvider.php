@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\WhatsAppClient;
 use App\Services\MetaWhatsAppClient;
 use App\Services\TimingSafePasswordVerifier;
+use App\Settings\BusinessSettings;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Middleware\TrustProxies;
@@ -23,6 +24,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(TimingSafePasswordVerifier::class);
+        // Singleton so the business identity read is memoised for the life of one request.
+        $this->app->singleton(BusinessSettings::class);
         $this->app->bind(WhatsAppClient::class, MetaWhatsAppClient::class);
     }
 

@@ -10,6 +10,7 @@
     ];
     if ($user->role === \App\Enums\UserRole::Admin) $nav[] = ['route' => 'staff.index', 'match' => 'staff.*', 'label' => 'Staff', 'icon' => 'staff'];
     if ($user->role === \App\Enums\UserRole::Admin) $nav[] = ['route' => 'audit.index', 'match' => 'audit.*', 'label' => 'Audit Trail', 'icon' => 'dashboard'];
+    if ($user->role === \App\Enums\UserRole::Admin) $nav[] = ['route' => 'settings.business.edit', 'match' => 'settings.*', 'label' => 'Business Settings', 'icon' => 'inventory'];
     if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'sale-payments.index', 'match' => 'sale-payments.*', 'label' => 'Payments', 'icon' => 'sales'];
     if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'purchases.index', 'match' => 'purchases.*', 'label' => 'Purchases', 'icon' => 'inventory'];
     if (in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true)) $nav[] = ['route' => 'suppliers.index', 'match' => 'suppliers.*', 'label' => 'Suppliers', 'icon' => 'customers'];

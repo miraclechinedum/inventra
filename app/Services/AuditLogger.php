@@ -33,6 +33,8 @@ class AuditLogger
         'category_name_snapshot', 'payee', 'incurred_at',
         'return_id', 'return_number', 'refund_id', 'refund_number', 'merchandise_value', 'receivable_reduction',
         'returned_at', 'refunded_at', 'method',
+        'business_name', 'legal_name', 'business_phone', 'business_email', 'business_address',
+        'state', 'receipt_footer',
     ];
 
     private const SAFE_METADATA = [
@@ -56,6 +58,14 @@ class AuditLogger
     /** Attribution used when no authenticated User initiated the mutation. */
     public const SYSTEM_ACTOR = 'System';
 
+    /**
+     * @param  bool  $explicitDiff  Pass true only when $oldValues and $newValues hold exactly the keys
+     *                              that changed. Under that contract an allowlisted null means "this
+     *                              field was deliberately cleared" and is preserved as JSON null.
+     *                              Callers that hand over a whole model's attributes must leave this
+     *                              false: there a null only means the column happens to be empty, and
+     *                              recording it would bury the real change under nullable-column noise.
+     */
     public function record(
         string $action,
         Model $auditable,
@@ -63,6 +73,7 @@ class AuditLogger
         array $oldValues = [],
         array $newValues = [],
         array $metadata = [],
+        bool $explicitDiff = false,
     ): void {
         $request = app()->bound('request') ? request() : null;
         $log = new AuditLog;
@@ -74,8 +85,8 @@ class AuditLogger
         $log->auditable_id = $auditable->getKey();
         $log->subject_label_snapshot = $this->subjectLabel($auditable);
         $safeFields = $action === 'expense_recorded' ? self::EXPENSE_SAFE_FIELDS : self::SAFE_FIELDS;
-        $log->old_values = $this->sanitize($oldValues, $safeFields);
-        $log->new_values = $this->sanitize($newValues, $safeFields);
+        $log->old_values = $this->sanitize($oldValues, $safeFields, $explicitDiff);
+        $log->new_values = $this->sanitize($newValues, $safeFields, $explicitDiff);
         $log->metadata = $this->sanitize($metadata, self::SAFE_METADATA);
         $log->ip_address = $request instanceof Request ? $request->ip() : null;
         $log->user_agent = $request instanceof Request ? mb_substr((string) $request->userAgent(), 0, 512) : null;
@@ -123,17 +134,29 @@ class AuditLogger
         return trim((string) $name) === '' ? null : trim((string) $name);
     }
 
-    private function sanitize(array $values, array $allowedKeys): ?array
+    /**
+     * Copies across only allowlisted keys the caller actually supplied, and only scalar values.
+     * Arrays, objects and anything else stay out of the log entirely. A null survives only under
+     * $preserveNulls, so an absent key and a deliberately cleared one remain distinguishable
+     * without inventing a display sentinel.
+     */
+    private function sanitize(array $values, array $allowedKeys, bool $preserveNulls = false): ?array
     {
         $safe = [];
 
         foreach ($allowedKeys as $key) {
-            $value = $values[$key] ?? null;
+            if (! array_key_exists($key, $values)) {
+                continue;
+            }
+
+            $value = $values[$key];
 
             if (is_string($value)) {
                 $safe[$key] = mb_substr($value, 0, 500);
             } elseif (is_int($value) || is_float($value) || is_bool($value)) {
                 $safe[$key] = $value;
+            } elseif ($value === null && $preserveNulls) {
+                $safe[$key] = null;
             }
         }
 

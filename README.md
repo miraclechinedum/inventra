@@ -238,3 +238,43 @@ the change and its evidence commit or roll back together.
 - **Growth.** The table grows with business volume and is never trimmed. At roughly one row per audited
   mutation, a shop recording 200 mutations a day accumulates about 73,000 rows a year; listings are
   paginated at 25 and every filter path is index-backed.
+
+## Business Settings & Configuration
+
+`business_settings` holds the identity of the single Inventra installation. It is one typed row, not
+a key/value store: `singleton_key` is UNIQUE and a CHECK constraint pins it to one literal, so a
+second row cannot be created by any code path, race or console command. The row is bootstrapped by
+its migration, so a fresh install and an existing upgrade both arrive at exactly one record.
+
+- **Editable.** Business name (required), registered legal name, phone, email, address, city, state
+  and a plain-text receipt footer. Nothing else. Writes go through `UpdateBusinessSettings` inside a
+  transaction that locks the row, applies only fields that actually differ, and records a
+  `business_settings_updated` audit event with just those fields. Submitting unchanged values writes
+  nothing and audits nothing.
+- **Fixed by design.** Currency (NGN, ₦) and business timezone (`config('business.timezone')`) are
+  displayed read-only. No table snapshots a currency, and historical Expense business dates were
+  evaluated in the configured timezone, so making either editable would silently reinterpret existing
+  records. Changing them is a deployment decision, not an operator setting.
+- **Reading.** `App\Settings\BusinessSettings` is the only read path. It is a container singleton, so
+  a page that renders business identity several times costs one query. It never creates the row: a
+  missing record raises a clear "not installed" error rather than being repaired by a GET.
+  `UpdateBusinessSettings` drops the memo itself once its transaction commits, so a write is visible
+  to every later read without the caller having to remember.
+- **Worker lifetime.** That memo is scoped to one container, which on the deployment target —
+  PHP-FPM on shared hosting — means one request, so it is safe as written. A long-lived process
+  (Octane, RoadRunner, a queue worker rendering business identity) keeps one container across many
+  requests, and a worker that did not handle the write would keep serving the pre-write value.
+  Running Inventra that way would require explicit forget/refresh semantics at the request boundary.
+  Octane is not supported and none of it is wired up today.
+- **Receipts.** Sale, Payment, Return and Refund receipts carry the business letterhead and the
+  receipt footer; the internal Stock Receiving Record and Expense Voucher carry the letterhead only.
+  Receipts render **live** business identity — renaming the business changes what historical receipts
+  display. Identifiers, amounts and customer/product snapshots are untouched. Snapshotting business
+  identity per transaction is deliberately deferred; it would mean new columns on Sale, Return, Refund
+  and Purchase and should be a reviewed decision, not a side effect of this module.
+- **WhatsApp.** Message bodies come from a provider-approved template filled with immutable Sale
+  snapshots and carry no business identity, so settings changes cannot alter historical or re-rendered
+  WhatsApp content.
+- **Access.** Administrator only, enforced by policy and route middleware. Deferred: logo upload
+  (the application has no file-storage architecture yet), and registration/tax identifiers (no current
+  receipt or business requirement).
