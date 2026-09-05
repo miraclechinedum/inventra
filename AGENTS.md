@@ -120,3 +120,7 @@
 - Reject non-positive Refund amounts in the action before MySQL, and keep the DB CHECK as defense in depth.
 - Report, never repair, divergence between Sale aggregates and the payment, return, and refund ledgers.
 - Expense corrections, reversals, attachments, approvals, accounting ledgers, inventory valuation and external delivery are deferred designs.
+- Keep the operational dashboard read-only, role-aware, and non-accounting: no profit, net income, COGS, margin, inventory valuation, tax, forecasting, or persisted alert state.
+- Separate dashboard period metrics from current-state metrics explicitly, and never net Refunds off Collections or let Returns reduce Gross Sales.
+- Scope the Sales Representative dashboard in the query layer by `sold_by`, never by hiding cards in Blade.
+- Keep dashboard queries in the dashboard service with bounded, database-side aggregates; reuse Reporting helpers rather than restating financial logic.

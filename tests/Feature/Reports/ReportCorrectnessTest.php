@@ -168,6 +168,70 @@ class ReportCorrectnessTest extends TestCase
         }
     }
 
+    public function test_paginated_report_lists_partition_tied_rows_without_duplication_or_loss(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        [$saleIds, $paymentIds, $productIds, $customerIds] = $this->tiedReportRows($admin);
+        $period = ['from' => '2026-05-14', 'to' => '2026-05-14'];
+
+        $expectations = [
+            'reports.sales' => array_reverse($saleIds),
+            'reports.collections' => array_reverse($paymentIds),
+            'reports.products' => $productIds,
+            'reports.customers' => $customerIds,
+        ];
+
+        foreach ($expectations as $route => $expected) {
+            $key = $route === 'reports.products' ? 'product_id' : 'id';
+            $pages = [];
+            foreach ([1, 2] as $page) {
+                $rows = $this->actingAs($admin)->get(route($route, $period + ['page' => $page]))
+                    ->assertOk()->viewData('rows');
+                $pages[$page] = $rows->pluck($key)->map(fn ($id) => (int) $id)->all();
+            }
+
+            $this->assertCount(15, $pages[1], "{$route} page 1 must be full");
+            $this->assertCount(count($expected) - 15, $pages[2], "{$route} page 2 must hold the remainder");
+            $this->assertSame([], array_intersect($pages[1], $pages[2]), "{$route} must not repeat a row across pages");
+            $this->assertSame($expected, array_merge($pages[1], $pages[2]),
+                "{$route} must partition tied rows in a stable, deterministic order");
+        }
+    }
+
+    /**
+     * Every Sale, payment and product line below carries an identical ordering value, so the
+     * paginated reports can only separate pages by their secondary key.
+     *
+     * @return array{0: list<int>, 1: list<int>, 2: list<int>, 3: list<int>}
+     */
+    private function tiedReportRows(User $admin): array
+    {
+        $stamp = '2026-05-14 10:00:00';
+        $saleIds = $paymentIds = $productIds = $customerIds = [];
+
+        foreach (range(1, 20) as $index) {
+            $customer = Customer::factory()->create();
+            $product = Product::factory()->create(['current_stock' => '10.000']);
+            $sale = Sale::factory()->create([
+                'customer_id' => $customer->id, 'sold_by' => $admin->id, 'status' => SaleStatus::Completed,
+                'subtotal' => '5000.00', 'total_amount' => '5000.00',
+                'amount_paid' => '5000.00', 'balance_due' => '0.00', 'payment_status' => PaymentStatus::Paid,
+            ]);
+            $this->item($sale, $product, '1.000', '5000.00');
+            $this->payment($sale, $admin, sprintf('PMT-TIE-%02d', $index), '5000.00', PaymentMethod::Cash, SalePaymentType::Initial, 5000, 0);
+
+            $saleIds[] = $sale->id;
+            $customerIds[] = $customer->id;
+            $productIds[] = $product->id;
+            $paymentIds[] = (int) DB::table('sale_payments')->where('sale_id', $sale->id)->value('id');
+        }
+
+        DB::table('sales')->whereIn('id', $saleIds)->update(['created_at' => $stamp, 'updated_at' => $stamp]);
+        DB::table('sale_payments')->whereIn('id', $paymentIds)->update(['paid_at' => $stamp]);
+
+        return [$saleIds, $paymentIds, $productIds, $customerIds];
+    }
+
     private function scenario(array $options = []): array
     {
         $admin = User::factory()->create(['role' => UserRole::Admin]);

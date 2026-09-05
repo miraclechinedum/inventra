@@ -1,13 +1,177 @@
+@php
+    $severities = [
+        'critical' => 'border-red-300 bg-red-50 text-red-800',
+        'attention' => 'border-amber-300 bg-amber-50 text-amber-900',
+        'information' => 'border-slate-300 bg-slate-50 text-slate-700',
+    ];
+    $severityLabels = ['critical' => 'Critical attention', 'attention' => 'Needs attention', 'information' => 'Information'];
+@endphp
 <x-app-layout title="Dashboard">
-    <section class="inventra-kpi-grid">
-        <article class="inventra-kpi"><span class="inventra-kpi-icon">▣</span><p>{{ $inventoryValue === null ? 'Products Available' : 'Total Inventory Value' }}</p><strong>{{ $inventoryValue === null ? \App\Models\Product::query()->active()->count() : '₦'.\App\Support\Money::format($inventoryValue) }}</strong></article>
-        <article class="inventra-kpi"><span class="inventra-kpi-icon is-green">▤</span><p>Sales Today</p><strong>₦{{ \App\Support\Money::format($salesToday) }}</strong></article>
-        <article class="inventra-kpi"><span class="inventra-kpi-icon is-amber">△</span><p>Low-Stock Products</p><strong>{{ $lowStockCount }}</strong></article>
-        <article class="inventra-kpi"><span class="inventra-kpi-icon is-muted">◷</span><p>Pending Follow-Ups</p><strong>0</strong></article>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h2 class="text-2xl font-bold">Operational dashboard</h2>
+            <p class="text-slate-500">Read-only operational state. No profit, COGS, margin, inventory valuation, or tax is calculated.</p>
+        </div>
+    </div>
+
+    <form method="GET" class="mt-6 grid gap-3 rounded-2xl border bg-white p-4 md:grid-cols-4">
+        <label class="text-sm">From<input class="mt-1 w-full rounded-xl border-slate-300" type="date" name="from" value="{{ $filters->from }}"></label>
+        <label class="text-sm">To<input class="mt-1 w-full rounded-xl border-slate-300" type="date" name="to" value="{{ $filters->to }}"></label>
+        <div class="flex items-end"><button class="rounded-xl bg-slate-800 px-4 py-3 text-white">Apply period</button></div>
+        <p class="flex items-end text-xs text-slate-500">Period {{ $filters->from }} through {{ $filters->to }} inclusive · {{ config('business.timezone') }}</p>
+    </form>
+    @error('from')<p class="mt-2 text-red-700">{{ $message }}</p>@enderror
+
+    <h3 class="mt-8 text-lg font-bold">In the selected period</h3>
+    <section class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        @foreach($periodMetrics as $metric)
+            <article class="rounded-2xl border bg-white p-5">
+                <small class="text-slate-500">{{ $metric['label'] }}</small>
+                <strong class="mt-1 block text-2xl">@if($metric['format'] === 'money')₦{{ \App\Support\Money::format((string) $metric['value']) }}@else{{ $metric['value'] }}@endif</strong>
+                <p class="mt-2 text-xs text-slate-500">{{ $metric['meaning'] }}</p>
+            </article>
+        @endforeach
     </section>
-    <section class="inventra-dashboard-split">
-        <article class="inventra-panel inventra-dashboard-main">@if($recentSales->isEmpty())<div class="inventra-empty"><span>▥</span><h2>No sales yet</h2><p>Record your first sale to see your dashboard come to life.</p><a href="{{ route('sales.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Record Sale</a></div>@else<div class="inventra-panel-head"><h2>Sales overview</h2><a href="{{ route('sales.index') }}">View all</a></div><div class="inventra-mini-chart">@foreach([48,62,54,78,69,92] as $height)<i style="--bar-height: {{ $height }}%"></i>@endforeach</div>@endif</article>
-        <article class="inventra-panel"><div class="inventra-panel-head"><h2>Low on stock</h2><a href="{{ route('inventory.index', ['stock' => 'low']) }}">View all</a></div>@if($lowStockProducts->isEmpty())<div class="inventra-empty is-compact"><span>◇</span><h2>Your inventory is empty</h2><p>Add your first product to start tracking stock.</p>@can('create', \App\Models\Product::class)<a href="{{ route('inventory.products.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Add Product</a>@endcan</div>@else<ul class="inventra-low-stock">@foreach($lowStockProducts as $product)<li><span><b>{{ $product->name }}</b><small>{{ $product->sku }}</small></span><strong>{{ $product->current_stock }} {{ $product->unit->value }}</strong></li>@endforeach</ul>@endif</article>
+
+    <h3 class="mt-8 text-lg font-bold">Right now</h3>
+    <p class="text-sm text-slate-500">Current-state figures. These describe the business today and are not limited by the selected period.</p>
+    <section class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        @foreach($currentMetrics as $metric)
+            <article class="rounded-2xl border bg-white p-5">
+                <small class="text-slate-500">{{ $metric['label'] }}</small>
+                <strong class="mt-1 block text-2xl">@if($metric['format'] === 'money')₦{{ \App\Support\Money::format((string) $metric['value']) }}@else{{ $metric['value'] }}@endif</strong>
+                <p class="mt-2 text-xs text-slate-500">{{ $metric['meaning'] }}</p>
+            </article>
+        @endforeach
     </section>
-    <section class="inventra-panel inventra-recent-sales"><div class="inventra-panel-head"><h2>Recent sales</h2><a href="{{ route('sales.index') }}">View all</a></div><div class="overflow-x-auto"><table class="inventra-table"><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th class="text-right">Amount</th><th>Status</th><th></th></tr></thead><tbody>@forelse($recentSales as $sale)<tr><td>{{ $sale->created_at->format('d M, Y') }}</td><td><b>{{ $sale->customer_name_snapshot }}</b><small>{{ $sale->sale_number }}</small></td><td>{{ $sale->items_count }}</td><td class="text-right">₦{{ \App\Support\Money::format($sale->total_amount) }}</td><td><span class="inventra-pill inventra-pill-{{ $sale->payment_status->value }}">{{ ucfirst($sale->payment_status->value) }}</span></td><td><a href="{{ route('sales.show', $sale) }}">•••</a></td></tr>@empty<tr><td colspan="6"><div class="inventra-empty is-table"><span>▥</span><h2>No sales recorded yet</h2><p>Your sales history will show up here.</p><a href="{{ route('sales.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Record Sale</a></div></td></tr>@endforelse</tbody></table></div></section>
+
+    <h3 class="mt-8 text-lg font-bold">Operational alerts</h3>
+    <section class="mt-3 grid gap-3">
+        @forelse($alerts['items'] as $alert)
+            <article class="rounded-2xl border p-4 {{ $severities[$alert['severity']] ?? $severities['information'] }}">
+                <small class="font-semibold uppercase tracking-wide">{{ $severityLabels[$alert['severity']] ?? 'Information' }}</small>
+                <p class="mt-1 font-semibold">{{ $alert['title'] }}</p>
+                <p class="text-sm">{{ $alert['detail'] }}</p>
+            </article>
+        @empty
+            <p class="rounded-2xl border bg-white p-5 text-slate-500">Nothing needs attention right now.</p>
+        @endforelse
+    </section>
+
+    <section class="mt-6 grid gap-4 lg:grid-cols-{{ $scope === 'management' ? '3' : '2' }}">
+        <article class="rounded-2xl border bg-white p-5">
+            <div class="flex items-center justify-between"><h4 class="font-bold">Oldest outstanding Sales</h4><a class="text-sm text-blue-700" href="{{ route('sales.index') }}">All Sales</a></div>
+            @forelse($alerts['outstandingSales'] as $row)
+                <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                    <span><a class="text-blue-700" href="{{ route('sales.show', $row) }}">{{ $row->sale_number }}</a><br><small>{{ $row->customer_name_snapshot }} · {{ $row->created_at->timezone(config('business.timezone'))->format('d M Y') }}</small></span>
+                    <strong>₦{{ \App\Support\Money::format($row->balance_due) }}</strong>
+                </div>
+            @empty
+                <p class="mt-3 text-sm text-slate-500">No outstanding balances.</p>
+            @endforelse
+        </article>
+
+        <article class="rounded-2xl border bg-white p-5">
+            <div class="flex items-center justify-between"><h4 class="font-bold">Low stock</h4><a class="text-sm text-blue-700" href="{{ route('inventory.index', ['stock' => 'low']) }}">All low stock</a></div>
+            @forelse($alerts['lowStockProducts'] as $row)
+                <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                    <span><a class="text-blue-700" href="{{ route('inventory.products.show', $row) }}">{{ $row->name }}</a><br><small>{{ $row->sku }}</small></span>
+                    <strong>{{ $row->current_stock }} {{ $row->unit->value }}</strong>
+                </div>
+            @empty
+                <p class="mt-3 text-sm text-slate-500">No Products at or below reorder level.</p>
+            @endforelse
+        </article>
+
+        @if($scope === 'management')
+            <article class="rounded-2xl border bg-white p-5">
+                <h4 class="font-bold">Refundable customer credit</h4>
+                @forelse($alerts['creditSales'] as $row)
+                    <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                        <span><a class="text-blue-700" href="{{ route('sales.show', $row) }}">{{ $row->sale_number }}</a><br><small>{{ $row->customer_name_snapshot }}</small></span>
+                        <strong>₦{{ \App\Support\Money::format($row->refundable_credit) }}</strong>
+                    </div>
+                @empty
+                    <p class="mt-3 text-sm text-slate-500">No Sale is holding refundable credit.</p>
+                @endforelse
+            </article>
+        @endif
+    </section>
+
+    <h3 class="mt-8 text-lg font-bold">Recent activity</h3>
+    <section class="mt-3 grid gap-4 lg:grid-cols-2">
+        <article class="rounded-2xl border bg-white p-5">
+            <div class="flex items-center justify-between"><h4 class="font-bold">{{ $scope === 'management' ? 'Recent Sales' : 'My recent Sales' }}</h4><a class="text-sm text-blue-700" href="{{ route('sales.index') }}">View all</a></div>
+            @forelse($recent['sales'] as $row)
+                <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                    <span><a class="text-blue-700" href="{{ route('sales.show', $row) }}">{{ $row->sale_number }}</a><br><small>{{ $row->customer_name_snapshot }} · {{ $row->created_at->timezone(config('business.timezone'))->format('d M Y') }} · {{ $row->payment_status->value }}</small></span>
+                    <strong>₦{{ \App\Support\Money::format($row->total_amount) }}</strong>
+                </div>
+            @empty
+                <p class="mt-3 text-sm text-slate-500">No Sales recorded yet.</p>
+            @endforelse
+        </article>
+
+        @if($scope === 'management')
+            <article class="rounded-2xl border bg-white p-5">
+                <div class="flex items-center justify-between"><h4 class="font-bold">Recent Collections</h4><a class="text-sm text-blue-700" href="{{ route('sale-payments.index') }}">View all</a></div>
+                @forelse($recent['collections'] as $row)
+                    <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                        <span>{{ $row->payment_number }}<br><small>{{ $row->sale?->sale_number }} · {{ $row->payment_method->label() }} · {{ $row->paid_at->timezone(config('business.timezone'))->format('d M Y') }}</small></span>
+                        <strong>₦{{ \App\Support\Money::format($row->amount) }}</strong>
+                    </div>
+                @empty
+                    <p class="mt-3 text-sm text-slate-500">No Collections recorded yet.</p>
+                @endforelse
+            </article>
+
+            <article class="rounded-2xl border bg-white p-5">
+                <div class="flex items-center justify-between"><h4 class="font-bold">Recent Returns</h4><a class="text-sm text-blue-700" href="{{ route('returns.index') }}">View all</a></div>
+                @forelse($recent['returns'] as $row)
+                    <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                        <span><a class="text-blue-700" href="{{ route('returns.show', $row) }}">{{ $row->return_number }}</a><br><small>{{ $row->sale_number_snapshot }} · {{ $row->customer_name_snapshot }}</small></span>
+                        <strong>₦{{ \App\Support\Money::format($row->merchandise_value) }}</strong>
+                    </div>
+                @empty
+                    <p class="mt-3 text-sm text-slate-500">No Returns recorded yet.</p>
+                @endforelse
+            </article>
+
+            <article class="rounded-2xl border bg-white p-5">
+                <div class="flex items-center justify-between"><h4 class="font-bold">Recent Refunds</h4><a class="text-sm text-blue-700" href="{{ route('refunds.index') }}">View all</a></div>
+                @forelse($recent['refunds'] as $row)
+                    <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                        <span><a class="text-blue-700" href="{{ route('refunds.show', $row) }}">{{ $row->refund_number }}</a><br><small>{{ $row->sale_number_snapshot }} · {{ $row->payment_method->label() }}</small></span>
+                        <strong>₦{{ \App\Support\Money::format($row->amount) }}</strong>
+                    </div>
+                @empty
+                    <p class="mt-3 text-sm text-slate-500">No Refunds recorded yet.</p>
+                @endforelse
+            </article>
+
+            <article class="rounded-2xl border bg-white p-5">
+                <div class="flex items-center justify-between"><h4 class="font-bold">Recent Expenses</h4><a class="text-sm text-blue-700" href="{{ route('expenses.index') }}">View all</a></div>
+                @forelse($recent['expenses'] as $row)
+                    <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                        <span><a class="text-blue-700" href="{{ route('expenses.show', $row) }}">{{ $row->expense_number }}</a><br><small>{{ $row->category_name_snapshot }} · {{ $row->description }}</small></span>
+                        <strong>₦{{ \App\Support\Money::format($row->amount) }}</strong>
+                    </div>
+                @empty
+                    <p class="mt-3 text-sm text-slate-500">No Expenses recorded yet.</p>
+                @endforelse
+            </article>
+
+            <article class="rounded-2xl border bg-white p-5">
+                <div class="flex items-center justify-between"><h4 class="font-bold">Recent Purchases</h4><a class="text-sm text-blue-700" href="{{ route('purchases.index') }}">View all</a></div>
+                @forelse($recent['purchases'] as $row)
+                    <div class="mt-3 flex justify-between border-b pb-2 text-sm">
+                        <span><a class="text-blue-700" href="{{ route('purchases.show', $row) }}">{{ $row->purchase_number }}</a><br><small>{{ $row->supplier_name_snapshot }} · {{ $row->received_at->timezone(config('business.timezone'))->format('d M Y') }}</small></span>
+                        <strong>₦{{ \App\Support\Money::format($row->total_amount) }}</strong>
+                    </div>
+                @empty
+                    <p class="mt-3 text-sm text-slate-500">No Purchases recorded yet.</p>
+                @endforelse
+            </article>
+        @endif
+    </section>
 </x-app-layout>

@@ -961,12 +961,17 @@ class ReturnRefundFoundationTest extends TestCase
         ];
     }
 
+    /**
+     * Counts the request's own queries. Session-driver reads and writes are excluded because a
+     * cold session inserts while a warm one updates, which varies the total without saying
+     * anything about the cost of the page under test.
+     */
     private function queryCount(callable $request): int
     {
         DB::flushQueryLog();
         DB::enableQueryLog();
         $request();
-        $count = count(DB::getQueryLog());
+        $count = count(array_filter(DB::getQueryLog(), fn (array $entry) => ! str_contains($entry['query'], '`sessions`')));
         DB::disableQueryLog();
 
         return $count;
