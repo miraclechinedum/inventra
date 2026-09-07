@@ -142,3 +142,19 @@
 - Business Settings must never expose numbering prefixes, sequence counters or padding, and must never store credentials, tokens, webhook secrets or any other secret.
 - Receipts render live business identity, not a transaction-time snapshot. Renaming the business changes historical receipt letterheads; it must never change a stored identifier, amount or snapshot.
 - Restrict Business Settings to Administrators in policy and route middleware; Manager and Sales Representative are denied both reading and updating.
+- Operational alerts are derived state projected from `products` and `sales`; they are never a source of truth and must never write to a business record. Reconciliation must be able to rebuild the active set from domain truth alone.
+- Keep at most one active alert per condition and subject: `active_key` is UNIQUE while active and NULL once resolved. Never dedupe by checking for existence and then inserting.
+- Project alerts after the business transaction commits (`DB::afterCommit`), never inside it. A failing notification write must not roll back a sale, payment or stock movement.
+- Alert generation belongs in the evaluator and its observers, never in a controller or a domain Action, and never in a GET request.
+- Only the system resolves an alert, and only because the underlying condition cleared. Read, acknowledged and resolved are three different things and must not be conflated.
+- Alert recipients are derived from role on the server. Sales Representatives receive no operational alerts; do not widen this without a reviewed attribution rule.
+- Read and acknowledgement state belong to the recipient alone. No role, including Administrator, may mutate another operator's notification state.
+- Notification access requires ownership **and** current entitlement: the holder's present role must still be one the alert type is delivered to. Derive that from `OperationalAlertType::allowsRole()`/`visibleToRole()` only — never re-declare role arrays in a policy, query, counter or view.
+- Filter entitlement in SQL, so an operator who lost access cannot read a title, a message, a severity, or infer a count from pagination totals.
+- Losing access is not losing history. Never delete a recipient row, null `read_at`/`acknowledged_at`, or resolve an alert because a role changed.
+- Retry alert projection transactions on concurrency errors, and keep the projector the outermost transaction — Laravel will not retry a nested one, so wrapping reconciliation or an observer in an outer transaction silently disables the retries.
+- Resolve alert recipients once per role set per run, never once per subject. Keep that cache on the instance so it cannot go stale between runs.
+- Log a failed projection as exception class and code plus the subject reference. Never log the exception message: a `QueryException` carries the SQL and its bindings, which include product and customer names and amounts.
+- The alert tables require MySQL >= 8.0.16 for CHECK enforcement; the UNIQUE `active_key` is the version-independent duplicate protection.
+- Never store a URL on an alert. Destinations are derived from a route name and the subject id, and an alert whose subject is gone renders with no link at all.
+- Do not prune operational alerts, and do not delete recipient rows when an alert resolves or an account is deactivated.

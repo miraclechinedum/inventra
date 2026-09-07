@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsurePinOnboardingIsCompleted;
 use App\Http\Middleware\LimitWhatsAppWebhookSize;
 use App\Http\Middleware\RequireRole;
+use App\Http\Middleware\ResetUnreadAlertCount;
 use App\Http\Middleware\TrustHosts;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(TrustHosts::class);
+        $middleware->appendToGroup('web', ResetUnreadAlertCount::class);
         $middleware->prepend(ApplySecurityHeaders::class);
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->redirectUsersTo(fn () => route('dashboard'));

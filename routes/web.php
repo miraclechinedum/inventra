@@ -13,6 +13,7 @@ use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleController;
@@ -172,6 +173,16 @@ Route::middleware('auth')->group(function () {
                 Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
                 Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])->name('purchases.show');
                 Route::get('/purchases/{purchase}/receipt', [PurchaseController::class, 'receipt'])->name('purchases.receipt');
+            });
+
+            // Every route is scoped to the signed-in operator's own delivered alerts. There is no
+            // create or delete route: operational alerts are system-generated evidence.
+            Route::middleware('pin.completed')->prefix('notifications')->name('notifications.')->group(function () {
+                Route::get('/', [NotificationController::class, 'index'])->name('index');
+                Route::post('/read-all', [NotificationController::class, 'readAll'])->name('read-all');
+                Route::get('/{notification}', [NotificationController::class, 'show'])->name('show');
+                Route::post('/{notification}/read', [NotificationController::class, 'markRead'])->name('read');
+                Route::post('/{notification}/acknowledge', [NotificationController::class, 'acknowledge'])->name('acknowledge');
             });
 
             Route::middleware('pin.completed')->prefix('whatsapp')->name('whatsapp.')->group(function () {

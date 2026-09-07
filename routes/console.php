@@ -32,3 +32,13 @@ Schedule::command('model:prune', ['--model' => SaleReturnRequest::class])
 Schedule::command('model:prune', ['--model' => SaleRefundRequest::class])
     ->dailyAt('02:50')
     ->withoutOverlapping();
+
+// Operational alerts are projected immediately after the domain writes that cause them, so this
+// sweep is a repair pass rather than the primary generator. Hourly is chosen because ledger
+// integrity is the one condition with no mutation to hang off — nothing saves a Sale when a Sale
+// fails to save what it claimed — so an hour bounds how long a mismatch can sit undetected, while
+// staying light enough for shared hosting. withoutOverlapping uses the database cache store already
+// configured here; no Redis, worker or supervisor is involved.
+Schedule::command('inventra:reconcile-operational-alerts')
+    ->hourly()
+    ->withoutOverlapping();

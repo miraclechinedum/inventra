@@ -226,7 +226,26 @@ class BusinessReports
         return $this->paymentIntegrityMismatches($sales ?? Sale::query()->where('status', 'completed'));
     }
 
+    /**
+     * Identifies the Sales whose stored aggregates disagree with their ledger, so operational alerts
+     * can name the individual Sale instead of only counting mismatches. Same predicate as the count
+     * above, by construction: both go through ledgerMismatches().
+     *
+     * @return list<int>
+     */
+    public function ledgerIntegrityMismatchSaleIds(?Builder $sales = null): array
+    {
+        return $this->ledgerMismatches($sales ?? Sale::query()->where('status', 'completed'))
+            ->orderBy('sales.id')->pluck('sales.id')->map(static fn ($id): int => (int) $id)->all();
+    }
+
     private function paymentIntegrityMismatches(Builder $sales): int
+    {
+        return $this->ledgerMismatches($sales)->count('sales.id');
+    }
+
+    /** Sales whose amount_paid, returned_amount or refunded_amount disagrees with their ledger. */
+    private function ledgerMismatches(Builder $sales): Builder
     {
         $payments = DB::table('sale_payments')->selectRaw('sale_id, SUM(amount) ledger_paid')->groupBy('sale_id');
         $returns = DB::table('sale_returns')->selectRaw('sale_id, SUM(merchandise_value) ledger_returned')->groupBy('sale_id');
@@ -237,7 +256,7 @@ class BusinessReports
             ->leftJoinSub($refunds, 'refund_ledger', 'refund_ledger.sale_id', '=', 'sales.id')
             ->whereRaw('sales.amount_paid <> COALESCE(payment_ledger.ledger_paid, 0)
                 OR sales.returned_amount <> COALESCE(return_ledger.ledger_returned, 0)
-                OR sales.refunded_amount <> COALESCE(refund_ledger.ledger_refunded, 0)')->count('sales.id');
+                OR sales.refunded_amount <> COALESCE(refund_ledger.ledger_refunded, 0)');
     }
 
     private function idFilter(Builder $query, string $column, string $value): void

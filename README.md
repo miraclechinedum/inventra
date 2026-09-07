@@ -278,3 +278,78 @@ its migration, so a fresh install and an existing upgrade both arrive at exactly
 - **Access.** Administrator only, enforced by policy and route middleware. Deferred: logo upload
   (the application has no file-storage architecture yet), and registration/tax identifiers (no current
   receipt or business requirement).
+
+## Notifications & Operational Alerts
+
+`operational_alerts` turns the conditions the Dashboard already detects into persistent, role-aware,
+in-app alerts with a lifecycle. Delivery is **in-app only** — no email, SMS, WhatsApp or push — and
+every alert is system-generated: there is no create route, no delete route and no message template.
+
+- **Derived state.** Alerts are a projection of `products` and `sales`, never a source of truth. The
+  evaluator reuses the Dashboard's own predicates, so a persistent alert and the Dashboard counter
+  can never disagree: active non-archived Product at or below `reorder_level`; completed Sale with
+  `balance_due > 0`; completed Sale with `refundable_credit > 0`; completed Sale whose aggregates
+  disagree with its ledger. Comparisons use `bccomp` or SQL — no decimal is cast to float.
+- **One active alert per condition.** `active_key` holds `type:subject_type:subject_id` while active
+  and is UNIQUE; resolving sets it to NULL, and MySQL allows unlimited NULLs in a UNIQUE index. So a
+  duplicate active alert is impossible at the database level rather than by check-then-insert, while
+  history accumulates freely. A recurrence opens a new row with the next `occurrence`, so the trail
+  answers when an issue first appeared, when it cleared, and whether it came back.
+- **Three independent states.** `read` is what one operator saw; `acknowledged` is that operator
+  saying "I am aware"; `resolved` is the business condition itself clearing. Only the system resolves
+  an alert — acknowledging a low-stock alert never closes it while stock is still low.
+- **Generation.** Product and Sale observers project after the business transaction commits, via
+  `DB::afterCommit`, so a failing alert write can never fail or roll back a stock movement or a
+  payment, and a rolled-back sale projects nothing. `inventra:reconcile-operational-alerts` re-derives
+  everything from source truth and repairs whatever a projection missed. It is idempotent, reads
+  business records and writes only alert tables. Scheduled hourly: ledger integrity is the one
+  condition with no mutation to observe, so an hour bounds detection latency while staying light on
+  shared hosting. No queue worker, Redis, Horizon or Supervisor is involved.
+- **Recipients.** Inventory, receivable and refundable-credit alerts go to Administrators and
+  Managers; integrity warnings to Administrators only. Sales Representatives receive nothing in this
+  foundation — receivables, credit and integrity are business-wide financial facts, and a
+  notification list is the wrong place to widen what a representative can see. Inactive and locked
+  accounts get no new deliveries and keep every historical one.
+- **Ownership and current entitlement.** Two conditions gate every notification, and both must
+  hold. A notification belongs to the person it was delivered to — being an Administrator confers no
+  authority over another operator's read or acknowledgement state, because that state is a record of
+  what *they* saw. Separately, the holder's **current** role must still be one the alert type is
+  meant for: `OperationalAlertType::allowsRole()` is the single source of truth, consumed by the
+  policy, the inbox query, the unread badge and mark-all-as-read. Demoting an Administrator to
+  Manager immediately hides the integrity warnings they were sent; demoting a Manager to Sales
+  Representative empties their inbox and badge. Filtering happens in SQL, so a demoted operator
+  cannot see a title, a message, a severity, or infer a count from pagination totals.
+- **History is never rewritten.** Losing access changes visibility only. Recipient rows, `read_at`
+  and `acknowledged_at` all survive a demotion untouched, and restoring the role restores visibility
+  of the same rows without creating a second delivery. Acknowledgement is audited
+  (`operational_alert_acknowledged`); read state deliberately is not, so the Audit Trail is not
+  buried under glances.
+- **Retention.** Nothing is pruned. Alert history is operational evidence; a retention policy would
+  be its own reviewed decision.
+- **Concurrency.** Two evaluators racing to open the same alert contend on the UNIQUE `active_key`,
+  and MySQL resolves that either as a duplicate-key error or as a deadlock. The projector adopts the
+  winner in the first case and retries the transaction in the second. Retries require the projector
+  to be the outermost transaction, which both callers satisfy — observers run after commit through
+  `DB::afterCommit`, and reconciliation opens no transaction of its own. Wrapping either in an outer
+  transaction would silently disable the retries, because Laravel will not retry a nested one.
+- **Cost.** Recipients depend only on the alert type's role set, so a sweep resolves them once per
+  role set rather than once per subject: reconciling 1,000 low-stock Products issues one `users`
+  query. Reconciliation is otherwise linear — roughly 4.7 queries and 1.4s per 1,000 subjects. The
+  unread badge reads one operator's rows through `(user_id, read_at)` and then checks each row's
+  alert type by primary key; that is sub-millisecond at ordinary volumes and about 13ms for an
+  operator sitting on 5,000 unread alerts.
+- **Requires MySQL 8.0.16 or newer.** Six CHECK constraints carry this module's state coherence —
+  valid type, severity and status, the active/resolved lifecycle pairing, a positive occurrence, and
+  acknowledgement implying read. MySQL parses but silently ignores CHECK constraints before 8.0.16,
+  which would downgrade all six to application-enforced only. The UNIQUE `active_key` remains the
+  primary protection against duplicate active alerts and works on any supported version. MariaDB
+  parity has not been verified. Confirm the production MySQL version before deploying.
+- **Indexes.** `operational_alerts_created_at_id_index` is currently unused: the inbox orders on the
+  alert id, which is both a total order and index-backed. It is retained deliberately rather than
+  dropped, because removing it would mean an extra migration against a table that does not exist in
+  production yet, for no measurable gain, and it will serve any future date-ordered alert view.
+- **Deferred.** One Sale write projects its two alert types more than once, because `CreateSale`
+  saves the Sale several times in a single transaction and each save queues a post-commit
+  projection. The work is idempotent and guarded by the dedupe invariant, so this is redundant cost
+  rather than a correctness problem. De-duplicating it would mean request-scoped state around the
+  financial write path, which is not worth the risk for the saving.

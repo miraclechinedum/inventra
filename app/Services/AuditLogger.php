@@ -43,6 +43,7 @@ class AuditLogger
         'purchase_id', 'purchase_number', 'supplier_id', 'supplier_code_snapshot', 'total_amount',
         'expense_id', 'expense_number', 'expense_category_id', 'category_code_snapshot', 'amount',
         'payment_method', 'incurred_at',
+        'alert_type', 'alert_severity',
     ];
 
     /**

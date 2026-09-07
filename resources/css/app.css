@@ -31,6 +31,8 @@ body { color:var(--inventra-text); }
 .inventra-nav-item:hover { background:#f8fafc; }
 .inventra-nav-item.is-active { background:#eff6ff; color:var(--inventra-primary); font-weight:600; }
 .inventra-nav-item.is-disabled { cursor:not-allowed; opacity:.48; }
+.inventra-nav-badge { margin-left:auto; min-width:20px; border-radius:999px; background:#dc2626; padding:1px 6px; color:#fff; font-size:11px; font-weight:700; text-align:center; }
+.inventra-topbar-badge { position:absolute; top:2px; right:2px; min-width:16px; border-radius:999px; background:#dc2626; padding:0 4px; color:#fff; font-size:10px; font-weight:700; line-height:16px; text-align:center; }
 .inventra-user-card { display:flex; align-items:center; gap:10px; margin:14px; border:1px solid var(--inventra-border-soft); border-radius:11px; padding:13px; }
 .inventra-avatar { display:grid; width:36px; height:36px; place-items:center; border-radius:50%; background:var(--inventra-primary); color:#fff; font-size:13px; font-weight:600; }
 .inventra-user-card strong,.inventra-user-card small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.inventra-user-card strong{font-size:13px;font-weight:600}.inventra-user-card small{color:var(--inventra-muted);font-size:11px}.inventra-logout{width:20px;padding:2px}.inventra-logout img{width:16px;height:16px}

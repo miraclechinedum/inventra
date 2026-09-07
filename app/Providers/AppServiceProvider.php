@@ -2,7 +2,12 @@
 
 namespace App\Providers;
 
+use App\Alerts\UnreadAlertCount;
 use App\Contracts\WhatsAppClient;
+use App\Models\Product;
+use App\Models\Sale;
+use App\Observers\ProductAlertObserver;
+use App\Observers\SaleAlertObserver;
 use App\Services\MetaWhatsAppClient;
 use App\Services\TimingSafePasswordVerifier;
 use App\Settings\BusinessSettings;
@@ -24,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(TimingSafePasswordVerifier::class);
+        // Request-scoped so the navigation badge costs one query however often it renders.
+        $this->app->singleton(UnreadAlertCount::class);
         // Singleton so the business identity read is memoised for the life of one request.
         $this->app->singleton(BusinessSettings::class);
         $this->app->bind(WhatsAppClient::class, MetaWhatsAppClient::class);
@@ -35,6 +42,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         URL::forceRootUrl(config('app.url'));
+
+        // Operational alerts are projected from one place rather than from each domain Action, so
+        // no inventory or financial code path has to remember to raise them.
+        Product::observe(ProductAlertObserver::class);
+        Sale::observe(SaleAlertObserver::class);
 
         TrustProxies::at(config('security.trusted_proxies', []));
         TrustProxies::withHeaders(
