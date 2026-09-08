@@ -353,3 +353,21 @@ every alert is system-generated: there is no create route, no delete route and n
   projection. The work is idempotent and guarded by the dedupe invariant, so this is redundant cost
   rather than a correctness problem. De-duplicating it would mean request-scoped state around the
   financial write path, which is not worth the risk for the saving.
+
+## Product completion boundaries
+
+Sale product search updates the existing eight line selectors in place. Draft customer, quantities,
+payment and notes stay in the page; search requests carry only the search phrase. Selected Products
+are retained across searches, and validation redisplays selected active Products even outside the
+first search page. Prices, eligibility and stock are revalidated by the Sale action at submission.
+
+Customer and Staff Performance include entities with completed Sales created in the selected period
+or payments received in that period against completed Sales, including older Sales. Global Collections
+continues to include receipts on later-voided Sales; performance reports intentionally exclude those
+Sales. Sales value/count and outstanding balances refer to Sales created in the selected period;
+collection-only rows have zero period Sales and no latest period Sale. Names are current profile
+names grouped by permanent IDs, while transaction receipts retain their historical snapshots.
+The Sales report's void count applies staff/customer filters to the void-event date range.
+
+Customer-facing Sale and Payment receipts provide browser printing and exclude private transaction
+notes from their HTML. Payment notes remain on the authorized internal payment detail page.

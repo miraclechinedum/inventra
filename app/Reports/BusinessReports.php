@@ -25,6 +25,10 @@ class BusinessReports
         $base = Sale::query()->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()]);
         $this->idFilter($base, 'sold_by', $filters->staff);
         $this->idFilter($base, 'customer_id', $filters->customer);
+        $voids = Sale::query()->where('status', 'voided')
+            ->whereBetween('voided_at', [$filters->utcStart(), $filters->utcEnd()]);
+        $this->idFilter($voids, 'sold_by', $filters->staff);
+        $this->idFilter($voids, 'customer_id', $filters->customer);
         $active = (clone $base)->where('status', 'completed');
         $count = (clone $active)->count();
 
@@ -34,7 +38,7 @@ class BusinessReports
             $this->count('Paid', (clone $active)->where('payment_status', 'paid')->count()),
             $this->count('Partial', (clone $active)->where('payment_status', 'partial')->count()),
             $this->count('Unpaid', (clone $active)->where('payment_status', 'unpaid')->count()),
-            $this->count('Voided in Period', Sale::query()->where('status', 'voided')->whereBetween('voided_at', [$filters->utcStart(), $filters->utcEnd()])->count()),
+            $this->count('Voided in Period', $voids->count()),
         ], $base->latest('created_at')->latest('id')->paginate(15)->withQueryString(), 'sales');
     }
 
@@ -137,18 +141,20 @@ class BusinessReports
     {
         $sales = DB::table('sales')->selectRaw('customer_id, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding, MAX(created_at) latest_sale')->where('status', 'completed')->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('customer_id');
         $payments = DB::table('sale_payments')->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sale_payments.customer_id, SUM(sale_payments.amount) collected')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sale_payments.customer_id');
-        $rows = Customer::query()->select(['customers.id', 'customer_code', 'first_name', 'last_name'])->joinSub($sales, 'sales_report', 'sales_report.customer_id', '=', 'customers.id')->leftJoinSub($payments, 'payment_report', 'payment_report.customer_id', '=', 'customers.id')->addSelect(['sale_count', 'sales_value', 'outstanding', 'latest_sale', DB::raw('COALESCE(collected, 0) collected')])->when(ctype_digit($filters->customer), fn ($q) => $q->where('customers.id', (int) $filters->customer))->orderByDesc('sales_value')->orderBy('customers.id')->paginate(15)->withQueryString();
+        $rows = Customer::query()->select(['customers.id', 'customer_code', 'first_name', 'last_name'])->leftJoinSub($sales, 'sales_report', 'sales_report.customer_id', '=', 'customers.id')->leftJoinSub($payments, 'payment_report', 'payment_report.customer_id', '=', 'customers.id')->where(fn ($query) => $query->whereNotNull('sales_report.customer_id')->orWhereNotNull('payment_report.customer_id'))
+            ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), 'latest_sale', DB::raw('COALESCE(collected, 0) collected')])->when(ctype_digit($filters->customer), fn ($q) => $q->where('customers.id', (int) $filters->customer))->orderByDesc('sales_value')->orderBy('customers.id')->paginate(15)->withQueryString();
 
-        return $this->payload('Customer Performance', $filters, [$this->count('Customers Who Purchased', $rows->total())], $rows, 'customers');
+        return $this->payload('Customer Performance', $filters, [$this->count('Customers With Period Activity', $rows->total())], $rows, 'customers');
     }
 
     public function staff(ReportFilters $filters): array
     {
         $sales = DB::table('sales')->selectRaw('sold_by, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding')->where('status', 'completed')->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sold_by');
         $collections = DB::table('sale_payments')->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sales.sold_by, SUM(sale_payments.amount) seller_sale_collections')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sales.sold_by');
-        $rows = User::query()->select(['users.id', 'users.name'])->joinSub($sales, 'sales_report', 'sales_report.sold_by', '=', 'users.id')->leftJoinSub($collections, 'collections_report', 'collections_report.sold_by', '=', 'users.id')->addSelect(['sale_count', 'sales_value', 'outstanding', DB::raw('COALESCE(seller_sale_collections, 0) seller_sale_collections')])->when(ctype_digit($filters->staff), fn ($q) => $q->where('users.id', (int) $filters->staff))->orderByDesc('sales_value')->orderBy('users.id')->paginate(15)->withQueryString();
+        $rows = User::query()->select(['users.id', 'users.name'])->leftJoinSub($sales, 'sales_report', 'sales_report.sold_by', '=', 'users.id')->leftJoinSub($collections, 'collections_report', 'collections_report.sold_by', '=', 'users.id')->where(fn ($query) => $query->whereNotNull('sales_report.sold_by')->orWhereNotNull('collections_report.sold_by'))
+            ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), DB::raw('COALESCE(seller_sale_collections, 0) seller_sale_collections')])->when(ctype_digit($filters->staff), fn ($q) => $q->where('users.id', (int) $filters->staff))->orderByDesc('sales_value')->orderBy('users.id')->paginate(15)->withQueryString();
 
-        return $this->payload('Staff Sales Performance', $filters, [$this->count('Staff With Sales', $rows->total())], $rows, 'staff');
+        return $this->payload('Staff Sales Performance', $filters, [$this->count('Staff With Period Activity', $rows->total())], $rows, 'staff');
     }
 
     public function summary(ReportFilters $filters): array

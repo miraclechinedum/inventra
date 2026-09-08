@@ -180,9 +180,12 @@ class SalePaymentTest extends TestCase
         $viewer = User::factory()->create(['role' => UserRole::Admin]);
         $actor->forceFill(['name' => 'Renamed Operator'])->save();
 
+        $this->actingAs($viewer)->get(route('sales.payments.show', [$sale, $payment]))
+            ->assertOk()->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)
+            ->assertDontSee('<script>alert(1)</script>', false);
         $this->actingAs($viewer)->get(route('sales.payments.receipt', [$sale, $payment]))
             ->assertOk()->assertSee($payment->recorded_by_name_snapshot)->assertDontSee('Renamed Operator')
-            ->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)->assertDontSee('<script>alert(1)</script>', false)
+            ->assertDontSee('alert(1)', false)->assertSee('data-print-trigger', false)
             ->assertDontSee('cost_price');
         try {
             $payment->amount = '99';

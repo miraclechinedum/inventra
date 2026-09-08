@@ -1,4 +1,4 @@
-@props(['title'])
+@props(['title', 'receipt' => false])
 @php
     $user = auth()->user();
     $initials = collect(preg_split('/\s+/', trim($user->name)))->filter()->take(2)->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
@@ -25,7 +25,7 @@
     $unreadAlerts = app(\App\Alerts\UnreadAlertCount::class)->badge($user);
 @endphp
 <!DOCTYPE html><html lang="{{ str_replace('_', '-', app()->getLocale()) }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>{{ $title }} · {{ config('app.name') }}</title>@vite(['resources/css/app.css', 'resources/js/app.js'])</head>
-<body class="inventra-app">
+<body @class(['inventra-app', 'inventra-receipt' => $receipt])>
 <aside class="inventra-sidebar"><a href="{{ route('dashboard') }}" class="inventra-logo"><img src="{{ asset('images/figma/inventra-logo.png') }}" alt="Inventra"></a><nav class="inventra-nav" aria-label="Primary navigation">@foreach ($nav as $item)<a href="{{ route($item['route']) }}" @class(['inventra-nav-item', 'is-active' => request()->routeIs($item['match'])])><img src="{{ asset('images/figma/icon-'.$item['icon'].'.svg') }}" alt=""><span>{{ $item['label'] }}</span>@if($item['route'] === 'notifications.index' && $unreadAlerts !== '')<span class="inventra-nav-badge">{{ $unreadAlerts }}</span>@endif</a>@endforeach</nav><div class="inventra-user-card"><span class="inventra-avatar">{{ $initials }}</span><span class="min-w-0 flex-1"><strong>{{ $user->name }}</strong><small>{{ $user->role->label() }}</small></span><form method="POST" action="{{ route('logout') }}">@csrf<button class="inventra-logout" title="Sign out"><img src="{{ asset('images/figma/icon-logout.svg') }}" alt="Sign out"></button></form></div></aside>
 <div class="inventra-workspace"><header class="inventra-topbar"><h1>{{ $title }}</h1><div class="inventra-top-actions"><span class="inventra-global-search"><img src="{{ asset('images/figma/icon-search.svg') }}" alt=""><span>Search...</span></span><a class="inventra-icon-button" href="{{ route('notifications.index') }}" aria-label="{{ $unreadAlerts === '' ? 'Notifications' : 'Notifications, '.$unreadAlerts.' unread' }}"><img src="{{ asset('images/figma/icon-bell.svg') }}" alt="">@if($unreadAlerts !== '')<span class="inventra-topbar-badge">{{ $unreadAlerts }}</span>@endif</a><a href="{{ route('sales.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Record Sale</a></div></header><main class="inventra-content">@if (session('status'))<div class="inventra-alert-success">{{ session('status') }}</div>@endif{{ $slot }}</main></div>
 @livewireScriptConfig</body></html>

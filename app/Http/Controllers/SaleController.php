@@ -17,6 +17,8 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
+use App\Support\Money;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -64,23 +66,38 @@ class SaleController extends Controller
         ]);
     }
 
-    public function create(Request $request): View
+    public function create(Request $request): View|JsonResponse
     {
         Gate::authorize('create', Sale::class);
         $searchInput = $request->query('product_search');
         $search = is_string($searchInput) ? trim($searchInput) : '';
         $escaped = $this->escapeLike($search);
 
+        $products = Product::query()->active()
+            ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
+                ->where('sku', 'like', mb_strtoupper($escaped).'%')
+                ->orWhere('name', 'like', $escaped.'%')))
+            ->orderBy('name')->limit(100)
+            ->get(['id', 'sku', 'name', 'unit', 'selling_price', 'current_stock']);
+
+        if ($request->expectsJson()) {
+            return response()->json(['products' => $products->map(fn (Product $product) => [
+                'id' => $product->id,
+                'label' => $product->sku.' · '.$product->name.' · ₦'.Money::format($product->selling_price).' · '.$product->current_stock.' '.$product->unit->value,
+            ])]);
+        }
+
+        $oldLines = $request->old('products', []);
+        $selectedIds = collect(is_array($oldLines) ? array_slice($oldLines, 0, 8) : [])
+            ->map(fn ($line) => is_array($line) ? ($line['product_id'] ?? null) : null)
+            ->filter(fn ($id) => (is_string($id) || is_int($id)) && ctype_digit((string) $id))
+            ->unique()->values();
+        $selectedProducts = Product::query()->active()->whereIn('id', $selectedIds)
+            ->get(['id', 'sku', 'name', 'unit', 'selling_price', 'current_stock']);
+
         return view('sales.create', [
             'customers' => Customer::query()->active()->orderBy('first_name')->get(['id', 'customer_code', 'first_name', 'last_name', 'phone']),
-            'products' => Product::query()
-                ->active()
-                ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
-                    ->where('sku', 'like', mb_strtoupper($escaped).'%')
-                    ->orWhere('name', 'like', $escaped.'%')))
-                ->orderBy('name')
-                ->limit(100)
-                ->get(['id', 'sku', 'name', 'unit', 'selling_price', 'current_stock']),
+            'products' => $products->merge($selectedProducts)->unique('id')->sortBy('name'),
             'productSearch' => $search,
         ]);
     }

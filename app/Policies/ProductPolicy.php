@@ -15,7 +15,8 @@ class ProductPolicy
 
     public function view(User $user, Product $product): bool
     {
-        return true;
+        return $this->canManage($user)
+            || ($user->role === UserRole::SalesRep && $product->is_active);
     }
 
     public function create(User $user): bool
