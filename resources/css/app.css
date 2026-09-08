@@ -74,3 +74,4 @@ body { color:var(--inventra-text); }
 }
 
 @import './prototype.css';
+@import './home.css';
