@@ -6,22 +6,20 @@
 @csrf @method('PUT')
 
 <div class="rounded-2xl border bg-white p-6"><h3 class="font-bold">Identity</h3>
-<div class="mt-4 grid gap-4 md:grid-cols-2">
-<label class="text-sm">Business name <span class="text-red-600">*</span><input class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_name" maxlength="150" required value="{{ old('business_name', $settings->business_name) }}"></label>
-<label class="text-sm">Registered legal name<input class="mt-1 w-full rounded-xl border-slate-300" type="text" name="legal_name" maxlength="150" value="{{ old('legal_name', $settings->legal_name) }}"></label>
-</div></div>
+<label class="mt-4 block text-sm">Business name <span class="text-red-600">*</span><input aria-label="Business name" class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_name" maxlength="150" required value="{{ old('business_name', $settings->business_name) }}"></label>
+</div>
 
 <div class="rounded-2xl border bg-white p-6"><h3 class="font-bold">Contact</h3>
 <div class="mt-4 grid gap-4 md:grid-cols-2">
-<label class="text-sm">Phone<input class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_phone" maxlength="20" value="{{ old('business_phone', $settings->business_phone) }}" placeholder="08030000000"></label>
-<label class="text-sm">Email<input class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_email" maxlength="255" value="{{ old('business_email', $settings->business_email) }}"></label>
-<label class="text-sm md:col-span-2">Address<input class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_address" maxlength="255" value="{{ old('business_address', $settings->business_address) }}"></label>
-<label class="text-sm">City<input class="mt-1 w-full rounded-xl border-slate-300" type="text" name="city" maxlength="100" value="{{ old('city', $settings->city) }}"></label>
-<label class="text-sm">State<input class="mt-1 w-full rounded-xl border-slate-300" type="text" name="state" maxlength="100" value="{{ old('state', $settings->state) }}"></label>
+<label class="text-sm">Phone<input aria-label="Business phone" class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_phone" maxlength="20" value="{{ old('business_phone', $settings->business_phone) }}" placeholder="08030000000"></label>
+<label class="text-sm">Email<input aria-label="Business email" class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_email" maxlength="255" value="{{ old('business_email', $settings->business_email) }}"></label>
+<label class="text-sm md:col-span-2">Address<input aria-label="Business address" class="mt-1 w-full rounded-xl border-slate-300" type="text" name="business_address" maxlength="255" value="{{ old('business_address', $settings->business_address) }}"></label>
+<label class="text-sm">City<input aria-label="City" class="mt-1 w-full rounded-xl border-slate-300" type="text" name="city" maxlength="100" value="{{ old('city', $settings->city) }}"></label>
+<label class="text-sm">State<input aria-label="State" class="mt-1 w-full rounded-xl border-slate-300" type="text" name="state" maxlength="100" value="{{ old('state', $settings->state) }}"></label>
 </div></div>
 
 <div class="rounded-2xl border bg-white p-6"><h3 class="font-bold">Receipts</h3>
-<label class="mt-4 block text-sm">Receipt footer<textarea class="mt-1 w-full rounded-xl border-slate-300" name="receipt_footer" rows="3" maxlength="500" placeholder="Thank you for your business.">{{ old('receipt_footer', $settings->receipt_footer) }}</textarea><small class="text-slate-500">Plain text, up to 500 characters. Shown at the bottom of printed receipts.</small></label>
+<label class="mt-4 block text-sm">Receipt footer<textarea aria-label="Receipt footer" class="mt-1 w-full rounded-xl border-slate-300" name="receipt_footer" rows="3" maxlength="500" placeholder="Thank you for your business.">{{ old('receipt_footer', $settings->receipt_footer) }}</textarea><small class="text-slate-500">Plain text, up to 500 characters. Shown at the bottom of printed receipts.</small></label>
 </div>
 
 <div class="rounded-2xl border bg-white p-6"><h3 class="font-bold">Fixed for this installation</h3>

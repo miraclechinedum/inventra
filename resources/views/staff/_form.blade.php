@@ -7,7 +7,7 @@
     @if (! isset($staffMember))
         <div>
             <label for="role" class="block text-sm font-semibold text-slate-800">Role</label>
-            <select id="role" name="role" required class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm outline-none focus:border-[#0b56c9] focus:ring-4 focus:ring-blue-100">
+            <select aria-label="Role" id="role" name="role" required class="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 shadow-sm outline-none focus:border-[#0b56c9] focus:ring-4 focus:ring-blue-100">
                 <option value="manager" @selected(\App\Support\OldInput::scalar('role') === 'manager')>Manager</option>
                 <option value="sales_rep" @selected(\App\Support\OldInput::scalar('role') === 'sales_rep')>Sales Representative</option>
             </select>

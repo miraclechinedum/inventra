@@ -7,25 +7,24 @@
     $severityLabels = ['critical' => 'Critical attention', 'attention' => 'Needs attention', 'information' => 'Information'];
 @endphp
 <x-app-layout title="Dashboard">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-            <h2 class="text-2xl font-bold">Operational dashboard</h2>
-            <p class="text-slate-500">Read-only operational state. No profit, COGS, margin, inventory valuation, or tax is calculated.</p>
-        </div>
-    </div>
+    <x-page-header title="Operational dashboard" description="Your sales, collections and operational priorities in one place." eyebrow="Dashboard">
+        <a class="ui-button" href="{{ route('inventory.index') }}">View {{ $scope === 'management' ? 'inventory' : 'products' }}</a>
+        <a class="ui-button ui-button-primary" href="{{ route('sales.create') }}">Record sale</a>
+    </x-page-header>
 
-    <form method="GET" class="mt-6 grid gap-3 rounded-2xl border bg-white p-4 md:grid-cols-4">
-        <label class="text-sm">From<input class="mt-1 w-full rounded-xl border-slate-300" type="date" name="from" value="{{ $filters->from }}"></label>
-        <label class="text-sm">To<input class="mt-1 w-full rounded-xl border-slate-300" type="date" name="to" value="{{ $filters->to }}"></label>
+    <form method="GET" class="ui-filter-bar mt-6 grid gap-3 rounded-2xl border bg-white p-4 md:grid-cols-4">
+        <label class="text-sm">From<input aria-label="From date" class="mt-1 w-full rounded-xl border-slate-300" type="date" name="from" value="{{ $filters->from }}"></label>
+        <label class="text-sm">To<input aria-label="To date" class="mt-1 w-full rounded-xl border-slate-300" type="date" name="to" value="{{ $filters->to }}"></label>
         <div class="flex items-end"><button class="rounded-xl bg-slate-800 px-4 py-3 text-white">Apply period</button></div>
         <p class="flex items-end text-xs text-slate-500">Period {{ $filters->from }} through {{ $filters->to }} inclusive · {{ config('business.timezone') }}</p>
     </form>
+<div class="mt-2 text-right"><x-filter-reset /></div>
     @error('from')<p class="mt-2 text-red-700">{{ $message }}</p>@enderror
 
-    <h3 class="mt-8 text-lg font-bold">In the selected period</h3>
-    <section class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="ui-section-title"><h3>In the selected period</h3><p>Sales and cash flows · {{ $filters->from }} to {{ $filters->to }}</p></div>
+    <section class="ui-metrics">
         @foreach($periodMetrics as $metric)
-            <article class="rounded-2xl border bg-white p-5">
+            <article class="ui-metric">
                 <small class="text-slate-500">{{ $metric['label'] }}</small>
                 <strong class="mt-1 block text-2xl">@if($metric['format'] === 'money')₦{{ \App\Support\Money::format((string) $metric['value']) }}@else{{ $metric['value'] }}@endif</strong>
                 <p class="mt-2 text-xs text-slate-500">{{ $metric['meaning'] }}</p>
@@ -33,11 +32,11 @@
         @endforeach
     </section>
 
-    <h3 class="mt-8 text-lg font-bold">Right now</h3>
+    <div class="ui-section-title"><h3>Right now</h3><p>Current business state</p></div>
     <p class="text-sm text-slate-500">Current-state figures. These describe the business today and are not limited by the selected period.</p>
-    <section class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section class="ui-metrics">
         @foreach($currentMetrics as $metric)
-            <article class="rounded-2xl border bg-white p-5">
+            <article class="ui-metric">
                 <small class="text-slate-500">{{ $metric['label'] }}</small>
                 <strong class="mt-1 block text-2xl">@if($metric['format'] === 'money')₦{{ \App\Support\Money::format((string) $metric['value']) }}@else{{ $metric['value'] }}@endif</strong>
                 <p class="mt-2 text-xs text-slate-500">{{ $metric['meaning'] }}</p>
@@ -54,11 +53,11 @@
                 <p class="text-sm">{{ $alert['detail'] }}</p>
             </article>
         @empty
-            <p class="rounded-2xl border bg-white p-5 text-slate-500">Nothing needs attention right now.</p>
+            <div class="rounded-2xl border bg-white"><x-empty-state title="Nothing needs attention right now." description="Current stock and sale balances have no attention items to show." /></div>
         @endforelse
     </section>
 
-    <section class="mt-6 grid gap-4 lg:grid-cols-{{ $scope === 'management' ? '3' : '2' }}">
+    <section class="mt-6 grid gap-4 {{ $scope === 'management' ? 'lg:grid-cols-3' : 'lg:grid-cols-2' }}">
         <article class="rounded-2xl border bg-white p-5">
             <div class="flex items-center justify-between"><h4 class="font-bold">Oldest outstanding Sales</h4><a class="text-sm text-blue-700" href="{{ route('sales.index') }}">All Sales</a></div>
             @forelse($alerts['outstandingSales'] as $row)
@@ -174,4 +173,5 @@
             </article>
         @endif
     </section>
+<p class="mt-8 text-xs text-slate-500">No profit, COGS, margin, inventory valuation, or tax is calculated.</p>
 </x-app-layout>

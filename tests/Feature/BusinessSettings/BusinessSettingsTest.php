@@ -165,6 +165,119 @@ class BusinessSettingsTest extends TestCase
         }
     }
 
+    /* ------------------------------------------- retired field: registered legal name */
+
+    public function test_the_settings_page_offers_business_name_as_the_only_business_name_field(): void
+    {
+        $html = $this->actingAs($this->admin())->get(route('settings.business.edit'))->assertOk()->getContent();
+
+        // Gone from the UI, not merely hidden or disabled.
+        $this->assertStringNotContainsStringIgnoringCase('Registered legal name', $html);
+        $this->assertStringNotContainsStringIgnoringCase('Legal name', $html);
+        $this->assertStringNotContainsString('legal_name', $html, 'No legal_name input may be rendered');
+
+        // The retained field is still there, still required, and is the only business-name input.
+        $this->assertStringContainsString('name="business_name"', $html);
+        $this->assertSame(1, substr_count($html, 'name="business_name"'));
+        $this->assertMatchesRegularExpression('/name="business_name"[^>]*required|required[^>]*name="business_name"/', $html);
+
+        // Nothing was left behind as an empty column or a placeholder control in the Identity card.
+        $identity = (string) preg_replace('/.*<h3[^>]*>Identity<\/h3>(.*?)<div class="rounded-2xl.*/s', '$1', $html);
+        $this->assertSame(1, substr_count($identity, '<input'), 'Identity holds exactly one control');
+        $this->assertStringNotContainsString('disabled', $identity);
+        $this->assertStringNotContainsString('hidden', $identity);
+    }
+
+    public function test_the_form_submits_without_a_legal_name_and_persists_every_retained_setting(): void
+    {
+        $admin = $this->admin();
+        $before = DB::table('business_settings')->firstOrFail();
+
+        $payload = [
+            'business_name' => 'Adaeze Stores', 'business_phone' => '08031234567',
+            'business_email' => 'hello@adaeze.example', 'business_address' => '12 Market Road',
+            'city' => 'Onitsha', 'state' => 'Anambra', 'receipt_footer' => 'Thank you for your business.',
+        ];
+        $this->assertArrayNotHasKey('legal_name', $payload, 'The browser no longer submits this field');
+
+        $this->actingAs($admin)->put(route('settings.business.update'), $payload)
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('settings.business.edit'))
+            ->assertSessionHas('status', 'Business settings updated.');
+
+        $after = DB::table('business_settings')->firstOrFail();
+        $this->assertSame('Adaeze Stores', $after->business_name);
+        $this->assertSame('+2348031234567', $after->business_phone);
+        $this->assertSame('hello@adaeze.example', $after->business_email);
+        $this->assertSame('12 Market Road', $after->business_address);
+        $this->assertSame('Onitsha', $after->city);
+        $this->assertSame('Anambra', $after->state);
+        $this->assertSame('Thank you for your business.', $after->receipt_footer);
+        $this->assertSame($admin->id, $after->updated_by);
+        $this->assertSame(1, DB::table('business_settings')->count());
+
+        // The audit event still fires and still diffs every retained field.
+        $log = $this->latestSettingsAudit();
+        $this->assertSame('business_settings_updated', $log->action);
+        $this->assertSame($admin->name, $log->actor_name_snapshot);
+        $this->assertSame(UserRole::Admin->value, $log->actor_role_snapshot);
+        foreach (['business_name', 'business_phone', 'business_email', 'business_address', 'city', 'state', 'receipt_footer'] as $field) {
+            $this->assertArrayHasKey($field, $log->new_values, "{$field} must still be audited");
+        }
+        $this->assertSame($before->business_name, $log->old_values['business_name']);
+        $this->assertSame('Adaeze Stores', $log->new_values['business_name']);
+        $this->assertArrayNotHasKey('legal_name', $log->old_values);
+        $this->assertArrayNotHasKey('legal_name', $log->new_values);
+
+        // Reloading shows the saved values.
+        $reloaded = $this->actingAs($admin)->get(route('settings.business.edit'))->assertOk()->getContent();
+        foreach (['Adaeze Stores', '+2348031234567', 'hello@adaeze.example', '12 Market Road', 'Onitsha', 'Anambra'] as $value) {
+            $this->assertStringContainsString($value, $reloaded, "{$value} must survive a reload");
+        }
+    }
+
+    public function test_a_submitted_legal_name_is_ignored_rather_than_written_or_audited(): void
+    {
+        $admin = $this->admin();
+        $legacy = DB::table('business_settings')->value('legal_name');
+        $audit = DB::table('audit_logs')->count();
+
+        // A stale cached form or a hand-crafted request must not reach the retired column.
+        $this->actingAs($admin)->put(route('settings.business.update'),
+            $this->payload(['legal_name' => 'Injected Legal Ltd']))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertSame($legacy, DB::table('business_settings')->value('legal_name'),
+            'The retired column must be unreachable from the request');
+        $this->assertSame($audit, DB::table('audit_logs')->count(),
+            'A retired field cannot manufacture an audit event');
+        $this->assertNotContains('legal_name', BusinessSetting::EDITABLE);
+    }
+
+    public function test_receipts_keep_their_business_identity_after_the_legal_name_is_retired(): void
+    {
+        $admin = $this->admin();
+
+        // Prove the letterhead cannot leak the retired column even when it still holds a value.
+        DB::table('business_settings')->update(['legal_name' => 'Retired Legal Ltd']);
+        app(BusinessSettings::class)->forget();
+
+        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
+            'business_name' => 'Adaeze Stores', 'business_phone' => '08031234567',
+            'business_address' => '12 Market Road', 'city' => 'Onitsha', 'state' => 'Anambra',
+        ]))->assertSessionHasNoErrors();
+
+        foreach ($this->receiptUrls($admin) as $label => $url) {
+            $html = $this->actingAs($admin)->get($url)->assertOk()->getContent();
+            $this->assertStringContainsString('Adaeze Stores', $html,
+                "{$label} must still carry the business identity");
+            $this->assertStringContainsString('12 Market Road', $html, "{$label} keeps its address");
+            $this->assertStringNotContainsString('Retired Legal Ltd', $html,
+                "{$label} must not render the retired legal name");
+        }
+    }
+
     /* ------------------------------------------------------------------ update & audit */
 
     public function test_a_valid_update_persists_and_records_only_the_changed_fields(): void
@@ -174,7 +287,6 @@ class BusinessSettingsTest extends TestCase
 
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
             'business_name' => 'Adaeze Stores',
-            'legal_name' => 'Adaeze Stores Limited',
             'business_phone' => '08031234567',
             'business_email' => 'hello@adaeze.example',
             'receipt_footer' => "Thank you for your business.\nGoods sold in good condition.",
@@ -182,7 +294,6 @@ class BusinessSettingsTest extends TestCase
 
         $after = DB::table('business_settings')->firstOrFail();
         $this->assertSame('Adaeze Stores', $after->business_name);
-        $this->assertSame('Adaeze Stores Limited', $after->legal_name);
         $this->assertSame('+2348031234567', $after->business_phone, 'Nigerian phones are canonicalised');
         $this->assertSame($admin->id, $after->updated_by);
         $this->assertSame(1, DB::table('business_settings')->count());
@@ -384,12 +495,12 @@ class BusinessSettingsTest extends TestCase
     {
         $admin = $this->admin();
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
-            'business_name' => '   Trimmed Stores   ', 'legal_name' => '   ', 'city' => '  Lagos  ',
+            'business_name' => '   Trimmed Stores   ', 'state' => '   ', 'city' => '  Lagos  ',
         ]))->assertSessionHasNoErrors();
 
         $row = DB::table('business_settings')->firstOrFail();
         $this->assertSame('Trimmed Stores', $row->business_name);
-        $this->assertNull($row->legal_name);
+        $this->assertNull($row->state);
         $this->assertSame('Lagos', $row->city);
     }
 
@@ -400,7 +511,7 @@ class BusinessSettingsTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
             'business_name' => '<script>alert(1)</script>',
-            'legal_name' => '<img src=x onerror=alert(2)>',
+            'city' => '<img src=x onerror=alert(2)>',
             'business_address' => '"><svg onload=alert(3)>',
             'receipt_footer' => '<script>alert(4)</script>',
         ]))->assertSessionHasNoErrors();
@@ -425,7 +536,7 @@ class BusinessSettingsTest extends TestCase
     {
         $admin = $this->admin();
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
-            'business_name' => 'Adaeze Stores', 'legal_name' => 'Adaeze Stores Limited',
+            'business_name' => 'Adaeze Stores',
             'business_phone' => '08031234567', 'business_email' => 'hello@adaeze.example',
             'business_address' => '12 Market Road', 'city' => 'Onitsha', 'state' => 'Anambra',
             'receipt_footer' => 'Thank you for your business.',
@@ -507,19 +618,19 @@ class BusinessSettingsTest extends TestCase
         $this->assertNull($log->new_values['receipt_footer'], 'The cleared value must be exactly null');
     }
 
-    public function test_clearing_the_legal_name_records_an_explicit_null(): void
+    public function test_clearing_the_state_records_an_explicit_null(): void
     {
         $admin = $this->admin();
-        $this->seedSettings($admin, ['legal_name' => 'Old Legal Ltd']);
+        $this->seedSettings($admin, ['state' => 'Anambra']);
 
-        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['legal_name' => '']))
+        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['state' => '']))
             ->assertRedirect();
 
-        $this->assertNull(DB::table('business_settings')->value('legal_name'));
+        $this->assertNull(DB::table('business_settings')->value('state'));
 
         $log = $this->latestSettingsAudit();
-        $this->assertSame(['legal_name' => 'Old Legal Ltd'], $log->old_values);
-        $this->assertSame(['legal_name' => null], $log->new_values);
+        $this->assertSame(['state' => 'Anambra'], $log->old_values);
+        $this->assertSame(['state' => null], $log->new_values);
     }
 
     public function test_clearing_the_business_phone_records_an_explicit_null(): void
@@ -541,31 +652,31 @@ class BusinessSettingsTest extends TestCase
     {
         $admin = $this->admin();
         $this->seedSettings($admin, [
-            'legal_name' => 'Old Legal Ltd', 'city' => 'Lagos', 'business_email' => 'old@example.com',
+            'state' => 'Anambra', 'city' => 'Lagos', 'business_email' => 'old@example.com',
             'business_address' => '12 Broad Street', 'receipt_footer' => 'Thank you',
         ]);
 
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
-            'legal_name' => '', 'city' => 'Ibadan', 'business_email' => '',
+            'state' => '', 'city' => 'Ibadan', 'business_email' => '',
             'business_address' => '12 Broad Street', 'receipt_footer' => 'Thank you',
         ]))->assertRedirect();
 
         $log = $this->latestSettingsAudit();
 
         // MySQL normalises JSON object key order, so compare membership and values, not order.
-        $this->assertEqualsCanonicalizing(['legal_name', 'business_email', 'city'], array_keys($log->old_values));
-        $this->assertEqualsCanonicalizing(['legal_name', 'business_email', 'city'], array_keys($log->new_values));
+        $this->assertEqualsCanonicalizing(['state', 'business_email', 'city'], array_keys($log->old_values));
+        $this->assertEqualsCanonicalizing(['state', 'business_email', 'city'], array_keys($log->new_values));
 
-        $this->assertSame('Old Legal Ltd', $log->old_values['legal_name']);
+        $this->assertSame('Anambra', $log->old_values['state']);
         $this->assertSame('old@example.com', $log->old_values['business_email']);
         $this->assertSame('Lagos', $log->old_values['city']);
 
-        $this->assertNull($log->new_values['legal_name'], 'A cleared field must be exactly null');
+        $this->assertNull($log->new_values['state'], 'A cleared field must be exactly null');
         $this->assertNull($log->new_values['business_email'], 'A cleared field must be exactly null');
         $this->assertSame('Ibadan', $log->new_values['city']);
 
         // Fields the Administrator left alone stay out of the record entirely.
-        foreach (['business_address', 'receipt_footer', 'business_name', 'state', 'business_phone'] as $untouched) {
+        foreach (['business_address', 'receipt_footer', 'business_name', 'business_phone'] as $untouched) {
             $this->assertArrayNotHasKey($untouched, $log->old_values);
             $this->assertArrayNotHasKey($untouched, $log->new_values);
         }
@@ -574,13 +685,13 @@ class BusinessSettingsTest extends TestCase
     public function test_resubmitting_an_already_blank_optional_field_stays_a_no_op(): void
     {
         $admin = $this->admin();
-        $this->seedSettings($admin, ['legal_name' => 'Old Legal Ltd']);
-        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['legal_name' => '']));
+        $this->seedSettings($admin, ['state' => 'Anambra']);
+        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['state' => '']));
 
         $row = DB::table('business_settings')->firstOrFail();
         $audit = DB::table('audit_logs')->count();
 
-        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['legal_name' => '']))
+        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['state' => '']))
             ->assertRedirect()->assertSessionHas('status', 'No changes were made to the business settings.');
 
         $this->assertEquals($row, DB::table('business_settings')->firstOrFail());
@@ -597,16 +708,16 @@ class BusinessSettingsTest extends TestCase
         app(AuditLogger::class)->record('business_settings_updated', $settings, $admin,
             newValues: $settings->getAttributes());
         $dump = $this->latestSettingsAudit();
-        foreach (['legal_name', 'business_phone', 'business_email', 'business_address', 'state', 'receipt_footer'] as $nullable) {
+        foreach (['business_phone', 'business_email', 'business_address', 'state', 'receipt_footer'] as $nullable) {
             $this->assertArrayNotHasKey($nullable, $dump->new_values ?? [],
                 "A model dump must not record {$nullable} merely because the column is empty");
         }
 
         // An explicit diff: the supplied key survives as null, an unsupplied one never appears.
         app(AuditLogger::class)->record('business_settings_updated', $settings, $admin,
-            ['legal_name' => 'Old Legal Ltd'], ['legal_name' => null], explicitDiff: true);
+            ['state' => 'Anambra'], ['state' => null], explicitDiff: true);
         $diff = $this->latestSettingsAudit();
-        $this->assertSame(['legal_name' => null], $diff->new_values);
+        $this->assertSame(['state' => null], $diff->new_values);
         $this->assertArrayNotHasKey('city', $diff->new_values);
     }
 
@@ -617,9 +728,10 @@ class BusinessSettingsTest extends TestCase
         app(AuditLogger::class)->record('business_settings_updated', BusinessSetting::query()->firstOrFail(), $admin,
             newValues: [
                 'business_name' => 'Kept',
-                'legal_name' => ['an', 'array'],
+                'business_address' => ['an', 'array'],
                 'city' => (object) ['an' => 'object'],
                 'state' => null,
+                'legal_name' => 'Retired Legal Ltd',
                 'password' => null,
                 'api_key' => null,
                 'webhook_secret' => 'whsec_live',
@@ -631,7 +743,7 @@ class BusinessSettingsTest extends TestCase
         $this->assertEqualsCanonicalizing(['business_name', 'state'], array_keys($log->new_values));
         $this->assertSame('Kept', $log->new_values['business_name']);
         $this->assertNull($log->new_values['state']);
-        foreach (['legal_name', 'city', 'password', 'api_key', 'webhook_secret', 'request_token'] as $rejected) {
+        foreach (['business_address', 'city', 'legal_name', 'password', 'api_key', 'webhook_secret', 'request_token'] as $rejected) {
             $this->assertArrayNotHasKey($rejected, $log->new_values,
                 "{$rejected} must never reach the audit log");
         }
@@ -734,7 +846,7 @@ class BusinessSettingsTest extends TestCase
     private function payload(array $overrides = []): array
     {
         return array_merge([
-            'business_name' => 'Inventra Smart Trade', 'legal_name' => null, 'business_phone' => null,
+            'business_name' => 'Inventra Smart Trade', 'business_phone' => null,
             'business_email' => null, 'business_address' => null, 'city' => null, 'state' => null,
             'receipt_footer' => null,
         ], $overrides);

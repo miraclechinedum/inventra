@@ -17,7 +17,7 @@
     @endforeach
     <label class="grid gap-2 text-sm font-semibold md:col-span-2">
         Notes
-        <textarea class="rounded-xl border-slate-300" name="notes">{{ \App\Support\OldInput::scalar('notes', $supplier->notes ?? '') }}</textarea>
+        <textarea aria-label="Notes" class="rounded-xl border-slate-300" name="notes">{{ \App\Support\OldInput::scalar('notes', $supplier->notes ?? '') }}</textarea>
         @error('notes')<span class="font-normal text-red-600">{{ $message }}</span>@enderror
     </label>
     @foreach(['supplier_code', 'created_by', 'updated_by', 'is_active'] as $field)

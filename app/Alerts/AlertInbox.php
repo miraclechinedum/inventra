@@ -5,6 +5,7 @@ namespace App\Alerts;
 use App\Enums\OperationalAlertType;
 use App\Models\OperationalAlertRecipient;
 use App\Models\User;
+use App\Support\PerPage;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -15,9 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class AlertInbox
 {
-    public const PER_PAGE = 25;
-
-    public function paginate(User $user, AlertFilters $filters): LengthAwarePaginator
+    public function paginate(User $user, AlertFilters $filters, int $perPage = PerPage::DEFAULT): LengthAwarePaginator
     {
         return $this->query($user, $filters)
             // Newest alert first. Ordering on the alert id rather than its created_at is both a
@@ -25,7 +24,7 @@ class AlertInbox
             // index-backed by (user_id, operational_alert_id), which is what keeps pagination
             // deterministic under identical timestamps without a filesort.
             ->orderByDesc('operational_alert_recipients.operational_alert_id')
-            ->paginate(self::PER_PAGE)
+            ->paginate($perPage)
             ->withQueryString();
     }
 

@@ -42,7 +42,6 @@ class UpdateBusinessSettingsRequest extends FormRequest
     {
         return [
             'business_name' => ['required', 'string', 'min:1', 'max:150'],
-            'legal_name' => ['nullable', 'string', 'max:150'],
             'business_phone' => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, \Closure $fail): void {
                 if ($this->phoneWasInvalid) {
                     $fail('Enter a valid Nigerian phone number.');

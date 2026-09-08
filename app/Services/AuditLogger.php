@@ -33,7 +33,7 @@ class AuditLogger
         'category_name_snapshot', 'payee', 'incurred_at',
         'return_id', 'return_number', 'refund_id', 'refund_number', 'merchandise_value', 'receivable_reduction',
         'returned_at', 'refunded_at', 'method',
-        'business_name', 'legal_name', 'business_phone', 'business_email', 'business_address',
+        'business_name', 'business_phone', 'business_email', 'business_address',
         'state', 'receipt_footer',
     ];
 

@@ -18,6 +18,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\PerPage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,7 +57,7 @@ class SaleController extends Controller
             ->when(is_string($fromInput) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fromInput), fn ($query) => $query->whereDate('created_at', '>=', $fromInput))
             ->when(is_string($toInput) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $toInput), fn ($query) => $query->whereDate('created_at', '<=', $toInput))
             ->latest('created_at')
-            ->paginate(20)
+            ->paginate(PerPage::resolve($request))
             ->withQueryString();
 
         return view('sales.index', [
@@ -150,7 +151,7 @@ class SaleController extends Controller
         return back()->with('status', 'Sale voided and stock restored.');
     }
 
-    public function activity(Sale $sale): View
+    public function activity(Request $request, Sale $sale): View
     {
         Gate::authorize('viewAudit', $sale);
 
@@ -162,7 +163,7 @@ class SaleController extends Controller
                 ->with('actor:id,name')
                 ->latest('created_at')
                 ->latest('id')
-                ->paginate(20),
+                ->paginate(PerPage::resolve($request))->withQueryString(),
         ]);
     }
 

@@ -4,12 +4,18 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Vite;
 use Symfony\Component\HttpFoundation\Response;
 
 class ApplySecurityHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {
+        $contentSecurityPolicy = config('security.content_security_policy');
+
+        if (is_string($contentSecurityPolicy) && $contentSecurityPolicy !== '') {
+            Vite::useCspNonce();
+        }
         $response = $next($request);
 
         foreach (config('security.headers', []) as $name => $value) {
@@ -18,10 +24,11 @@ class ApplySecurityHeaders
             }
         }
 
-        $contentSecurityPolicy = config('security.content_security_policy');
-
         if (is_string($contentSecurityPolicy) && $contentSecurityPolicy !== '') {
-            $response->headers->set('Content-Security-Policy', $contentSecurityPolicy);
+            $header = config('security.content_security_policy_report_only')
+                ? 'Content-Security-Policy-Report-Only'
+                : 'Content-Security-Policy';
+            $response->headers->set($header, str_replace('{nonce}', Vite::cspNonce(), $contentSecurityPolicy));
         }
 
         if ($this->shouldSendStrictTransportSecurity($request)) {

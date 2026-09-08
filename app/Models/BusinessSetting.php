@@ -15,7 +15,7 @@ class BusinessSetting extends Model
 
     /** Fields an Administrator may change. Everything else is out of reach by construction. */
     public const EDITABLE = [
-        'business_name', 'legal_name', 'business_phone', 'business_email',
+        'business_name', 'business_phone', 'business_email',
         'business_address', 'city', 'state', 'receipt_footer',
     ];
 

@@ -39,7 +39,7 @@ class BusinessReports
             $this->count('Partial', (clone $active)->where('payment_status', 'partial')->count()),
             $this->count('Unpaid', (clone $active)->where('payment_status', 'unpaid')->count()),
             $this->count('Voided in Period', $voids->count()),
-        ], $base->latest('created_at')->latest('id')->paginate(15)->withQueryString(), 'sales');
+        ], $base->latest('created_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'sales');
     }
 
     public function collections(ReportFilters $filters): array
@@ -56,7 +56,7 @@ class BusinessReports
             $metrics[] = $this->money($method->label(), $this->sum((clone $base)->where('payment_method', $method->value), 'amount'));
         }
 
-        return $this->payload('Collections Report', $filters, $metrics, $base->with('sale:id,sale_number,customer_name_snapshot,sold_by_name_snapshot')->latest('paid_at')->latest('id')->paginate(15)->withQueryString(), 'collections');
+        return $this->payload('Collections Report', $filters, $metrics, $base->with('sale:id,sale_number,customer_name_snapshot,sold_by_name_snapshot')->latest('paid_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'collections');
     }
 
     public function receivables(ReportFilters $filters): array
@@ -71,7 +71,7 @@ class BusinessReports
             $this->count('Outstanding Sales', (clone $base)->count()),
             $this->money('Partial Balances', $this->sum((clone $base)->where('payment_status', 'partial'), 'balance_due')),
             $this->money('Unpaid Balances', $this->sum((clone $base)->where('payment_status', 'unpaid'), 'balance_due')),
-        ], $base->latest('created_at')->latest('id')->paginate(15)->withQueryString(), 'receivables');
+        ], $base->latest('created_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'receivables');
 
         $payload['integrityWarning'] = $mismatches > 0 ? 'Sale aggregate and ledger inconsistency detected. No records were changed.' : null;
 
@@ -88,7 +88,7 @@ class BusinessReports
         }
         $count = (clone $base)->count();
 
-        $rows = (clone $base)->latest('incurred_at')->latest('id')->paginate(15)->withQueryString();
+        $rows = (clone $base)->latest('incurred_at')->latest('id')->paginate($filters->perPage)->withQueryString();
 
         $byPaymentMethod = (clone $base)->select('payment_method as label', DB::raw('SUM(amount) as value'))->groupBy('payment_method')->get()
             ->each(function ($row): void {
@@ -113,7 +113,7 @@ class BusinessReports
         $byReceiver = (clone $base)->select('received_by_name_snapshot as label', DB::raw('SUM(total_amount) value'))->groupBy('received_by_name_snapshot')->orderByDesc('value')->get()->each(fn ($row) => $row->format = 'money');
         $byProduct = DB::table('purchase_items')->joinSub($filteredIds, 'filtered_purchases', 'filtered_purchases.id', '=', 'purchase_items.purchase_id')->selectRaw('product_name_snapshot label, SUM(quantity) value')->groupBy('product_name_snapshot')->orderByDesc('value')->get()->each(fn ($row) => $row->format = 'quantity');
 
-        return $this->payload('Purchase Report', $filters, [$this->money('Inventory Purchases', $this->sum($base, 'total_amount')), $this->count('Purchases', (clone $base)->count()), $this->quantity('Units Received', (string) $quantity)], $base->withCount('items')->latest('received_at')->latest('id')->paginate(15)->withQueryString(), 'purchases', ['By Supplier' => $bySupplier, 'By Product Quantity' => $byProduct, 'By Receiver' => $byReceiver]);
+        return $this->payload('Purchase Report', $filters, [$this->money('Inventory Purchases', $this->sum($base, 'total_amount')), $this->count('Purchases', (clone $base)->count()), $this->quantity('Units Received', (string) $quantity)], $base->withCount('items')->latest('received_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'purchases', ['By Supplier' => $bySupplier, 'By Product Quantity' => $byProduct, 'By Receiver' => $byReceiver]);
     }
 
     public function inventory(ReportFilters $filters): array
@@ -123,7 +123,7 @@ class BusinessReports
         $in = (string) (clone $base)->where('quantity_change', '>', 0)->sum('quantity_change');
         $out = (string) (clone $base)->where('quantity_change', '<', 0)->sum(DB::raw('ABS(quantity_change)'));
 
-        return $this->payload('Inventory Movement Report', $filters, [$this->count('Movements', (clone $base)->count()), $this->quantity('Quantity In', $in), $this->quantity('Quantity Out', $out)], $base->with('product:id,name,sku')->latest('created_at')->latest('id')->paginate(15)->withQueryString(), 'inventory');
+        return $this->payload('Inventory Movement Report', $filters, [$this->count('Movements', (clone $base)->count()), $this->quantity('Quantity In', $in), $this->quantity('Quantity Out', $out)], $base->with('product:id,name,sku')->latest('created_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'inventory');
     }
 
     public function products(ReportFilters $filters): array
@@ -132,7 +132,7 @@ class BusinessReports
             ->when(ctype_digit($filters->product), fn ($q) => $q->where('sale_items.product_id', (int) $filters->product));
         $gross = (string) (clone $base)->sum('sale_items.line_total');
         $rows = $base->select(['sale_items.product_id', 'product_sku_snapshot', 'product_name_snapshot', 'products.current_stock', DB::raw('SUM(quantity) quantity_sold'), DB::raw('SUM(line_total) sales_value'), DB::raw('COUNT(DISTINCT sale_id) transaction_count')])
-            ->groupBy('sale_items.product_id', 'product_sku_snapshot', 'product_name_snapshot', 'products.current_stock')->orderByDesc('sales_value')->orderBy('sale_items.product_id')->paginate(15)->withQueryString();
+            ->groupBy('sale_items.product_id', 'product_sku_snapshot', 'product_name_snapshot', 'products.current_stock')->orderByDesc('sales_value')->orderBy('sale_items.product_id')->paginate($filters->perPage)->withQueryString();
 
         return $this->payload('Product Performance', $filters, [$this->money('Gross Product Sales', $gross)], $rows, 'products');
     }
@@ -142,7 +142,7 @@ class BusinessReports
         $sales = DB::table('sales')->selectRaw('customer_id, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding, MAX(created_at) latest_sale')->where('status', 'completed')->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('customer_id');
         $payments = DB::table('sale_payments')->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sale_payments.customer_id, SUM(sale_payments.amount) collected')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sale_payments.customer_id');
         $rows = Customer::query()->select(['customers.id', 'customer_code', 'first_name', 'last_name'])->leftJoinSub($sales, 'sales_report', 'sales_report.customer_id', '=', 'customers.id')->leftJoinSub($payments, 'payment_report', 'payment_report.customer_id', '=', 'customers.id')->where(fn ($query) => $query->whereNotNull('sales_report.customer_id')->orWhereNotNull('payment_report.customer_id'))
-            ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), 'latest_sale', DB::raw('COALESCE(collected, 0) collected')])->when(ctype_digit($filters->customer), fn ($q) => $q->where('customers.id', (int) $filters->customer))->orderByDesc('sales_value')->orderBy('customers.id')->paginate(15)->withQueryString();
+            ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), 'latest_sale', DB::raw('COALESCE(collected, 0) collected')])->when(ctype_digit($filters->customer), fn ($q) => $q->where('customers.id', (int) $filters->customer))->orderByDesc('sales_value')->orderBy('customers.id')->paginate($filters->perPage)->withQueryString();
 
         return $this->payload('Customer Performance', $filters, [$this->count('Customers With Period Activity', $rows->total())], $rows, 'customers');
     }
@@ -152,7 +152,7 @@ class BusinessReports
         $sales = DB::table('sales')->selectRaw('sold_by, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding')->where('status', 'completed')->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sold_by');
         $collections = DB::table('sale_payments')->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sales.sold_by, SUM(sale_payments.amount) seller_sale_collections')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sales.sold_by');
         $rows = User::query()->select(['users.id', 'users.name'])->leftJoinSub($sales, 'sales_report', 'sales_report.sold_by', '=', 'users.id')->leftJoinSub($collections, 'collections_report', 'collections_report.sold_by', '=', 'users.id')->where(fn ($query) => $query->whereNotNull('sales_report.sold_by')->orWhereNotNull('collections_report.sold_by'))
-            ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), DB::raw('COALESCE(seller_sale_collections, 0) seller_sale_collections')])->when(ctype_digit($filters->staff), fn ($q) => $q->where('users.id', (int) $filters->staff))->orderByDesc('sales_value')->orderBy('users.id')->paginate(15)->withQueryString();
+            ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), DB::raw('COALESCE(seller_sale_collections, 0) seller_sale_collections')])->when(ctype_digit($filters->staff), fn ($q) => $q->where('users.id', (int) $filters->staff))->orderByDesc('sales_value')->orderBy('users.id')->paginate($filters->perPage)->withQueryString();
 
         return $this->payload('Staff Sales Performance', $filters, [$this->count('Staff With Period Activity', $rows->total())], $rows, 'staff');
     }

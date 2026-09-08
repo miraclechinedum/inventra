@@ -8,6 +8,7 @@ use App\Http\Requests\ReceivePurchaseRequest;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Supplier;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -30,7 +31,7 @@ class PurchaseController extends Controller
                 ->orWhere('received_by_name_snapshot', 'like', $escaped.'%')))
             ->when($from && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from), fn ($query) => $query->whereDate('received_at', '>=', $from))
             ->when($to && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to), fn ($query) => $query->whereDate('received_at', '<=', $to))
-            ->latest('received_at')->paginate(15)->withQueryString();
+            ->latest('received_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString();
 
         return view('purchases.index', compact('purchases', 'search', 'from', 'to'));
     }

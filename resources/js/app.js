@@ -2,11 +2,60 @@ import { Alpine, Livewire } from '../../vendor/livewire/livewire/dist/livewire.c
 
 window.Alpine = Alpine;
 
+Alpine.data('navigation', () => ({
+    menuOpen: false,
+    compact: window.matchMedia('(max-width: 1100px)').matches,
+    init() {
+        this.media = window.matchMedia('(max-width: 1100px)');
+        this.onResize = (event) => {
+            this.compact = event.matches;
+            this.menuOpen = false;
+        };
+        this.media.addEventListener('change', this.onResize);
+        this.$nextTick(() => {
+            if (!this.compact) document.querySelector('.inventra-nav [aria-current=page]')?.scrollIntoView({block: 'nearest'});
+        });
+    },
+    destroy() { this.media.removeEventListener('change', this.onResize); },
+    openMenu() {
+        this.menuOpen = true;
+        this.$nextTick(() => {
+            document.querySelector('.inventra-nav [aria-current=page]')?.scrollIntoView({block: 'nearest'});
+            document.querySelector('.inventra-menu-close').focus();
+        });
+    },
+    closeMenu() {
+        if (!this.menuOpen) return;
+        this.menuOpen = false;
+        this.$nextTick(() => document.getElementById('navigation-toggle').focus());
+    },
+    trapFocus(event) {
+        if (!this.compact || !this.menuOpen) return;
+        const controls = [...document.querySelectorAll('#app-navigation a, #app-navigation button')]
+            .filter(element => element.getClientRects().length && !element.disabled);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    },
+}));
+
 Livewire.start();
 
 document.addEventListener('click', (event) => {
     if (event.target.closest('[data-print-trigger], button[data-print-page]')) {
         window.print();
+    }
+});
+
+// Shared record-list controls (currently the rows-per-page selector) submit their own GET form on
+// change. Delegated here rather than as an inline handler or an Alpine expression: the CSP allows
+// only nonce'd external scripts, and this bundle uses the CSP-safe Alpine build, which does not
+// evaluate arbitrary expressions in attributes.
+document.addEventListener('change', (event) => {
+    const control = event.target.closest('[data-table-control]');
+    if (control instanceof HTMLSelectElement && control.form) {
+        control.form.requestSubmit();
     }
 });
 
@@ -57,3 +106,22 @@ if (productSearch) {
         }
     });
 }
+
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (form.dataset.submitting === 'true') {
+        event.preventDefault();
+        return;
+    }
+    if (form.dataset.confirmMessage && !window.confirm(form.dataset.confirmMessage)) {
+        event.preventDefault();
+        return;
+    }
+    if (form.hasAttribute('data-submit-once') && !event.defaultPrevented) {
+        form.dataset.submitting = 'true';
+        form.querySelectorAll('button[type="submit"], button:not([type])').forEach(button => {
+            button.disabled = true;
+        });
+    }
+});

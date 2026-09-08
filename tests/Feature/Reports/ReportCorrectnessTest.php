@@ -22,6 +22,7 @@ use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\PerPage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -190,8 +191,9 @@ class ReportCorrectnessTest extends TestCase
                 $pages[$page] = $rows->pluck($key)->map(fn ($id) => (int) $id)->all();
             }
 
-            $this->assertCount(15, $pages[1], "{$route} page 1 must be full");
-            $this->assertCount(count($expected) - 15, $pages[2], "{$route} page 2 must hold the remainder");
+            $size = PerPage::DEFAULT;
+            $this->assertCount($size, $pages[1], "{$route} page 1 must be full");
+            $this->assertCount(count($expected) - $size, $pages[2], "{$route} page 2 must hold the remainder");
             $this->assertSame([], array_intersect($pages[1], $pages[2]), "{$route} must not repeat a row across pages");
             $this->assertSame($expected, array_merge($pages[1], $pages[2]),
                 "{$route} must partition tied rows in a stable, deterministic order");

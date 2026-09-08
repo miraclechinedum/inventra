@@ -6,7 +6,7 @@
     <title>{{ $purchase->purchase_number }} · Stock Receiving Record</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="mx-auto max-w-4xl p-10 text-slate-800">
+<body class="ui-standalone-receipt">
     <button type="button" data-print-page class="mb-6 rounded-lg bg-[#0b56c9] px-4 py-2 font-semibold text-white print:hidden">Print</button>
     <x-receipt-letterhead document="Stock Receiving Record" />
     <h2 class="mt-2 font-mono text-xl">{{ $purchase->purchase_number }}</h2>
@@ -19,5 +19,5 @@
         <tbody>@foreach($purchase->items as $item)<tr class="border-b"><td class="p-3">{{ $item->product_name_snapshot }} ({{ $item->product_sku_snapshot }})</td><td class="p-3">{{ $item->quantity }} {{ $item->product_unit_snapshot }}</td><td class="p-3">₦{{ \App\Support\Money::format($item->unit_cost) }}</td><td class="p-3 text-right">₦{{ \App\Support\Money::format($item->line_total) }}</td></tr>@endforeach</tbody>
     </table>
     <h3 class="mt-6 text-right text-xl font-bold">Total: ₦{{ \App\Support\Money::format($purchase->total_amount) }}</h3>
-</body>
+@livewireScriptConfig</body>
 </html>

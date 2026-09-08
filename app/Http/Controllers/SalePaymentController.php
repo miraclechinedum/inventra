@@ -8,6 +8,7 @@ use App\Http\Requests\Sale\RecordSalePaymentRequest;
 use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Models\User;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -35,7 +36,7 @@ class SalePaymentController extends Controller
             ->when(preg_match('/^\d{4}-\d{2}-\d{2}$/', $from), fn ($query) => $query->whereDate('paid_at', '>=', $from))
             ->when(preg_match('/^\d{4}-\d{2}-\d{2}$/', $to), fn ($query) => $query->whereDate('paid_at', '<=', $to))
             ->when(ctype_digit($recordedBy), fn ($query) => $query->where('recorded_by', $recordedBy))
-            ->latest('paid_at')->paginate(20)->withQueryString();
+            ->latest('paid_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString();
 
         return view('sale-payments.index', [
             'payments' => $payments,

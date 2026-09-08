@@ -24,6 +24,7 @@ use App\Models\SaleReturnItem;
 use App\Models\SaleReturnRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Events\Dispatcher;
@@ -697,11 +698,12 @@ class ReturnRefundFoundationTest extends TestCase
 
         foreach ([['returns.index', 'RET-VOL', 50], ['refunds.index', 'REF-VOL', 35]] as [$routeName, $search, $total]) {
             $seen = [];
-            $pages = (int) ceil($total / 15);
+            $size = PerPage::DEFAULT;
+            $pages = (int) ceil($total / $size);
             foreach (range(1, $pages) as $page) {
                 $html = $this->get(route($routeName, ['search' => $search, 'page' => $page]))->assertOk()->getContent();
                 preg_match_all('/'.preg_quote(substr($search, 0, 3), '/').'-VOL-\d{3}/', $html, $matches);
-                $expected = $page < $pages ? 15 : $total - (15 * ($pages - 1));
+                $expected = $page < $pages ? $size : $total - ($size * ($pages - 1));
                 $this->assertCount($expected, array_unique($matches[0]));
                 $this->assertEmpty(array_intersect($seen, $matches[0]));
                 $seen = array_merge($seen, $matches[0]);
@@ -961,12 +963,21 @@ class ReturnRefundFoundationTest extends TestCase
         ];
     }
 
+    /**
+     * Counts the queries a request issues, excluding the session table. Session bookkeeping is
+     * harness noise, not application data access: the first request of a run INSERTs its session
+     * row and later ones UPDATE it, which makes an otherwise-identical pair of pages differ by one
+     * query. Matches the convention already used in the business-settings suite.
+     */
     private function queryCount(callable $request): int
     {
         DB::flushQueryLog();
         DB::enableQueryLog();
         $request();
-        $count = count(DB::getQueryLog());
+        $count = count(array_filter(
+            DB::getQueryLog(),
+            fn (array $query) => ! str_contains($query['query'], '`sessions`'),
+        ));
         DB::disableQueryLog();
 
         return $count;

@@ -16,6 +16,8 @@ return [
     // The enforced policy must include frame-ancestors 'none' when rollout is complete.
     'content_security_policy' => env('CONTENT_SECURITY_POLICY'),
 
+    'content_security_policy_report_only' => (bool) env('CONTENT_SECURITY_POLICY_REPORT_ONLY', false),
+
     'strict_transport_security' => env(
         'STRICT_TRANSPORT_SECURITY',
         'max-age=31536000'

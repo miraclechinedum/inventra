@@ -13,6 +13,7 @@ use App\Http\Requests\RecordSaleReturnRequest;
 use App\Models\Sale;
 use App\Models\SaleRefund;
 use App\Models\SaleReturn;
+use App\Support\PerPage;
 use App\Support\SaleFinancials;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,7 +39,7 @@ class SaleReturnController extends Controller
             ->when(ctype_digit($filters['staff']), fn ($query) => $query->where('returned_by', (int) $filters['staff']))
             ->when($this->date($filters['from']), fn ($query) => $query->whereDate('returned_at', '>=', $filters['from']))
             ->when($this->date($filters['to']), fn ($query) => $query->whereDate('returned_at', '<=', $filters['to']))
-            ->latest('returned_at')->paginate(15)->withQueryString();
+            ->latest('returned_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString();
 
         return view('returns.index', compact('rows', 'filters'));
     }
@@ -101,7 +102,7 @@ class SaleReturnController extends Controller
             ->when(in_array($filters['method'], ['cash', 'transfer'], true), fn ($query) => $query->where('payment_method', $filters['method']))
             ->when($this->date($filters['from']), fn ($query) => $query->whereDate('refunded_at', '>=', $filters['from']))
             ->when($this->date($filters['to']), fn ($query) => $query->whereDate('refunded_at', '<=', $filters['to']))
-            ->latest('refunded_at')->paginate(15)->withQueryString();
+            ->latest('refunded_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString();
 
         return view('returns.refunds-index', compact('rows', 'filters'));
     }

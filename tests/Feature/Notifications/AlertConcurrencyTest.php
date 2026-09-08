@@ -15,6 +15,7 @@ use App\Models\OperationalAlertRecipient;
 use App\Models\Product;
 use App\Models\User;
 use App\Reports\BusinessReports;
+use App\Support\PerPage;
 use DomainException;
 use Illuminate\Database\DeadlockException;
 use Illuminate\Database\Events\QueryExecuted;
@@ -332,7 +333,7 @@ class AlertConcurrencyTest extends TestCase
         $response = $this->actingAs($admin)->get(route('notifications.index'))->assertOk();
         DB::getEventDispatcher()->forget(QueryExecuted::class);
 
-        $this->assertCount(25, $response->viewData('notifications')->items(), 'The page must stay bounded');
+        $this->assertCount(PerPage::DEFAULT, $response->viewData('notifications')->items(), 'The page must stay bounded');
         $this->assertLessThanOrEqual(8, $queries, "Index issued {$queries} queries over 5,000 alerts");
         $this->assertSame('99+', app(UnreadAlertCount::class)->badge($admin));
     }

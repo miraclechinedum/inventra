@@ -7,6 +7,7 @@ use App\Actions\Expense\SetExpenseCategoryActive;
 use App\Actions\Expense\UpdateExpenseCategory;
 use App\Http\Requests\ExpenseCategoryRequest;
 use App\Models\ExpenseCategory;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -23,7 +24,7 @@ class ExpenseCategoryController extends Controller
         $categories = ExpenseCategory::query()->withCount('expenses')->withMax('expenses', 'incurred_at')
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('category_code', 'like', mb_strtoupper($escaped).'%')->orWhere('name', 'like', $escaped.'%')->orWhere('description', 'like', $escaped.'%')))
             ->when(in_array($status, ['active', 'inactive'], true), fn ($q) => $q->where('is_active', $status === 'active'))
-            ->orderBy('name')->paginate(15)->withQueryString();
+            ->orderBy('name')->orderBy('id')->paginate(PerPage::resolve($request))->withQueryString();
 
         return view('expense-categories.index', compact('categories', 'search', 'status'));
     }
@@ -42,11 +43,11 @@ class ExpenseCategoryController extends Controller
         return redirect()->route('expense-categories.show', $category)->with('status', 'Expense Category created.');
     }
 
-    public function show(ExpenseCategory $expenseCategory): View
+    public function show(Request $request, ExpenseCategory $expenseCategory): View
     {
         Gate::authorize('view', $expenseCategory);
 
-        return view('expense-categories.show', ['category' => $expenseCategory->loadCount('expenses'), 'expenses' => $expenseCategory->expenses()->latest('incurred_at')->paginate(10)]);
+        return view('expense-categories.show', ['category' => $expenseCategory->loadCount('expenses'), 'expenses' => $expenseCategory->expenses()->latest('incurred_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString()]);
     }
 
     public function edit(ExpenseCategory $expenseCategory): View

@@ -11,9 +11,9 @@
     @endif
 </div>
 
-<form method="GET" action="{{ route('notifications.index') }}" class="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4">
+<form method="GET" action="{{ route('notifications.index') }}" class="ui-filter-bar mt-6 flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4">
     <label class="text-sm">Status
-        <select name="status" class="mt-1 block rounded-xl border-slate-300">
+        <select aria-label="Status" name="status" class="mt-1 block rounded-xl border-slate-300">
             <option value="">All</option>
             @foreach(\App\Enums\OperationalAlertStatus::cases() as $case)
                 <option value="{{ $case->value }}" @selected($filters->status === $case->value)>{{ $case->label() }}</option>
@@ -21,7 +21,7 @@
         </select>
     </label>
     <label class="text-sm">Read state
-        <select name="read" class="mt-1 block rounded-xl border-slate-300">
+        <select aria-label="Read" name="read" class="mt-1 block rounded-xl border-slate-300">
             <option value="">All</option>
             @foreach(['unread' => 'Unread', 'read' => 'Read', 'acknowledged' => 'Acknowledged'] as $value => $label)
                 <option value="{{ $value }}" @selected($filters->readState === $value)>{{ $label }}</option>
@@ -29,7 +29,7 @@
         </select>
     </label>
     <label class="text-sm">Severity
-        <select name="severity" class="mt-1 block rounded-xl border-slate-300">
+        <select aria-label="Severity" name="severity" class="mt-1 block rounded-xl border-slate-300">
             <option value="">All</option>
             @foreach(\App\Enums\OperationalAlertSeverity::cases() as $case)
                 <option value="{{ $case->value }}" @selected($filters->severity === $case->value)>{{ $case->label() }}</option>
@@ -37,7 +37,7 @@
         </select>
     </label>
     <label class="text-sm">Type
-        <select name="type" class="mt-1 block rounded-xl border-slate-300">
+        <select aria-label="Type" name="type" class="mt-1 block rounded-xl border-slate-300">
             <option value="">All</option>
             @foreach(\App\Enums\OperationalAlertType::cases() as $case)
                 <option value="{{ $case->value }}" @selected($filters->type === $case->value)>{{ $case->label() }}</option>
@@ -49,12 +49,14 @@
         <a href="{{ route('notifications.index') }}" class="text-sm font-semibold text-[#0b56c9]">Clear filters</a>
     @endif
 </form>
+<div class="mt-2 text-right"><x-filter-reset /></div>
 
 <div class="mt-6 overflow-hidden rounded-2xl border bg-white">
 @forelse($notifications as $notification)
     <article class="flex flex-wrap items-start justify-between gap-4 border-b p-5 last:border-b-0 {{ $notification->read_at === null ? 'bg-blue-50/40' : '' }}">
         <div class="min-w-0 flex-1">
             <p class="flex flex-wrap items-center gap-2">
+                <span class="ui-feed-ordinal">{{ $notifications->firstItem() + $loop->index }}</span>
                 <span class="rounded-full px-2 py-0.5 text-xs font-semibold {{ $notification->alert->severity->badgeClasses() }}">{{ $notification->alert->severity->label() }}</span>
                 <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{{ $notification->alert->status->label() }}</span>
                 @if($notification->read_at === null)<span class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">Unread</span>@endif
@@ -94,5 +96,5 @@
 @endforelse
 </div>
 
-<div class="mt-6">{{ $notifications->links() }}</div>
+<x-table-footer :paginator="$notifications" noun="notification" />
 </x-app-layout>

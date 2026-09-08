@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -9,6 +10,8 @@ use Tests\TestCase;
 
 class SecurityHeadersTest extends TestCase
 {
+    use DatabaseTransactions;
+
     public function test_web_responses_include_baseline_security_headers(): void
     {
         $this->get('/')
@@ -27,6 +30,32 @@ class SecurityHeadersTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertHeader('Content-Security-Policy', "default-src 'self'");
+    }
+
+    public function test_csp_nonce_matches_rendered_scripts_and_changes_for_each_request(): void
+    {
+        config()->set('security.content_security_policy', "default-src 'self'; script-src 'self' 'nonce-{nonce}'; frame-ancestors 'none'");
+        config()->set('security.content_security_policy_report_only', false);
+
+        $first = $this->get(route('login'))->assertOk();
+        preg_match("/nonce-([^']+)/", $first->headers->get('Content-Security-Policy'), $matches);
+        $this->assertNotEmpty($matches[1] ?? null);
+        $first->assertSee('nonce="'.$matches[1].'"', false);
+        $first->assertSee('window.livewireScriptConfig', false);
+        $second = $this->get(route('login'))->assertOk();
+        $this->assertNotSame($first->headers->get('Content-Security-Policy'), $second->headers->get('Content-Security-Policy'));
+    }
+
+    public function test_csp_report_only_does_not_silently_enforce_the_rollout_policy(): void
+    {
+        config()->set('security.content_security_policy', "default-src 'self'; script-src 'nonce-{nonce}'; frame-ancestors 'none'");
+        config()->set('security.content_security_policy_report_only', true);
+
+        $response = $this->get(route('login'))->assertOk()
+            ->assertHeaderMissing('Content-Security-Policy')
+            ->assertHeader('X-Frame-Options', 'DENY');
+        $this->assertStringContainsString('nonce-', $response->headers->get('Content-Security-Policy-Report-Only'));
+        $this->assertStringNotContainsString('{nonce}', $response->headers->get('Content-Security-Policy-Report-Only'));
     }
 
     public function test_security_headers_are_added_to_error_and_health_responses(): void

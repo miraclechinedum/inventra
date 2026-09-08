@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Audit\AuditFilters;
 use App\Audit\AuditTrail;
 use App\Models\AuditLog;
+use App\Support\PerPage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -19,7 +20,7 @@ class AuditController extends Controller
 
         return view('audit.index', [
             'filters' => $filters,
-            'events' => $trail->paginate($filters),
+            'events' => $trail->paginate($filters, PerPage::resolve($request)),
             'eventOptions' => $trail->eventOptions(),
             'actorOptions' => $trail->actorOptions(),
             'subjectTypes' => array_keys(AuditFilters::SUBJECT_TYPES),

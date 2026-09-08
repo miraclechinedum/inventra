@@ -13,6 +13,7 @@ use App\Models\OperationalAlert;
 use App\Models\OperationalAlertRecipient;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -443,19 +444,23 @@ class NotificationDeliveryTest extends TestCase
         // Every alert shares one created_at, so only the tiebreakers can order them.
         $this->seedBulkAlerts($admin, 30, identicalTimestamps: true);
 
+        $size = PerPage::DEFAULT;
         $firstPage = $this->idsOn($admin, route('notifications.index'));
         $secondPage = $this->idsOn($admin, route('notifications.index').'?page=2');
+        $thirdPage = $this->idsOn($admin, route('notifications.index').'?page=3');
 
-        $this->assertCount(25, $firstPage);
-        $this->assertCount(5, $secondPage);
+        $this->assertCount($size, $firstPage);
+        $this->assertCount($size, $secondPage);
+        $this->assertCount(30 - (2 * $size), $thirdPage);
         $this->assertSame($firstPage, $this->idsOn($admin, route('notifications.index')), 'Repeated loads must agree');
         $this->assertSame($firstPage, $this->idsOn($admin, route('notifications.index')), 'And keep agreeing');
         $this->assertSame([], array_intersect($firstPage, $secondPage), 'No row may appear on two pages');
+        $this->assertSame([], array_intersect($secondPage, $thirdPage), 'And none on the next boundary either');
 
         $descending = $firstPage;
         rsort($descending);
         $this->assertSame($descending, $firstPage, 'Newest first, by a total order');
-        $this->assertSame(30, count(array_unique([...$firstPage, ...$secondPage])), 'Every row is reachable exactly once');
+        $this->assertSame(30, count(array_unique([...$firstPage, ...$secondPage, ...$thirdPage])), 'Every row is reachable exactly once');
     }
 
     /* ------------------------------------------------------------------- audit */

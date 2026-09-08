@@ -18,6 +18,8 @@ use App\Http\Requests\Staff\UpdateStaffRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\SecurityEventRecorder;
+use App\Support\PerPage;
+use App\Support\TableSort;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,6 +30,16 @@ use Illuminate\View\View;
 
 class StaffController extends Controller
 {
+    /** Sort keys the staff list exposes, mapped to the real columns they may order by. */
+    private const SORTABLE = [
+        'name' => 'name',
+        'email' => 'email',
+        'phone' => 'phone',
+        'role' => 'role',
+        'status' => 'status',
+        'last_login' => 'last_login_at',
+    ];
+
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', User::class);
@@ -38,6 +50,7 @@ class StaffController extends Controller
         $search = is_string($searchInput) ? trim($searchInput) : '';
         $escapedSearch = $this->escapeLikePrefix($search);
         $normalizedPhone = User::normalizePhone($search);
+        $sort = TableSort::resolve($request, self::SORTABLE, 'name');
         $staff = User::query()
             ->with('creator:id,name')
             ->when($search !== '', function ($query) use ($escapedSearch, $normalizedPhone): void {
@@ -51,11 +64,14 @@ class StaffController extends Controller
                 fn ($query, UserRole $role) => $query->where('role', $role))
             ->when(is_string($statusInput) ? UserStatus::tryFrom($statusInput) : null,
                 fn ($query, UserStatus $status) => $query->where('status', $status))
-            ->orderBy('name')
-            ->paginate(15)
+            ->orderBy($sort['columns'][0], $sort['direction'])
+            // Names, emails and last-login timestamps all tie, so the primary key breaks the tie
+            // and keeps page boundaries stable across requests.
+            ->orderBy('id')
+            ->paginate(PerPage::resolve($request))
             ->withQueryString();
 
-        return view('staff.index', compact('staff'));
+        return view('staff.index', ['staff' => $staff, 'sort' => $sort]);
     }
 
     public function create(): View
@@ -209,14 +225,15 @@ class StaffController extends Controller
         return back()->with('status', 'All staff sessions revoked.');
     }
 
-    public function activity(User $user): View
+    public function activity(Request $request, User $user): View
     {
         Gate::authorize('viewActivity', $user);
         $events = $user->securityEvents()
             ->with('actor:id,name')
             ->latest('created_at')
             ->latest('id')
-            ->paginate(20);
+            ->paginate(PerPage::resolve($request))
+            ->withQueryString();
 
         return view('staff.activity', ['staffMember' => $user, 'events' => $events]);
     }

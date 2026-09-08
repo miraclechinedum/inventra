@@ -9,6 +9,7 @@ use App\Http\Requests\RecordExpenseRequest;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\User;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -30,7 +31,7 @@ class ExpenseController extends Controller
             ->when(preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters['to']), fn ($q) => $q->whereDate('incurred_at', '<=', $filters['to']));
         $total = (string) (clone $query)->sum('amount');
         $count = (clone $query)->count();
-        $expenses = $query->latest('incurred_at')->latest('id')->paginate(15)->withQueryString();
+        $expenses = $query->latest('incurred_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString();
 
         return view('expenses.index', ['expenses' => $expenses, 'total' => $total, 'count' => $count, 'filters' => $filters, 'categories' => ExpenseCategory::orderBy('name')->get(['id', 'name']), 'recorders' => User::whereIn('role', ['admin', 'manager'])->orderBy('name')->get(['id', 'name'])]);
     }

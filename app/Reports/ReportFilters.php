@@ -2,6 +2,7 @@
 
 namespace App\Reports;
 
+use App\Support\PerPage;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -17,6 +18,7 @@ final readonly class ReportFilters
         public string $category,
         public string $paymentMethod,
         public string $supplier,
+        public int $perPage = PerPage::DEFAULT,
     ) {}
 
     public static function fromRequest(Request $request): self
@@ -36,6 +38,7 @@ final readonly class ReportFilters
             self::scalar($request, 'staff'), self::scalar($request, 'customer'),
             self::scalar($request, 'product'), self::scalar($request, 'category'),
             self::scalar($request, 'payment_method'), self::scalar($request, 'supplier'),
+            PerPage::resolve($request),
         );
     }
 

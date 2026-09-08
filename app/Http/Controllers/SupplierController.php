@@ -7,6 +7,8 @@ use App\Actions\Supplier\SetSupplierActive;
 use App\Actions\Supplier\UpdateSupplier;
 use App\Http\Requests\SupplierRequest;
 use App\Models\Supplier;
+use App\Support\PerPage;
+use App\Support\TableSort;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -14,12 +16,22 @@ use Illuminate\View\View;
 
 class SupplierController extends Controller
 {
+    /** Sort keys the supplier list exposes, mapped to the real columns they may order by. */
+    private const SORTABLE = [
+        'name' => 'name',
+        'code' => 'supplier_code',
+        'contact' => 'contact_person',
+        'purchases' => 'purchases_count',
+        'status' => 'is_active',
+    ];
+
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', Supplier::class);
         $search = is_string($request->query('search')) ? trim($request->query('search')) : '';
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
         $status = $request->query('status');
+        $sort = TableSort::resolve($request, self::SORTABLE, 'name');
 
         $suppliers = Supplier::query()
             ->withCount('purchases')
@@ -31,11 +43,12 @@ class SupplierController extends Controller
                 ->orWhere('phone', 'like', $escaped.'%')
                 ->orWhere('email', 'like', mb_strtolower($escaped).'%')))
             ->when(in_array($status, ['active', 'inactive'], true), fn ($query) => $query->where('is_active', $status === 'active'))
-            ->orderBy('name')->paginate(15)->withQueryString();
+            ->orderBy($sort['columns'][0], $sort['direction'])->orderBy('id')
+            ->paginate(PerPage::resolve($request))->withQueryString();
 
         $statusFilter = is_string($status) ? $status : '';
 
-        return view('suppliers.index', compact('suppliers', 'search', 'statusFilter'));
+        return view('suppliers.index', compact('suppliers', 'search', 'statusFilter', 'sort'));
     }
 
     public function create(): View
@@ -52,13 +65,13 @@ class SupplierController extends Controller
         return redirect()->route('suppliers.show', $supplier)->with('status', 'Supplier created.');
     }
 
-    public function show(Supplier $supplier): View
+    public function show(Request $request, Supplier $supplier): View
     {
         Gate::authorize('view', $supplier);
 
         return view('suppliers.show', [
             'supplier' => $supplier->loadCount('purchases')->loadMax('purchases', 'received_at'),
-            'purchases' => $supplier->purchases()->latest('received_at')->paginate(10),
+            'purchases' => $supplier->purchases()->latest('received_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString(),
         ]);
     }
 

@@ -4,6 +4,7 @@ namespace App\Audit;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Support\PerPage;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -15,9 +16,7 @@ use Illuminate\Support\Collection;
  */
 class AuditTrail
 {
-    private const PER_PAGE = 25;
-
-    public function paginate(AuditFilters $filters): LengthAwarePaginator
+    public function paginate(AuditFilters $filters, int $perPage = PerPage::DEFAULT): LengthAwarePaginator
     {
         return $this->query($filters)
             // Rows written before actor snapshots existed carry NULL snapshots and fall back to the
@@ -30,7 +29,7 @@ class AuditTrail
             ])
             ->latest('created_at')
             ->latest('id')
-            ->paginate(self::PER_PAGE)
+            ->paginate($perPage)
             ->withQueryString();
     }
 

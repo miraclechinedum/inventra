@@ -33,6 +33,7 @@ use App\Models\SaleRefundRequest;
 use App\Models\SaleReturnRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Support\PerPage;
 use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
@@ -49,7 +50,7 @@ class AuditTrailTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const PAGE_SIZE = 25;
+    private const PAGE_SIZE = PerPage::DEFAULT;
 
     private const BOUNDED_INDEX_QUERIES = 12;
 
@@ -397,12 +398,12 @@ class AuditTrailTest extends TestCase
         $page1 = $this->orderedIds($admin, ['page' => 1]);
         $page2 = $this->orderedIds($admin, ['page' => 2]);
 
-        $this->assertCount(25, $page1, 'The index paginates at 25 rows');
+        $this->assertCount(self::PAGE_SIZE, $page1, 'The index paginates at the shared default page size');
         $this->assertSame([], array_intersect($page1, $page2), 'Pages must not overlap on tied timestamps');
 
         $expected = array_reverse($ids);
-        $this->assertSame(array_slice($expected, 0, 25), $page1);
-        $this->assertSame(array_slice($expected, 25), $page2);
+        $this->assertSame(array_slice($expected, 0, self::PAGE_SIZE), $page1);
+        $this->assertSame(array_slice($expected, self::PAGE_SIZE, self::PAGE_SIZE), $page2);
         $this->assertSame($page1, $this->orderedIds($admin, ['page' => 1]), 'Ordering must be stable across renders');
     }
 
@@ -434,7 +435,7 @@ class AuditTrailTest extends TestCase
         $this->assertStringNotContainsString('Customer Created', $bySearch);
 
         $outOfRange = $this->indexContent($admin, ['from' => '2020-01-01', 'to' => '2020-01-31']);
-        $this->assertStringContainsString('0 records', $outOfRange);
+        $this->assertStringContainsString('No audit events match these filters.', $outOfRange);
     }
 
     public function test_business_timezone_boundaries_include_the_whole_lagos_day(): void
@@ -452,7 +453,7 @@ class AuditTrailTest extends TestCase
         }
 
         DB::table('audit_logs')->where('id', $event->id)->update(['created_at' => '2026-06-15 23:05:00']);
-        $this->assertStringContainsString('0 records',
+        $this->assertStringContainsString('No audit events match these filters.',
             $this->indexContent($admin, ['from' => '2026-06-15', 'to' => '2026-06-15']),
             'The next Lagos day must not leak into the filter');
     }

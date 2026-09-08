@@ -4,7 +4,7 @@ Inventra Smart Trade is an internal business application built as a Laravel mono
 
 ## Stack
 
-- PHP 8.3+ and Laravel 13
+- PHP 8.4.1+ (current lock) and Laravel 13
 - Blade, Livewire 4 and Alpine.js
 - Tailwind CSS 4 and Vite
 - MySQL
@@ -13,7 +13,7 @@ Inventra Smart Trade is an internal business application built as a Laravel mono
 
 ## Local setup
 
-Prerequisites are PHP 8.3 or newer with BCMath, mbstring and PDO MySQL, Composer 2, Node.js 22.13 or newer, npm, and MySQL. Local development currently uses MySQL 9.6. Verify that the production host provides these PHP extensions before deployment.
+Prerequisites are PHP 8.4.1 or newer with BCMath, mbstring and PDO MySQL, Composer 2, Node.js 22.13 or newer, npm, and MySQL. Local development currently uses MySQL 9.6. Verify that the production host provides these PHP extensions before deployment.
 
 ```bash
 composer install
@@ -133,7 +133,7 @@ The scheduler prunes security events older than `SECURITY_EVENT_RETENTION_DAYS` 
 
 Production must set `APP_URL` to the exact public HTTPS origin and use `SESSION_SECURE_COOKIE=true`. Requests with any other host are rejected, and generated password-reset links use this configured origin. The security middleware sends baseline browser protections, denies framing, and enables HSTS only for secure production requests. HSTS initially uses `max-age` without `includeSubDomains` or `preload`; add those directives only after every affected subdomain is confirmed HTTPS-only.
 
-The frontend uses Livewire's CSP-compatible Alpine runtime. CSP enforcement remains deferred until application asset requirements are known. The production rollout must build a restrictive policy containing `frame-ancestors 'none'`, apply a per-request nonce where required, deploy it in report-only mode, exercise all application functionality, understand and resolve violations, and only then enforce it. Broad wildcards, `unsafe-inline`, and `unsafe-eval` are not acceptable shortcuts.
+The frontend uses Livewire's CSP-compatible Alpine runtime. CSP nonce support and report-only rollout configuration are implemented; enforcement awaits production-like browser and host verification. The production rollout must build a restrictive policy containing `frame-ancestors 'none'`, apply a per-request nonce where required, deploy it in report-only mode, exercise all application functionality, understand and resolve violations, and only then enforce it. Broad wildcards, `unsafe-inline`, and `unsafe-eval` are not acceptable shortcuts.
 
 `TRUSTED_PROXIES` is intentionally empty by default. If production terminates HTTPS at a reverse proxy, set it to the proxy's verified IP address or CIDR ranges as a comma-separated list. Never use a trust-all value. Confirm secure-cookie behaviour, generated HTTPS URLs, and HSTS after deployment; leave it empty when Namecheap passes requests directly to the application.
 
@@ -371,3 +371,7 @@ The Sales report's void count applies staff/customer filters to the void-event d
 
 Customer-facing Sale and Payment receipts provide browser printing and exclude private transaction
 notes from their HTML. Payment notes remain on the authorized internal payment detail page.
+
+## Production runtime readiness
+
+See [the production runtime contract](docs/production-runtime.md) for the locked PHP minimum, extension/MySQL requirements, CSP rollout, host evidence gates, scheduler, backups and future deployment sequence. PHP 8.3 is not a supported deployment target for the current lock.

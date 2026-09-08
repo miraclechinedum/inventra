@@ -7,6 +7,7 @@ use App\Actions\WhatsApp\SendWhatsAppReceipt;
 use App\Contracts\WhatsAppClient;
 use App\Models\Sale;
 use App\Models\WhatsAppDelivery;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -63,7 +64,7 @@ class WhatsAppDeliveryController extends Controller
         Gate::authorize('viewAny', WhatsAppDelivery::class);
 
         return view('whatsapp.deliveries.index', [
-            'deliveries' => WhatsAppDelivery::query()->with(['sale:id,sale_number', 'creator:id,name'])->latest()->paginate(20),
+            'deliveries' => WhatsAppDelivery::query()->with(['sale:id,sale_number', 'creator:id,name'])->latest('id')->paginate(PerPage::resolve($request))->withQueryString(),
             'configured' => $client->isConfigured(),
         ]);
     }

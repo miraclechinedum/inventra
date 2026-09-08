@@ -10,6 +10,7 @@ use App\Alerts\AlertInbox;
 use App\Alerts\AlertSubject;
 use App\Alerts\UnreadAlertCount;
 use App\Models\OperationalAlertRecipient;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -27,7 +28,7 @@ class NotificationController extends Controller
 
         return view('notifications.index', [
             'filters' => $filters,
-            'notifications' => $inbox->paginate($request->user(), $filters),
+            'notifications' => $inbox->paginate($request->user(), $filters, PerPage::resolve($request)),
             'unreadCount' => $unread->for($request->user()),
         ]);
     }

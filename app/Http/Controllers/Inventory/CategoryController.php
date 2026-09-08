@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\StoreCategoryRequest;
 use App\Http\Requests\Inventory\UpdateCategoryRequest;
 use App\Models\ProductCategory;
+use App\Support\PerPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -16,12 +17,12 @@ use Illuminate\View\View;
 
 class CategoryController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         Gate::authorize('viewAny', ProductCategory::class);
 
         return view('inventory.categories.index', [
-            'categories' => ProductCategory::query()->withCount('products')->orderBy('name')->paginate(20),
+            'categories' => ProductCategory::query()->withCount('products')->orderBy('name')->orderBy('id')->paginate(PerPage::resolve($request))->withQueryString(),
         ]);
     }
 

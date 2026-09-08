@@ -15,6 +15,7 @@ use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Support\CanonicalLoginIdentifier;
+use App\Support\PerPage;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +53,7 @@ class CustomerController extends Controller
                 fn ($query) => $query->where('whatsapp_opt_in', $whatsAppInput === 'opted_in'))
             ->orderBy('first_name')
             ->orderBy('last_name')
-            ->paginate(15)
+            ->paginate(PerPage::resolve($request))
             ->withQueryString();
 
         return view('customers.index', compact('customers', 'canManageStatus'));
@@ -148,7 +149,7 @@ class CustomerController extends Controller
         return back()->with('status', 'WhatsApp consent preference updated.');
     }
 
-    public function activity(Customer $customer): View
+    public function activity(Request $request, Customer $customer): View
     {
         Gate::authorize('viewAudit', $customer);
 
@@ -160,7 +161,7 @@ class CustomerController extends Controller
                 ->with('actor:id,name')
                 ->latest('created_at')
                 ->latest('id')
-                ->paginate(20),
+                ->paginate(PerPage::resolve($request))->withQueryString(),
         ]);
     }
 
