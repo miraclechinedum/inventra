@@ -366,20 +366,35 @@ class NotificationDeliveryTest extends TestCase
 
     /* --------------------------------------------------------------- link safety */
 
-    public function test_an_archived_subject_renders_without_a_broken_destination(): void
+    public function test_an_unresolvable_subject_renders_without_a_broken_destination(): void
     {
         $admin = $this->fixture->admin();
         $product = $this->fixture->product($admin, ['initial_stock' => '1', 'reorder_level' => '5']);
         $recipient = OperationalAlertRecipient::query()->where('user_id', $admin->id)->sole();
 
-        // Products are soft-deleted; an inventory_movements foreign key forbids a hard delete, so
-        // archiving is what "the subject is gone" actually looks like in this application.
-        app(ArchiveProduct::class)->execute($admin, $product->fresh());
+        // A soft-deleted product no longer resolves through route-model binding, which is what "the
+        // subject is gone" looks like. An inventory_movements foreign key forbids a hard delete.
+        $product->fresh()->delete();
 
         $response = $this->actingAs($admin)->get(route('notifications.show', $recipient))->assertOk();
         $response->assertSee('Subject is no longer available');
         $this->assertStringNotContainsString('javascript:', $response->getContent());
         $this->actingAs($admin)->get(route('notifications.index'))->assertOk();
+    }
+
+    public function test_an_archived_subject_still_links_to_the_product_it_refers_to(): void
+    {
+        $admin = $this->fixture->admin();
+        $product = $this->fixture->product($admin, ['initial_stock' => '1', 'reorder_level' => '5']);
+        $recipient = OperationalAlertRecipient::query()->where('user_id', $admin->id)->sole();
+
+        // Archiving retires a product without removing it, so the alert it raised keeps resolving.
+        app(ArchiveProduct::class)->execute($admin, $product->fresh());
+
+        $this->actingAs($admin)->get(route('notifications.show', $recipient))
+            ->assertOk()
+            ->assertDontSee('Subject is no longer available')
+            ->assertSee(route('inventory.products.show', $product), false);
     }
 
     public function test_an_alert_whose_subject_row_no_longer_exists_still_renders(): void

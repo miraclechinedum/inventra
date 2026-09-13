@@ -9,6 +9,7 @@ use App\Actions\Staff\DeactivateStaff;
 use App\Actions\Staff\LockStaff;
 use App\Actions\Staff\RequireStaffPasswordChange;
 use App\Actions\Staff\RevokeStaffSessions;
+use App\Actions\Staff\SetUserPhoto;
 use App\Actions\Staff\UnlockStaff;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
@@ -16,6 +17,7 @@ use App\Http\Requests\Staff\ChangeStaffRoleRequest;
 use App\Http\Requests\Staff\StoreStaffRequest;
 use App\Http\Requests\Staff\UpdateStaffRequest;
 use App\Models\User;
+use App\Reports\EmployeeActivity;
 use App\Services\AuditLogger;
 use App\Services\SecurityEventRecorder;
 use App\Support\PerPage;
@@ -225,7 +227,7 @@ class StaffController extends Controller
         return back()->with('status', 'All staff sessions revoked.');
     }
 
-    public function activity(Request $request, User $user): View
+    public function activity(Request $request, User $user, EmployeeActivity $employeeActivity): View
     {
         Gate::authorize('viewActivity', $user);
         $events = $user->securityEvents()
@@ -235,11 +237,37 @@ class StaffController extends Controller
             ->paginate(PerPage::resolve($request))
             ->withQueryString();
 
-        return view('staff.activity', ['staffMember' => $user, 'events' => $events]);
+        // Work activity is derived on demand from the business tables; see EmployeeActivity for why
+        // there is no counter column to keep in step.
+        $from = $request->query('from');
+        $to = $request->query('to');
+        $activity = $employeeActivity->forUser(
+            $user,
+            is_string($from) ? $from : null,
+            is_string($to) ? $to : null,
+        );
+
+        return view('staff.activity', [
+            'staffMember' => $user,
+            'events' => $events,
+            'activity' => $activity,
+        ]);
     }
 
     private function escapeLikePrefix(string $value): string
     {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
+    /**
+     * Removes another staff member's photograph. Admin moderation only — uploading a photo for
+     * someone else is deliberately not offered, so a person's picture is always their own choice.
+     */
+    public function destroyPhoto(Request $request, User $user, SetUserPhoto $action): RedirectResponse
+    {
+        Gate::authorize('removePhoto', $user);
+        $action->remove($request->user(), $user);
+
+        return back()->with('status', 'Profile photo removed.');
     }
 }

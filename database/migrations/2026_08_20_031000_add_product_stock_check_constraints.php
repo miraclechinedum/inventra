@@ -13,7 +13,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE products DROP CHECK products_reorder_level_non_negative');
-        DB::statement('ALTER TABLE products DROP CHECK products_current_stock_non_negative');
+        DB::statement('ALTER TABLE products DROP CONSTRAINT products_reorder_level_non_negative');
+        DB::statement('ALTER TABLE products DROP CONSTRAINT products_current_stock_non_negative');
     }
 };

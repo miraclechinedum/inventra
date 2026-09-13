@@ -11,12 +11,44 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
+use LogicException;
 
 #[Fillable(['category_id', 'name', 'sku', 'description', 'cost_price', 'selling_price', 'reorder_level', 'unit'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
     use HasFactory, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        // The public identifier is the server's to assign, never the client's. It is not in the
+        // Fillable attribute either, so no request payload can reach it; this only guarantees a
+        // value exists for every Product however it was created.
+        static::creating(function (self $product): void {
+            if (blank($product->public_id)) {
+                $product->public_id = (string) Str::ulid();
+            }
+        });
+
+        // Once published, a URL should keep resolving. Changing the identifier would break every
+        // link already shared, so it is fixed at creation.
+        static::updating(function (self $product): void {
+            if ($product->isDirty('public_id')) {
+                throw new LogicException('A product public identifier is immutable once assigned.');
+            }
+        });
+    }
+
+    /**
+     * Products are addressed publicly by their ULID, so `/inventory/products/1` becomes
+     * `/inventory/products/01K5G9…`. Internal relationships continue to use the numeric primary
+     * key; only route binding and URL generation change.
+     */
+    public function getRouteKeyName(): string
+    {
+        return 'public_id';
+    }
 
     public function category(): BelongsTo
     {

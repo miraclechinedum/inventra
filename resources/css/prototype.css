@@ -281,3 +281,344 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
 }
 /* The notification inbox stays a feed of actionable cards; the ordinal is its S/N. */
 .ui-feed-ordinal { display: inline-grid; min-width: 22px; height: 22px; place-items: center; padding: 0 6px; border-radius: 6px; background: #f1f5f9; color: var(--ui-muted); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ── Record form pages (Add product) ────────────────────────────────────────
+   A flat, compact application form: one bordered sheet, a breadcrumb head, a
+   two-column field grid that collapses to one column, and a footer action bar.
+   Deliberately no hero heading and no nested cards. */
+.ui-form-sheet { border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-surface); box-shadow: 0 2px 3px #0f172a03; }
+.ui-form-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid var(--ui-border); }
+.ui-form-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--ui-muted); }
+.ui-form-crumbs a { color: var(--ui-muted); font-weight: 500; }
+.ui-form-crumbs a:hover { color: #334155; text-decoration: underline; text-underline-offset: 3px; }
+.ui-form-crumbs span[aria-hidden] { color: #cbd5e1; }
+.ui-form-crumbs strong { color: #1d4ed8; font-size: 13px; font-weight: 650; }
+.ui-form-dismiss { display: grid; flex: none; width: 32px; height: 32px; place-items: center; border: 1px solid var(--ui-border); border-radius: 8px; background: #fff; color: #64748b; }
+.ui-form-dismiss:hover { background: #f1f5f9; color: #0f172a; }
+.inventra-content .ui-form-dismiss { min-height: 32px; padding: 0; }
+.ui-form-body { padding: 24px; }
+.ui-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+.ui-form-grid > .is-full { grid-column: 1 / -1; }
+.ui-field { display: flex; min-width: 0; flex-direction: column; }
+.inventra-content .ui-field > label, .ui-field-label { margin-bottom: 7px; color: #475569; font-size: 12px; font-weight: 600; }
+.ui-field-label .is-required { margin-left: 2px; color: #dc2626; }
+.inventra-content .ui-field :is(input, select, textarea) { width: 100%; height: 44px; }
+.inventra-content .ui-field textarea { height: auto; min-height: 88px; padding-top: 10px; resize: vertical; }
+.ui-field-error { margin-top: 6px; color: #dc2626; font-size: 12px; line-height: 1.45; }
+.ui-field-hint { margin-top: 6px; color: #94a3b8; font-size: 11px; line-height: 1.5; }
+.inventra-content .ui-field :is(input, select)[aria-invalid=true], .inventra-content .ui-field textarea[aria-invalid=true] { border-color: #f87171; background-color: #fffbfb; }
+
+/* Naira prefix: the symbol is decoration inside the control, the input stays a plain input. */
+.ui-money { position: relative; display: flex; align-items: center; }
+.ui-money > span { position: absolute; left: 0; display: grid; width: 34px; place-items: center; color: #64748b; font-size: 13px; pointer-events: none; }
+.inventra-content .ui-money :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden])) { padding-left: 34px; }
+
+/* Numeric stepper. The input is a real number input; the buttons only nudge it. */
+.ui-stepper { display: flex; width: 100%; max-width: 168px; align-items: stretch; overflow: hidden; border: 1px solid #d6dee9; border-radius: 9px; background: #fff; }
+.ui-stepper:focus-within { outline: 3px solid #dbeafe; outline-offset: 1px; border-color: #2563eb; }
+.inventra-content .ui-stepper button { flex: none; width: 42px; min-height: 42px; border: 0; border-radius: 0; background: #fff; color: #475569; font-size: 17px; font-weight: 600; line-height: 1; }
+.inventra-content .ui-stepper button:hover { background: #f1f5f9; color: #0f172a; }
+.inventra-content .ui-stepper button:focus-visible { outline: 2px solid #1d4ed8; outline-offset: -2px; }
+.inventra-content .ui-stepper input { width: auto; flex: 1; height: 42px; min-width: 0; border: 0; border-inline: 1px solid #eef1f6; border-radius: 0; padding: 0 8px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+.inventra-content .ui-stepper input:focus-visible { outline: 0; }
+.ui-stepper input[aria-invalid=true] { color: #b91c1c; }
+/* The spin buttons would duplicate the − / + controls. */
+.ui-stepper input::-webkit-outer-spin-button, .ui-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ui-stepper input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+/* Product image: square preview beside its two controls. */
+.ui-image-field { display: flex; align-items: flex-start; gap: 16px; }
+.ui-image-drop { display: grid; flex: none; width: 84px; height: 84px; place-items: center; overflow: hidden; border: 1px dashed #cbd5e1; border-radius: 11px; background: #f8fafc; color: #94a3b8; }
+.ui-image-drop img { width: 100%; height: 100%; object-fit: cover; }
+.ui-image-actions { display: flex; min-width: 0; flex-direction: column; gap: 9px; }
+.ui-image-buttons { display: flex; flex-wrap: wrap; gap: 9px; }
+.inventra-content .ui-image-buttons button { min-height: 38px; padding: 0 15px; gap: 7px; }
+.ui-image-chosen { display: flex; align-items: center; gap: 8px; min-width: 0; color: #475569; font-size: 12px; }
+.ui-image-chosen > b { overflow: hidden; min-width: 0; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.inventra-content .ui-image-chosen button { min-height: 24px; padding: 0; color: #dc2626; font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+/* Focusable and operable, but never the thing a pointer reaches for. The wrapper is the
+   positioning context, so the offscreen input cannot contribute to the page's scroll width. */
+.ui-image-actions { position: relative; }
+.ui-image-input { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; clip-path: inset(50%); white-space: nowrap; }
+.ui-image-input:focus-visible { width: auto; height: auto; opacity: 1; clip-path: none; }
+
+/* Category field: the select and its management affordance share one row. */
+.ui-field-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.inventra-content .ui-inline-link { align-self: auto; min-height: 24px; margin-bottom: 3px; padding: 0 4px; margin-right: -4px; color: #1d4ed8; font-size: 12px; font-weight: 600; }
+.inventra-content .ui-inline-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* "More details": a disclosure, not a second card. */
+.ui-more-details { margin-top: 22px; border-top: 1px solid var(--ui-border); padding-top: 18px; }
+.inventra-content .ui-more-toggle { min-height: 34px; padding: 0; color: #334155; font-size: 13px; font-weight: 600; gap: 7px; }
+.ui-more-toggle i { display: inline-block; border-inline: 4px solid transparent; border-top: 5px solid #94a3b8; transition: transform .15s; }
+.ui-more-toggle[aria-expanded=true] i { transform: rotate(-180deg); }
+.ui-more-panel { margin-top: 18px; }
+
+/* Footer action bar. */
+.ui-form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--ui-border); background: #fcfdff; border-radius: 0 0 var(--ui-radius) var(--ui-radius); }
+.ui-form-actions-end { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-left: auto; }
+.inventra-content .ui-button-subtle { background: transparent; border-color: transparent; color: #475569; }
+.inventra-content .ui-button-subtle:hover { background: #f1f5f9; color: #0f172a; }
+
+/* Inline new-category panel, shown only to users the policy already trusts. */
+.ui-inline-panel { margin-top: 14px; border: 1px solid #dbeafe; border-radius: 11px; background: #f8faff; padding: 14px; }
+.ui-inline-panel-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.ui-inline-panel-row > .ui-field { flex: 1 1 180px; }
+.ui-inline-panel > p { margin-top: 9px; color: #64748b; font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 1023px) {
+    .ui-form-body, .ui-form-sheet-head, .ui-form-actions { padding-inline: 18px; }
+    .ui-form-grid { gap: 16px; }
+}
+@media (max-width: 767px) {
+    .ui-form-sheet-head { padding: 14px 16px; }
+    .ui-form-body { padding: 18px 16px; }
+    .ui-form-grid { grid-template-columns: minmax(0, 1fr); }
+    .ui-image-field { flex-direction: column; }
+    .ui-image-buttons { width: 100%; }
+    .inventra-content .ui-image-buttons button { flex: 1 1 auto; }
+    .ui-stepper { max-width: none; }
+    .inventra-content .ui-stepper button { width: 48px; min-height: 46px; }
+    .ui-form-actions { flex-direction: column-reverse; align-items: stretch; padding: 14px 16px; gap: 10px; }
+    .ui-form-actions-end { margin-left: 0; flex-direction: column-reverse; align-items: stretch; }
+    .inventra-content .ui-form-actions :is(button, a) { width: 100%; min-height: 46px; align-self: stretch; }
+    .ui-inline-panel-row > .ui-field { flex-basis: 100%; }
+    .inventra-content .ui-inline-panel-row button { width: 100%; }
+}
+
+/* ── Category combobox ──────────────────────────────────────────────────────
+   A text input that owns a listbox. The popup is absolutely positioned so it
+   overlays the fields below rather than pushing the form around as it opens. */
+.ui-combobox { position: relative; }
+.ui-combobox-control { position: relative; display: flex; align-items: center; }
+.inventra-content .ui-combobox-input { width: 100%; height: 44px; padding-right: 34px; }
+.ui-combobox-caret { position: absolute; right: 14px; border-inline: 4px solid transparent; border-top: 5px solid #64748b; pointer-events: none; }
+.ui-combobox-list { position: absolute; z-index: 30; top: calc(100% + 5px); left: 0; right: 0; max-height: 232px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid #bfdbfe; border-radius: 10px; background: #fff; box-shadow: 0 12px 32px #0f172a1f; overscroll-behavior: contain; scrollbar-width: thin; }
+.ui-combobox-option { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 7px; color: #1e293b; font-size: 13px; cursor: pointer; }
+.ui-combobox-option.is-active { background: #f1f5f9; }
+.ui-combobox-option.is-create { color: #1d4ed8; font-weight: 600; }
+.ui-combobox-option.is-create.is-active { background: #eff6ff; }
+.ui-combobox-create { display: flex; align-items: center; gap: 8px; }
+.ui-combobox-empty { display: flex; align-items: center; min-height: 40px; padding: 0 12px; color: #94a3b8; font-size: 12px; }
+.ui-combobox-busy { margin-top: 6px; color: #64748b; font-size: 11px; }
+/* The create row is the last child and reads as a distinct action, as in the design. */
+.ui-combobox-option.is-create:not(:only-child) { margin-top: 4px; border-top: 1px solid #eef1f6; border-radius: 0 0 7px 7px; padding-top: 4px; }
+
+/* Success flash: dismissible by hand, and clears itself after a few seconds. */
+.inventra-alert-success { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.inventra-alert-dismiss { flex: none; border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .6; }
+.inventra-alert-dismiss:hover { opacity: 1; }
+.inventra-content .inventra-alert-dismiss { min-height: 0; padding: 0 2px; }
+
+/* Advisory field warnings: visible and actionable, but never a block on their own. */
+.ui-field-warning { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; color: #b45309; font-size: 12px; line-height: 1.5; }
+.ui-field-warning > span[aria-hidden] { color: #d97706; }
+.inventra-content .ui-field-warning button, .inventra-content .ui-field-warning a { min-height: 0; padding: 0; color: #b45309; font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.inventra-content .ui-field-warning button:hover, .inventra-content .ui-field-warning a:hover { color: #92400e; }
+.ui-field-error { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.inventra-content .ui-field-error a { min-height: 0; padding: 0; color: inherit; font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Inventory listing rows ─────────────────────────────────────────────── */
+.ui-product-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ui-product-cell a { font-weight: 600; color: #0f172a; }
+.ui-product-cell a:hover { color: #1d4ed8; }
+/* A low-stock row is tinted the palest rose: enough to scan the table and spot what needs
+   reordering, light enough that body text, badges and icons keep their normal contrast.
+   The tint is painted on the cells, not the row: a <tr> background sits behind its <td>s, so
+   anything that ever gives a cell its own background would hide it. Each state also declares its
+   own :hover, because these selectors outrank the generic `tbody tr:hover` and would otherwise
+   swallow the hover feedback entirely. */
+.inventra-content .ui-inventory-table tr.is-low > td { background: #fef2f2; }
+.inventra-content .ui-inventory-table tr.is-low:hover > td { background: #fde8e8; }
+/* Archived is the authoritative operational state. Blade already refuses to set `is-low` on an
+   archived row, so the two never combine; this keeps the archived row visually quiet. */
+.inventra-content .ui-inventory-table tr.is-archived > td { background: #fff; }
+.inventra-content .ui-inventory-table tr.is-archived:hover > td { background: #f8fafc; }
+.ui-inventory-table tr.is-archived { color: #94a3b8; }
+.ui-inventory-table tr.is-archived .ui-product-cell a { color: #64748b; }
+.ui-inventory-table tr.is-archived img, .ui-inventory-table tr.is-archived [role=img] { opacity: .55; }
+.ui-stock-low { color: #b45309; }
+.ui-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.ui-icon-action { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--ui-border); border-radius: 8px; background: #fff; color: #475569; cursor: pointer; }
+.ui-icon-action:hover { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.ui-icon-action.is-danger:hover { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
+.inventra-content .ui-icon-action { min-height: 32px; padding: 0; }
+
+/* ── Modal ──────────────────────────────────────────────────────────────── */
+.ui-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.ui-modal-backdrop { position: absolute; inset: 0; background: #0f172a66; }
+/* 100dvh (not vh) so the panel's cap tracks the real, address-bar-adjusted viewport on mobile
+   browsers rather than a taller value that leaves controls below the fold. */
+.ui-modal-panel { position: relative; display: flex; flex-direction: column; width: min(620px, 100%); max-height: min(calc(100vh - 40px), calc(100dvh - 40px)); overflow: hidden; border-radius: var(--ui-radius); background: #fff; box-shadow: 0 24px 60px #0f172a33; }
+.ui-modal-head { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--ui-border); }
+.ui-modal-head h2 { font-size: 17px; font-weight: 700; }
+.ui-modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.ui-modal-loading { padding: 28px 22px; color: var(--ui-muted); font-size: 13px; }
+.ui-modal-body .ui-form-actions { border-radius: 0; }
+.ui-modal-body .ui-form-body { padding: 20px 22px; }
+
+/* ── Lifecycle confirmation dialog ─────────────────────────────────────────
+   A real centered dialog for consequential product-lifecycle actions
+   (archive, reactivate, permanent delete), rather than a floating popover
+   that can be clipped by a scrolling ancestor. It sits above the Edit
+   Product modal (higher z-index) and is a sibling of that modal's panel,
+   so its own fixed positioning is never subject to the modal body's
+   `overflow-y: auto` clipping. */
+.ui-confirm-dialog { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.ui-confirm-backdrop { position: absolute; inset: 0; background: #0f172a80; }
+.ui-confirm-panel { position: relative; display: flex; flex-direction: column; width: min(420px, 100%); max-height: min(calc(100vh - 40px), calc(100dvh - 40px)); overflow-y: auto; border-radius: var(--ui-radius); background: #fff; padding: 22px; box-shadow: 0 24px 60px #0f172a3d; }
+.ui-confirm-panel h2 { font-size: 16px; font-weight: 700; color: #0f172a; }
+.ui-confirm-panel p { margin-top: 8px; color: #475569; font-size: 13px; line-height: 1.6; }
+.ui-confirm-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.ui-button-warning { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.ui-button-warning:hover { background: #fef3c7; }
+.ui-button-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+.ui-button-danger:hover { background: #b91c1c; }
+@media (max-width: 480px) {
+    .ui-confirm-dialog { align-items: flex-end; padding: 0; }
+    .ui-confirm-panel { width: 100%; border-radius: var(--ui-radius) var(--ui-radius) 0 0; }
+    .ui-confirm-actions { flex-direction: column-reverse; align-items: stretch; }
+    .inventra-content .ui-confirm-actions :is(button) { width: 100%; min-height: 46px; }
+}
+
+/* Lifecycle actions sit apart from save/cancel; permanent delete is further out still. */
+.ui-lifecycle-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ui-danger-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid #fee2e2; background: #fffafa; padding: 14px 24px; }
+.ui-danger-zone strong { display: block; color: #991b1b; font-size: 12.5px; }
+.ui-danger-zone p { margin-top: 2px; max-width: 52ch; color: #b45309; font-size: 11.5px; line-height: 1.5; }
+.inventra-content .ui-danger-zone button[disabled] { min-height: 34px; padding: 0 12px; color: #94a3b8; font-size: 12px; }
+/* When deletion is unavailable, the whole section reads as quieter/secondary rather than an
+   active destructive control competing for attention with the primary Archive action above it. */
+.ui-danger-zone.is-unavailable { background: #fafafa; border-top-color: #f1f5f9; }
+.ui-danger-zone.is-unavailable strong { color: #64748b; font-weight: 600; }
+.ui-danger-zone.is-unavailable p { color: #94a3b8; }
+
+@media (max-width: 767px) {
+    /* The product photo sits above its name rather than squeezing the column. */
+    .ui-product-cell { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .ui-row-actions { justify-content: flex-start; flex-wrap: wrap; }
+    .ui-modal { padding: 0; align-items: flex-end; }
+    .ui-modal-panel { width: 100%; max-height: 92vh; border-radius: var(--ui-radius) var(--ui-radius) 0 0; }
+    .ui-modal-body .ui-form-body { padding: 16px; }
+    .ui-danger-zone { flex-direction: column; align-items: stretch; padding: 16px; }
+    .inventra-content .ui-danger-zone :is(button, details, summary) { width: 100%; }
+    /* The lifecycle-confirm trigger is a <span x-data="..."> wrapping its button; on mobile its
+       containers stretch their children, so the wrapper (an inline box by default) is made a block
+       so the button inside can genuinely fill the available width rather than just its own
+       shrunk-to-content box. */
+    .inventra-content .ui-lifecycle-actions > span, .inventra-content .ui-danger-zone > span { display: block; width: 100%; }
+    .inventra-content .ui-lifecycle-actions > span > button, .inventra-content .ui-danger-zone > span > button { width: 100%; min-height: 46px; }
+}
+
+/* Filter bars flow rather than assume a fixed column count: several of them render a different
+   number of controls depending on what the viewer is allowed to filter by. */
+.ui-filter-flow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.ui-filter-flow > .ui-field { flex: 1 1 170px; min-width: 0; }
+.ui-filter-flow > .ui-field:first-child { flex: 2 1 260px; }
+.inventra-content .ui-filter-flow > button { flex: none; align-self: flex-end; }
+@media (max-width: 639px) {
+    .ui-filter-flow > .ui-field, .ui-filter-flow > .ui-field:first-child { flex-basis: 100%; }
+    .inventra-content .ui-filter-flow > button { width: 100%; }
+}
+
+/* ── Icon-only button tooltips ──────────────────────────────────────────────
+   A single bubble, positioned by script and appended to <body>, so no card,
+   table or modal overflow can clip it. Purely decorative: every trigger keeps
+   its own aria-label, so nothing here is the only way to understand a control. */
+.ui-tooltip {
+    position: fixed; top: 0; left: 0; z-index: 90;
+    max-width: 220px; padding: 5px 9px;
+    border-radius: 7px; background: #0f172a; color: #f8fafc;
+    font-size: 11.5px; font-weight: 500; line-height: 1.45; white-space: nowrap;
+    box-shadow: 0 6px 18px #0f172a2e;
+    opacity: 0; visibility: hidden; transform: translateY(2px);
+    transition: opacity .12s ease, transform .12s ease, visibility .12s;
+    pointer-events: none;
+}
+.ui-tooltip.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .ui-tooltip { transition: none; } }
+
+/* ── Product details ────────────────────────────────────────────────────────
+   One flat sheet: breadcrumb head, identity + actions, a metric strip and the
+   activity ledger. Deliberately no nested cards or heavy shadows. */
+.ui-detail-sheet { border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-surface); box-shadow: 0 2px 3px #0f172a03; overflow: hidden; }
+.ui-detail-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; }
+.ui-detail-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ui-detail-titles { min-width: 0; }
+.inventra-content .ui-detail-titles h2 { font-size: 21px; font-weight: 750; letter-spacing: -.3px; color: #0f172a; overflow-wrap: anywhere; }
+.ui-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; color: var(--ui-muted); font-size: 12.5px; }
+.ui-detail-sku { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; letter-spacing: -.1px; }
+.ui-stock-state { font-weight: 650; }
+.ui-stock-state.is-healthy { color: #047857; }
+.ui-stock-state.is-low { color: #b45309; }
+.ui-stock-state.is-archived { color: #64748b; }
+.ui-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* Metric strip: equal columns separated by hairlines, wrapping on narrow screens. */
+.ui-metric-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--ui-border); border-bottom: 1px solid var(--ui-border); background: #fcfdff; }
+.ui-metric-cell { padding: 14px 24px; border-left: 1px solid var(--ui-border); }
+.ui-metric-cell:first-child { border-left: 0; }
+.ui-metric-cell small { display: block; color: var(--ui-muted); font-size: 11.5px; font-weight: 500; }
+.ui-metric-cell strong { display: block; margin-top: 3px; color: #0f172a; font-size: 19px; font-weight: 750; letter-spacing: -.3px; font-variant-numeric: tabular-nums; }
+.ui-metric-cell strong.is-low { color: #b45309; }
+
+.ui-detail-description { padding: 16px 24px; border-bottom: 1px solid var(--ui-border); }
+.ui-detail-description small { color: var(--ui-muted); font-size: 11.5px; font-weight: 500; }
+.ui-detail-description p { margin-top: 4px; color: #334155; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+
+/* Activity ledger */
+.ui-activity { padding: 18px 24px 20px; }
+.ui-activity-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.inventra-content .ui-activity-head h3 { font-size: 14px; font-weight: 700; color: #0f172a; }
+.ui-activity-head a { color: var(--inventra-primary, #1d4ed8); font-size: 12.5px; font-weight: 600; }
+.ui-activity-list { margin: 10px 0 0; padding: 0; list-style: none; }
+.ui-activity-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #f1f5f9; }
+.ui-activity-row:first-child { border-top: 0; }
+.ui-activity-icon { display: grid; flex: none; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: #f1f5f9; color: #64748b; }
+.ui-activity-icon[data-tone=positive] { background: #ecfdf5; color: #047857; }
+.ui-activity-icon[data-tone=negative] { background: #fef2f2; color: #b91c1c; }
+.ui-activity-icon[data-tone=sale] { background: #eff6ff; color: #1d4ed8; }
+.ui-activity-icon[data-tone=warning] { background: #fffbeb; color: #b45309; }
+.ui-activity-body { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
+.ui-activity-body b { color: #0f172a; font-size: 13px; font-weight: 650; }
+.ui-activity-body span { color: var(--ui-muted); font-size: 12px; overflow-wrap: anywhere; }
+.ui-activity-when { display: flex; flex: none; align-items: baseline; gap: 8px; color: var(--ui-muted); font-size: 11.5px; white-space: nowrap; }
+.ui-activity-empty { padding: 22px 0; color: var(--ui-muted); font-size: 13px; text-align: center; }
+
+/* Supporting panels and the lifecycle strip */
+.ui-detail-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.ui-detail-panel { border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-surface); padding: 20px; box-shadow: 0 2px 3px #0f172a03; }
+.inventra-content .ui-detail-panel h3 { font-size: 14px; font-weight: 700; color: #0f172a; }
+.ui-detail-hint { margin-top: 5px; color: var(--ui-muted); font-size: 12px; line-height: 1.55; }
+.inventra-content .ui-detail-panel :is(input, select, textarea) { width: 100%; }
+.ui-detail-lifecycle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: #fcfdff; padding: 16px 20px; }
+.ui-detail-lifecycle strong { display: block; color: #0f172a; font-size: 13px; }
+.ui-detail-lifecycle p { margin-top: 3px; max-width: 62ch; color: var(--ui-muted); font-size: 12px; line-height: 1.55; }
+.ui-detail-lifecycle-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+@media (max-width: 1023px) {
+    .ui-metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* With two per row, the third cell starts a new row and must lose its divider. */
+    .ui-metric-cell:nth-child(odd) { border-left: 0; }
+    .ui-metric-cell:nth-child(n+3) { border-top: 1px solid var(--ui-border); }
+    .ui-detail-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+    .ui-detail-head { padding: 16px; gap: 14px; }
+    .ui-detail-actions { width: 100%; }
+    .inventra-content .ui-detail-actions > a { flex: 1 1 auto; justify-content: center; }
+    .ui-metric-cell { padding: 12px 16px; }
+    .inventra-content .ui-detail-titles h2 { font-size: 18px; }
+    .ui-detail-description, .ui-activity { padding-inline: 16px; }
+    /* Description and actor drop under the activity text rather than crowding it. */
+    .ui-activity-row { flex-wrap: wrap; }
+    .ui-activity-when { width: 100%; padding-left: 42px; }
+    .ui-detail-lifecycle { padding: 16px; }
+    .ui-detail-lifecycle-actions { width: 100%; }
+    .inventra-content .ui-detail-lifecycle-actions > span, .inventra-content .ui-detail-lifecycle-actions button { width: 100%; }
+}
+@media (max-width: 479px) {
+    .ui-metric-strip { grid-template-columns: minmax(0, 1fr); }
+    .ui-metric-cell { border-left: 0; border-top: 1px solid var(--ui-border); }
+    .ui-metric-cell:first-child { border-top: 0; }
+}

@@ -14,7 +14,7 @@ return new class extends Migration
             $table->decimal('refunded_amount', 15, 2)->default(0)->after('amount_paid');
             $table->decimal('refundable_credit', 15, 2)->default(0)->after('balance_due');
         });
-        DB::statement('ALTER TABLE sales DROP CHECK sales_total_matches_payment');
+        DB::statement('ALTER TABLE sales DROP CONSTRAINT sales_total_matches_payment');
         DB::statement('ALTER TABLE sales ADD CONSTRAINT sales_return_financials_reconcile CHECK (returned_amount >= 0 AND returned_amount <= total_amount AND refunded_amount >= 0 AND refunded_amount <= amount_paid AND refundable_credit >= 0 AND total_amount - returned_amount + refundable_credit = amount_paid - refunded_amount + balance_due)');
     }
 
@@ -23,7 +23,7 @@ return new class extends Migration
         if (DB::table('sale_returns')->exists() || DB::table('sale_refunds')->exists()) {
             throw new RuntimeException('Cannot remove Return financial aggregates while Return or Refund history exists.');
         }
-        DB::statement('ALTER TABLE sales DROP CHECK sales_return_financials_reconcile');
+        DB::statement('ALTER TABLE sales DROP CONSTRAINT sales_return_financials_reconcile');
         Schema::table('sales', fn (Blueprint $table) => $table->dropColumn(['returned_amount', 'refunded_amount', 'refundable_credit']));
         DB::statement('ALTER TABLE sales ADD CONSTRAINT sales_total_matches_payment CHECK (total_amount = amount_paid + balance_due)');
     }

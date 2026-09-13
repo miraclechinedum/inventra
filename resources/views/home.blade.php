@@ -357,7 +357,7 @@
                         <li><i><img src="{{ $check }}" alt=""></i><span>Customer, products and quantities on one screen</span></li>
                         <li><i><img src="{{ $check }}" alt=""></i><span>Full, part or no payment — the balance is tracked either way</span></li>
                         <li><i><img src="{{ $check }}" alt=""></i><span>Later payments recorded against the original sale</span></li>
-                        <li><i><img src="{{ $check }}" alt=""></i><span>A printable receipt, and delivery to the customer on WhatsApp</span></li>
+                        <li><i><img src="{{ $check }}" alt=""></i><span>A printable receipt, sent to the customer on WhatsApp automatically when they have opted in</span></li>
                     </ul>
                 </div>
                 <div class="home-showcase-visual home-reveal" data-delay="2">

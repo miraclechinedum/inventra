@@ -14,9 +14,12 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SaleCorrectionController;
+use App\Http\Controllers\SaleDiscountRequestController;
 use App\Http\Controllers\SalePaymentController;
 use App\Http\Controllers\SaleReturnController;
 use App\Http\Controllers\StaffController;
@@ -70,9 +73,23 @@ Route::middleware('auth')->group(function () {
                 ->middleware('pin.completed')
                 ->name('dashboard');
 
+            // Self-service profile. Open to every signed-in staff member, which is how Managers
+            // and Sales Reps manage their own photograph without Admin involvement.
+            Route::middleware('pin.completed')->group(function () {
+                Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+                Route::post('/profile/photo', [ProfileController::class, 'storePhoto'])->name('profile.photo.store');
+                Route::delete('/profile/photo', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
+                // Serving is authorized per subject by UserPolicy::viewPhoto, so it lives outside
+                // the Admin-only staff group: a staff member must be able to load their own avatar.
+                Route::get('/users/{user}/photo', [ProfileController::class, 'photo'])->name('users.photo');
+            });
+
             Route::middleware('pin.completed')->prefix('inventory')->name('inventory.')->group(function () {
                 Route::get('/', [ProductController::class, 'index'])->name('index');
                 Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+                // Live duplicate feedback for the product form. Restricted to users who may create
+                // or update a product, so it adds no way for anyone else to enumerate the catalogue.
+                Route::get('/products/check-duplicate', [ProductController::class, 'checkDuplicate'])->name('products.check-duplicate');
                 Route::post('/products', [ProductController::class, 'store'])->name('products.store');
                 Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
                 Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
@@ -80,11 +97,26 @@ Route::middleware('auth')->group(function () {
                 Route::post('/products/{product}/adjust-stock', [ProductController::class, 'adjust'])->name('products.adjust');
                 Route::post('/products/{product}/activate', [ProductController::class, 'activate'])->name('products.activate');
                 Route::post('/products/{product}/deactivate', [ProductController::class, 'deactivate'])->name('products.deactivate');
+                Route::post('/products/{product}/reactivate', [ProductController::class, 'reactivate'])->name('products.reactivate');
+                // Archiving is the ordinary retirement path; force-destroy is the Admin-only
+                // exception and is refused server-side for any product that has history.
                 Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+                Route::delete('/products/{product}/force', [ProductController::class, 'forceDestroy'])->name('products.force-destroy');
                 Route::get('/products/{product}/movements', [ProductController::class, 'movements'])->name('products.movements');
+                // The image routes sit inside this authenticated, PIN-gated group on purpose: the
+                // photograph is only ever shown on pages that already require the same access.
+                Route::get('/products/{product}/image', [ProductController::class, 'image'])->name('products.image');
+                Route::post('/products/{product}/image', [ProductController::class, 'storeImage'])->name('products.image.store');
+                Route::delete('/products/{product}/image', [ProductController::class, 'destroyImage'])->name('products.image.destroy');
 
                 Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+                Route::get('/categories/create', [CategoryController::class, 'create'])->name('categories.create');
                 Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+                Route::get('/categories/{category}/edit', [CategoryController::class, 'edit'])->name('categories.edit');
+                // Inline creation from the product form's category combobox. Returns the created
+                // category as JSON so the page can select it without a reload; the policy and the
+                // shared StoreCategoryRequest still gate and validate it exactly as the page does.
+                Route::post('/categories/quick', [CategoryController::class, 'storeQuick'])->name('categories.quick-store');
                 Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
                 Route::post('/categories/{category}/activate', [CategoryController::class, 'activate'])->name('categories.activate');
                 Route::post('/categories/{category}/deactivate', [CategoryController::class, 'deactivate'])->name('categories.deactivate');
@@ -113,6 +145,14 @@ Route::middleware('auth')->group(function () {
                 Route::get('/{sale}/payments/{payment}', [SalePaymentController::class, 'show'])->name('payments.show');
                 Route::get('/{sale}/payments/{payment}/receipt', [SalePaymentController::class, 'receipt'])->name('payments.receipt');
                 Route::post('/{sale}/void', [SaleController::class, 'void'])->name('void');
+                Route::post('/{sale}/discount-requests', [SaleDiscountRequestController::class, 'store'])
+                    ->name('discounts.store');
+                // Correcting a recording mistake. Who may do it is decided by SalePolicy@correct
+                // (Admin any; Manager own only; Sales Rep never), not by route middleware, so the
+                // rule lives with the Sale rather than with the URL.
+                Route::get('/{sale}/correct', [SaleCorrectionController::class, 'create'])->name('corrections.create');
+                Route::post('/{sale}/correct', [SaleCorrectionController::class, 'store'])->name('corrections.store');
+                Route::get('/{sale}/corrections', [SaleCorrectionController::class, 'show'])->name('corrections.index');
                 Route::get('/{sale}/activity', [SaleController::class, 'activity'])->name('activity');
                 Route::post('/{sale}/whatsapp/send', [WhatsAppDeliveryController::class, 'send'])->name('whatsapp.send');
                 Route::post('/{sale}/whatsapp/retry/{delivery}', [WhatsAppDeliveryController::class, 'retry'])->name('whatsapp.retry');
@@ -122,6 +162,18 @@ Route::middleware('auth')->group(function () {
                 ->name('sale-payments.index');
 
             Route::middleware(['pin.completed', 'role:admin,manager'])->group(function () {
+                // Reviewing the queue is management; approving or declining is Admin-only and
+                // enforced by SaleDiscountRequestPolicy rather than by route middleware, so the
+                // rule lives with the decision instead of with the URL.
+                Route::get('/sale-discounts', [SaleDiscountRequestController::class, 'index'])
+                    ->name('discounts.index');
+                Route::get('/sale-discounts/{discountRequest}', [SaleDiscountRequestController::class, 'show'])
+                    ->name('discounts.show');
+                Route::post('/sale-discounts/{discountRequest}/approve', [SaleDiscountRequestController::class, 'approve'])
+                    ->name('discounts.approve');
+                Route::post('/sale-discounts/{discountRequest}/decline', [SaleDiscountRequestController::class, 'decline'])
+                    ->name('discounts.decline');
+
                 Route::get('/returns', [SaleReturnController::class, 'index'])->name('returns.index');
                 Route::get('/returns/{return}', [SaleReturnController::class, 'show'])->name('returns.show');
                 Route::get('/returns/{return}/receipt', [SaleReturnController::class, 'receipt'])->name('returns.receipt');
@@ -211,6 +263,9 @@ Route::middleware('auth')->group(function () {
                 Route::post('/staff/{user}/revoke-sessions', [StaffController::class, 'revokeSessions'])
                     ->name('staff.revoke-sessions');
                 Route::get('/staff/{user}/activity', [StaffController::class, 'activity'])->name('staff.activity');
+                // Moderation only: an Admin may remove an inappropriate photo but never choose one
+                // for someone else — that stays with the account holder on /profile.
+                Route::delete('/staff/{user}/photo', [StaffController::class, 'destroyPhoto'])->name('staff.photo.destroy');
             });
         });
     });

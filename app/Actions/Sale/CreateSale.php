@@ -2,6 +2,7 @@
 
 namespace App\Actions\Sale;
 
+use App\Actions\WhatsApp\QueueAutomaticWhatsAppReceipt;
 use App\Enums\InventoryMovementType;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
@@ -24,7 +25,10 @@ use Illuminate\Validation\ValidationException;
 
 class CreateSale
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly QueueAutomaticWhatsAppReceipt $queueReceipt,
+    ) {}
 
     public function execute(User $actor, array $data): Sale
     {
@@ -32,7 +36,7 @@ class CreateSale
         $productIds = array_keys($quantities);
         sort($productIds, SORT_NUMERIC);
 
-        return DB::transaction(function () use ($actor, $data, $productIds, $quantities): Sale {
+        $sale = DB::transaction(function () use ($actor, $data, $productIds, $quantities): Sale {
             $customer = Customer::query()->lockForUpdate()->findOrFail($data['customer_id']);
 
             if (! $customer->is_active) {
@@ -172,6 +176,13 @@ class CreateSale
 
             return $sale;
         });
+
+        // The sale is now committed and irreversible. Queueing the receipt afterwards keeps the
+        // provider entirely outside the sale transaction: the scheduler sends it later, and the
+        // queueing itself swallows every failure so a WhatsApp problem can never affect a sale.
+        $this->queueReceipt->execute($sale);
+
+        return $sale;
     }
 
     private function aggregateQuantities(array $lines): array

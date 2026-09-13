@@ -5,6 +5,7 @@ namespace Tests\Feature\SalePayments;
 use App\Actions\Sale\CreateSale;
 use App\Actions\Sale\IssueSalePaymentRequest;
 use App\Actions\Sale\RecordSalePayment;
+use App\Actions\WhatsApp\QueueAutomaticWhatsAppReceipt;
 use App\Enums\PaymentStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
@@ -255,7 +256,7 @@ class SalePaymentTest extends TestCase
         $product = Product::factory()->create(['current_stock' => '10', 'selling_price' => '100']);
 
         try {
-            (new CreateSale($audit))->execute($actor, $this->payload($customer, $product, '50', 'cash'));
+            (new CreateSale($audit, app(QueueAutomaticWhatsAppReceipt::class)))->execute($actor, $this->payload($customer, $product, '50', 'cash'));
             $this->fail('The Sale transaction should roll back.');
         } catch (RuntimeException) {
             $this->assertDatabaseCount('sales', 0);

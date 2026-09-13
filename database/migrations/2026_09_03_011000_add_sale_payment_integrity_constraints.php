@@ -13,7 +13,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE sale_payments DROP CHECK sale_payments_status_snapshot_valid');
-        DB::statement('ALTER TABLE sale_payments DROP CHECK sale_payments_initial_guard_valid');
+        DB::statement('ALTER TABLE sale_payments DROP CONSTRAINT sale_payments_status_snapshot_valid');
+        DB::statement('ALTER TABLE sale_payments DROP CONSTRAINT sale_payments_initial_guard_valid');
     }
 };

@@ -33,6 +33,12 @@ class AuditLogger
         'category_name_snapshot', 'payee', 'incurred_at',
         'return_id', 'return_number', 'refund_id', 'refund_number', 'merchandise_value', 'receivable_reduction',
         'returned_at', 'refunded_at', 'method',
+        // Sale aggregates a discount approval moves, alongside the discount request's own fields.
+        // All are money or short free text; none carry personal data.
+        'returned_amount', 'refunded_amount', 'refundable_credit',
+        'requested_amount', 'reason', 'decision_note',
+        // Server-generated random image filenames. They contain no client-supplied text.
+        'image_path', 'photo_path',
         'business_name', 'business_phone', 'business_email', 'business_address',
         'state', 'receipt_footer',
     ];
@@ -44,6 +50,8 @@ class AuditLogger
         'expense_id', 'expense_number', 'expense_category_id', 'category_code_snapshot', 'amount',
         'payment_method', 'incurred_at',
         'alert_type', 'alert_severity',
+        // Distinguishes an automatic WhatsApp receipt from a staff-initiated one.
+        'origin',
     ];
 
     /**

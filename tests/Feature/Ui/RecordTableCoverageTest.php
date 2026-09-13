@@ -41,6 +41,7 @@ class RecordTableCoverageTest extends TestCase
             'notifications.index' => 'notifications',
             'audit.index' => 'events',
             'whatsapp.deliveries.index' => 'deliveries',
+            'discounts.index' => 'requests',
             'reports.sales' => 'rows',
             'reports.collections' => 'rows',
             'reports.receivables' => 'rows',
@@ -117,6 +118,7 @@ class RecordTableCoverageTest extends TestCase
             'returns.index' => 'Return',
             'refunds.index' => 'Refund',
             'audit.index' => 'Event',
+            'inventory.categories.index' => 'Category',
             'whatsapp.deliveries.index' => null,
             'reports.sales' => 'Report rows',
         ];
@@ -133,20 +135,15 @@ class RecordTableCoverageTest extends TestCase
         }
     }
 
-    public function test_the_two_non_tabular_listings_still_number_their_records(): void
+    public function test_the_remaining_non_tabular_listing_still_numbers_its_records(): void
     {
         $admin = $this->admin();
 
-        // The notification inbox and the inline-edit category cards keep their layouts; the
-        // ordinal badge is their S/N.
-        foreach (['notifications.index', 'inventory.categories.index'] as $name) {
-            $this->actingAs($admin)->get(route($name))->assertOk()
-                ->assertSee('Rows per page:', false);
-        }
+        // The notification inbox keeps its feed-of-cards layout; the ordinal badge is its S/N.
+        $this->actingAs($admin)->get(route('notifications.index'))->assertOk()
+            ->assertSee('Rows per page:', false);
         $this->assertStringContainsString('ui-feed-ordinal',
             file_get_contents(resource_path('views/notifications/index.blade.php')));
-        $this->assertStringContainsString('ui-feed-ordinal',
-            file_get_contents(resource_path('views/inventory/categories/index.blade.php')));
     }
 
     public function test_no_listing_bypasses_the_shared_footer(): void

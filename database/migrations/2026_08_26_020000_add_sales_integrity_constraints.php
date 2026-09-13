@@ -16,8 +16,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE sales DROP CHECK sales_total_matches_payment');
-        DB::statement('ALTER TABLE sales DROP CHECK sales_total_matches_subtotal_discount');
+        DB::statement('ALTER TABLE sales DROP CONSTRAINT sales_total_matches_payment');
+        DB::statement('ALTER TABLE sales DROP CONSTRAINT sales_total_matches_subtotal_discount');
         DB::statement('ALTER TABLE sales DROP COLUMN sold_by_name_snapshot');
     }
 };

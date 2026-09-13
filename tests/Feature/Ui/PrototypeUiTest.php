@@ -47,4 +47,41 @@ class PrototypeUiTest extends TestCase
         $this->assertSame(8, substr_count($response->getContent(), 'aria-label="Quantity for product '));
         $response->assertDontSee('name="total_amount"', false)->assertDontSee('name="unit_price"', false);
     }
+
+    public function test_no_alpine_directive_uses_a_multi_statement_expression(): void
+    {
+        // The app ships Livewire's CSP-safe Alpine build, whose expression evaluator parses a
+        // single statement per attribute. An `x-on` (or `x-init`, `x-effect`, ...) written as
+        // "a = 1; b = 2" throws a parser error at runtime and the handler silently does nothing —
+        // there is no build-time failure, only a broken control the browser never reports back.
+        // A property assignment such as `overridden.cost = true` is fine; two of them joined by a
+        // semicolon are not, so the fix is always a single method call that does both internally.
+        $offenders = [];
+        $views = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator(resource_path('views'), \FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($views as $file) {
+            if ($file->getExtension() !== 'php' || ! str_ends_with($file->getFilename(), '.blade.php')) {
+                continue;
+            }
+
+            $path = $file->getPathname();
+            $markup = (string) file_get_contents($path);
+
+            if (preg_match_all('/x-(?:on:[\w.\-]+|init|effect)="([^"]*)"/', $markup, $matches)) {
+                foreach ($matches[1] as $expression) {
+                    // A semicolon inside a string literal (e.g. a message) is not a statement
+                    // separator; only bare semicolons outside quotes indicate multiple statements.
+                    $stripped = preg_replace('/\'[^\']*\'|"[^"]*"/', '', $expression);
+
+                    if (str_contains((string) $stripped, ';')) {
+                        $offenders[] = basename($path).': '.$expression;
+                    }
+                }
+            }
+        }
+
+        $this->assertSame([], $offenders, 'Multi-statement Alpine expressions break under the CSP-safe build: '.implode(' | ', $offenders));
+    }
 }

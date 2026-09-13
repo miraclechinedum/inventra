@@ -16,9 +16,12 @@ use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Models\SaleDiscountRequest;
 use App\Models\User;
 use App\Support\Money;
 use App\Support\PerPage;
+use App\Support\SaleCorrectionEligibility;
+use App\Support\SaleDiscountEligibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -127,6 +130,11 @@ class SaleController extends Controller
 
         return view('sales.show', [
             'sale' => $sale,
+            'discountRequests' => $sale->discountRequests()->with('decider:id,name')->latest('id')->limit(5)->get(),
+            'discountBlockedReason' => SaleDiscountEligibility::blockedReason($sale),
+            'correctionCount' => $sale->corrections()->count(),
+            'correctionBlockedReason' => SaleCorrectionEligibility::blockedReason($sale),
+            'canRequestDiscount' => Gate::allows('create', [SaleDiscountRequest::class, $sale]),
             'whatsappDeliveries' => $sale->whatsappDeliveries()->latest()->limit(5)->get(),
             'whatsappConfigured' => $client->isConfigured(),
             'whatsappEligible' => $sale->customer->is_active && $sale->customer->whatsapp_opt_in

@@ -23,7 +23,13 @@ class SecurityEventLifecycleTest extends TestCase
         ]);
 
         $event = SecurityEvent::query()->firstOrFail();
-        $this->assertSame(['route' => 'dashboard', 'channel' => true], $event->metadata);
+        // The sanitizer's contract is which keys survive and with what values.
+        // JSON object key order is engine-specific — MySQL's native JSON type
+        // reorders keys, MariaDB's LONGTEXT-backed JSON preserves insertion
+        // order — so the key set is compared without depending on order.
+        $this->assertEqualsCanonicalizing(['route', 'channel'], array_keys($event->metadata));
+        $this->assertSame('dashboard', $event->metadata['route']);
+        $this->assertSame(true, $event->metadata['channel']);
         $this->assertStringNotContainsString('NeverStoreThis9', $event->toJson());
         $this->assertStringNotContainsString('secret-token', $event->toJson());
     }

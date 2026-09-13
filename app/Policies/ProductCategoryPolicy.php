@@ -8,12 +8,26 @@ use App\Models\User;
 
 class ProductCategoryPolicy
 {
+    /**
+     * Reading the category management screen, as opposed to merely choosing a category while
+     * working on a product. Only the roles that may change categories may open the screen that
+     * changes them, so a Sales Representative is refused server-side and not merely hidden from.
+     */
     public function viewAny(User $user): bool
     {
-        return true;
+        return $this->canManage($user);
     }
 
     public function view(User $user, ProductCategory $category): bool
+    {
+        return $this->canManage($user);
+    }
+
+    /**
+     * Choosing an existing category on a product form. Anyone who may work on the product itself
+     * needs this, including a Sales Representative, which is why it is distinct from viewAny.
+     */
+    public function select(User $user): bool
     {
         return true;
     }

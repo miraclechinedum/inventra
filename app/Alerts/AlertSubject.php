@@ -50,7 +50,12 @@ final class AlertSubject
             'sale' => $viewer->role === UserRole::SalesRep
                 ? null
                 : route('sales.show', $alert->subject_id),
-            'product' => route('inventory.products.show', $alert->subject_id),
+            // Products are addressed publicly by ULID, so the alert's numeric subject_id cannot be
+            // handed to the route directly; the row is resolved to build the link. exists() has
+            // already confirmed it is there.
+            'product' => ($product = Product::query()->whereKey($alert->subject_id)->first()) !== null
+                ? route('inventory.products.show', $product)
+                : null,
             default => null,
         };
     }

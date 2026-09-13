@@ -6,6 +6,7 @@ use App\Enums\ProductUnit;
 use App\Http\Requests\Concerns\NormalizesScalarInput;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Support\ImageStore;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -38,11 +39,21 @@ class StoreProductRequest extends FormRequest
             'initial_stock' => ['required', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
             'reorder_level' => ['required', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
             'unit' => ['required', Rule::enum(ProductUnit::class)],
+            // Optional at creation; when present it is held to exactly the rules every other
+            // image field uses, so nothing about what is accepted can drift here.
+            'image' => ImageStore::validationRules(required: false),
             'current_stock' => ['prohibited'],
             'created_by' => ['prohibited'],
             'updated_by' => ['prohibited'],
             'is_active' => ['prohibited'],
             'deleted_at' => ['prohibited'],
+            'image_path' => ['prohibited'],
         ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return ImageStore::validationMessages('image');
     }
 }

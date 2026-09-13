@@ -22,14 +22,21 @@ class InventoryAuthorizationTest extends TestCase
         }
     }
 
-    public function test_manager_can_manage_products_but_cannot_archive(): void
+    public function test_manager_can_manage_and_archive_products_but_never_delete_permanently(): void
     {
         $manager = User::factory()->create(['role' => UserRole::Manager]);
         $product = Product::factory()->create();
         $this->actingAs($manager)->get(route('inventory.products.create'))->assertOk();
         $this->get(route('inventory.products.edit', $product))->assertOk();
         $this->post(route('inventory.products.adjust', $product), $this->adjustment())->assertRedirect();
-        $this->delete(route('inventory.products.destroy', $product))->assertForbidden();
+
+        // Archiving is part of managing inventory; permanent removal is not.
+        $this->delete(route('inventory.products.destroy', $product))->assertRedirect();
+        $this->assertFalse($product->fresh()->is_active);
+        $this->post(route('inventory.products.reactivate', $product))->assertRedirect();
+        $this->assertTrue($product->fresh()->is_active);
+        $this->delete(route('inventory.products.force-destroy', $product))->assertForbidden();
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
 
     public function test_sales_rep_is_strictly_read_only_and_cannot_view_movements_or_cost(): void

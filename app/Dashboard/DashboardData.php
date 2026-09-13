@@ -119,7 +119,7 @@ class DashboardData
                 ->orderByDesc('refundable_credit')->orderBy('id')->limit(self::ALERT_LIMIT)
                 ->get(['id', 'sale_number', 'customer_name_snapshot', 'refundable_credit', 'updated_at']),
             'lowStockProducts' => Product::query()->active()->lowStock()->orderBy('current_stock')->orderBy('id')
-                ->limit(self::ALERT_LIMIT)->get(['id', 'sku', 'name', 'unit', 'current_stock', 'reorder_level']),
+                ->limit(self::ALERT_LIMIT)->get(['id', 'public_id', 'sku', 'name', 'unit', 'current_stock', 'reorder_level']),
         ];
     }
 
@@ -189,7 +189,7 @@ class DashboardData
                     ->get(['id', 'sale_number', 'customer_name_snapshot', 'balance_due', 'created_at']),
                 'creditSales' => collect(),
                 'lowStockProducts' => Product::query()->active()->lowStock()->orderBy('current_stock')->orderBy('id')
-                    ->limit(self::ALERT_LIMIT)->get(['id', 'sku', 'name', 'unit', 'current_stock', 'reorder_level']),
+                    ->limit(self::ALERT_LIMIT)->get(['id', 'public_id', 'sku', 'name', 'unit', 'current_stock', 'reorder_level']),
             ],
             'recent' => [
                 'sales' => Sale::query()->where('status', 'completed')->where('sold_by', $user->id)

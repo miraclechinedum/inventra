@@ -4,6 +4,7 @@ namespace App\Actions\WhatsApp;
 
 use App\Contracts\WhatsAppClient;
 use App\Enums\SaleStatus;
+use App\Enums\WhatsAppDeliveryOrigin;
 use App\Enums\WhatsAppDeliveryStatus;
 use App\Exceptions\WhatsAppOutcomeUnknownException;
 use App\Models\Customer;
@@ -11,7 +12,7 @@ use App\Models\Sale;
 use App\Models\User;
 use App\Models\WhatsAppDelivery;
 use App\Services\AuditLogger;
-use App\Support\CanonicalLoginIdentifier;
+use App\Support\WhatsAppReceiptEligibility;
 use App\Support\WhatsAppReceiptTemplate;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -64,6 +65,7 @@ class SendWhatsAppReceipt
             $delivery->consent_opt_in_at_snapshot = $customer->whatsapp_opt_in_at;
             $delivery->requested_at = $now;
             $delivery->status = WhatsAppDeliveryStatus::Pending;
+            $delivery->origin = WhatsAppDeliveryOrigin::Manual->value;
             $delivery->attempt = (int) WhatsAppDelivery::query()->where('sale_id', $lockedSale->id)->max('attempt') + 1;
             $delivery->created_by = $actor->id;
             $delivery->save();
@@ -81,6 +83,16 @@ class SendWhatsAppReceipt
             return $delivery;
         }
 
+        return $this->dispatch($delivery, $sale, $actor);
+    }
+
+    /**
+     * Sends an already-persisted pending delivery and records the provider's answer. `execute()`
+     * calls this inline for a manual send; the scheduler calls it for a claimed automatic row.
+     * Nothing here writes to the Sale, so it is safe to run long after the sale transaction closed.
+     */
+    public function dispatch(WhatsAppDelivery $delivery, Sale $sale, ?User $actor): WhatsAppDelivery
+    {
         try {
             $result = $this->client->sendReceipt($delivery, WhatsAppReceiptTemplate::parameters($sale));
         } catch (WhatsAppOutcomeUnknownException) {
@@ -136,10 +148,7 @@ class SendWhatsAppReceipt
 
     private function ensureEligible(Customer $customer): void
     {
-        $canonicalPhone = CanonicalLoginIdentifier::normalizeNigerianPhone($customer->phone);
-
-        if (! $customer->is_active || ! $customer->whatsapp_opt_in || $customer->whatsapp_opt_out_at !== null
-            || $customer->whatsapp_opt_in_at === null || $canonicalPhone !== $customer->phone) {
+        if (! WhatsAppReceiptEligibility::permits($customer)) {
             throw ValidationException::withMessages(['customer' => 'The Customer is not currently eligible for WhatsApp delivery.']);
         }
     }

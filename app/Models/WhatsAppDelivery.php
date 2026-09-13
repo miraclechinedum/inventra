@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\WhatsAppDeliveryOrigin;
 use App\Enums\WhatsAppDeliveryStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -43,9 +44,11 @@ class WhatsAppDelivery extends Model
     {
         return [
             'status' => WhatsAppDeliveryStatus::class,
+            'origin' => WhatsAppDeliveryOrigin::class,
             'consent_checked_at' => 'datetime',
             'consent_opt_in_at_snapshot' => 'datetime',
             'requested_at' => 'datetime',
+            'dispatch_claimed_at' => 'datetime',
             'sent_at' => 'datetime',
             'delivered_at' => 'datetime',
             'read_at' => 'datetime',

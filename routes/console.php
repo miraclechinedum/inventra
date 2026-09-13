@@ -42,3 +42,14 @@ Schedule::command('model:prune', ['--model' => SaleRefundRequest::class])
 Schedule::command('inventra:reconcile-operational-alerts')
     ->hourly()
     ->withoutOverlapping();
+
+// Automatic WhatsApp receipts. Sale completion only persists the delivery; the provider is called
+// here, on the scheduler, so a Meta outage or slow response can never sit inside a sale
+// transaction. Every minute is chosen because a receipt is worth little once the customer has left,
+// and the shared-hosting cron already runs once a minute for the scheduler as a whole. This adds no
+// queue worker and no supervisor: it is one short command that exits immediately when the queue is
+// empty or WhatsApp is unconfigured. Duplicate sending is prevented in the database by the
+// dispatch_claimed_at claim, so withoutOverlapping here is a courtesy, not the safety mechanism.
+Schedule::command('inventra:dispatch-whatsapp-receipts')
+    ->everyMinute()
+    ->withoutOverlapping();

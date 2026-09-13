@@ -5,12 +5,15 @@
     $management = in_array($user->role, [\App\Enums\UserRole::Admin, \App\Enums\UserRole::Manager], true);
     $groups = ['Workspace' => [
         ['dashboard', 'dashboard', 'Dashboard', 'dashboard'],
-        ['inventory.index', 'inventory.*', $management ? 'Inventory' : 'Products', 'inventory'],
+        ['inventory.index', ['inventory.index', 'inventory.products.*'], $management ? 'Inventory' : 'Products', 'inventory'],
         ['customers.index', 'customers.*', 'Customers', 'customers'],
         ['sales.index', 'sales.*', 'Sales', 'sales'],
     ]];
     if ($management) {
         $groups['Operations'] = [
+            ...($user->can('viewAny', \App\Models\ProductCategory::class)
+                ? [['inventory.categories.index', 'inventory.categories.*', 'Product categories', 'inventory']]
+                : []),
             ['returns.index', 'returns.*', 'Returns', 'sales'],
             ['refunds.index', 'refunds.*', 'Refunds', 'sales'],
             ['sale-payments.index', 'sale-payments.*', 'Payments', 'sales'],
@@ -20,6 +23,7 @@
             ['expense-categories.index', 'expense-categories.*', 'Expense categories', 'inventory'],
             ['reports.index', 'reports.*', 'Reports', 'dashboard'],
             ['notifications.index', 'notifications.*', 'Notifications', 'bell'],
+            ['discounts.index', 'discounts.*', 'Discount approvals', 'sales'],
             ['whatsapp.deliveries.index', 'whatsapp.*', 'WhatsApp history', 'whatsapp'],
         ];
     }
@@ -44,7 +48,7 @@
     <a href="#main-content" class="inventra-skip-link">Skip to content</a>
     <button type="button" class="inventra-nav-backdrop" x-cloak x-show="menuOpen" x-on:click="closeMenu" aria-label="Close navigation" tabindex="-1"></button>
     <aside id="app-navigation" class="inventra-sidebar" x-bind:inert="compact && !menuOpen" x-bind:role="compact ? 'dialog' : null" x-bind:aria-modal="compact && menuOpen ? 'true' : null" aria-label="Application navigation">
-        <div class="inventra-brand-row"><a href="{{ route('dashboard') }}" class="inventra-logo"><img src="{{ asset('images/figma/inventra-logo.png') }}" alt="Inventra"></a><button type="button" class="inventra-menu-close" x-on:click="closeMenu" aria-label="Close navigation">×</button></div>
+        <div class="inventra-brand-row"><a href="{{ route('dashboard') }}" class="inventra-logo"><img src="{{ asset('images/figma/inventra-logo.png') }}" alt="Inventra"></a><button type="button" class="inventra-menu-close" x-on:click="closeMenu" aria-label="Close navigation" data-tooltip="Close navigation">×</button></div>
         <nav class="inventra-nav" aria-label="Primary navigation">
             @foreach($groups as $group => $items)
                 <div class="inventra-nav-group"><p>{{ $group }}</p>
@@ -57,17 +61,17 @@
                 </div>
             @endforeach
         </nav>
-        <div class="inventra-user-card"><span class="inventra-avatar">{{ $initials }}</span><span class="min-w-0 flex-1"><strong title="{{ $user->name }}">{{ $user->name }}</strong><small>{{ $user->role->label() }}</small></span><form method="POST" action="{{ route('logout') }}">@csrf<button class="inventra-logout" aria-label="Sign out" title="Sign out"><img src="{{ asset('images/figma/icon-logout.svg') }}" alt=""></button></form></div>
+        <div class="inventra-user-card"><a href="{{ route('profile.edit') }}" class="inventra-avatar" aria-label="My profile" data-tooltip="My profile">@if($user->photo_path)<img src="{{ route('users.photo', $user) }}" alt="" width="36" height="36" class="h-full w-full rounded-full object-cover">@else{{ $initials }}@endif</a><span class="min-w-0 flex-1"><strong title="{{ $user->name }}">{{ $user->name }}</strong><small>{{ $user->role->label() }}</small></span><form method="POST" action="{{ route('logout') }}">@csrf<button class="inventra-logout" aria-label="Sign out" data-tooltip="Sign out"><img src="{{ asset('images/figma/icon-logout.svg') }}" alt=""></button></form></div>
     </aside>
     <div class="inventra-workspace" x-bind:inert="compact && menuOpen">
         <header class="inventra-topbar">
             <div class="inventra-topbar-title"><button id="navigation-toggle" type="button" class="inventra-menu-trigger" aria-controls="app-navigation" x-bind:aria-expanded="menuOpen" x-on:click="openMenu">Menu</button><span class="inventra-breadcrumb">Workspace <span aria-hidden="true">/</span></span><h1>{{ $title }}</h1></div>
             <div class="inventra-top-actions">
-                @if($management)<a class="inventra-icon-button" href="{{ route('notifications.index') }}" aria-label="{{ $unreadAlerts === '' ? 'Notifications' : 'Notifications, '.$unreadAlerts.' unread' }}"><img src="{{ asset('images/figma/icon-bell.svg') }}" alt="">@if($unreadAlerts !== '')<span class="inventra-topbar-badge">{{ $unreadAlerts }}</span>@endif</a>@endif
+                @if($management)<a class="inventra-icon-button" href="{{ route('notifications.index') }}" aria-label="{{ $unreadAlerts === '' ? 'Notifications' : 'Notifications, '.$unreadAlerts.' unread' }}" data-tooltip="Notifications"><img src="{{ asset('images/figma/icon-bell.svg') }}" alt="">@if($unreadAlerts !== '')<span class="inventra-topbar-badge">{{ $unreadAlerts }}</span>@endif</a>@endif
                 @can('create', \App\Models\Sale::class)<a href="{{ route('sales.create') }}" class="inventra-primary-action"><img src="{{ asset('images/figma/icon-plus.svg') }}" alt="">Record sale</a>@endcan
             </div>
         </header>
-        <main id="main-content" tabindex="-1" class="inventra-content">@if(session('status'))<div role="status" class="inventra-alert-success">{{ session('status') }}</div>@endif{{ $slot }}</main>
+        <main id="main-content" tabindex="-1" class="inventra-content">@if(session('status'))<div role="status" class="inventra-alert-success" x-data="autoDismiss" x-show="shown" x-cloak><span>{{ session('status') }}</span><button type="button" class="inventra-alert-dismiss" x-on:click="hide" aria-label="Dismiss message" data-tooltip="Dismiss">&times;</button></div>@endif{{ $slot }}</main>
     </div>
     @livewireScriptConfig
 </body>

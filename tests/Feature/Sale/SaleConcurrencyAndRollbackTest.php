@@ -3,6 +3,7 @@
 namespace Tests\Feature\Sale;
 
 use App\Actions\Sale\CreateSale;
+use App\Actions\WhatsApp\QueueAutomaticWhatsAppReceipt;
 use App\Enums\UserRole;
 use App\Models\Customer;
 use App\Models\InventoryMovement;
@@ -70,7 +71,7 @@ class SaleConcurrencyAndRollbackTest extends TestCase
         $product = Product::factory()->create(['current_stock' => '5']);
 
         try {
-            (new CreateSale($audit))->execute($seller, $this->payload($customer, [['product_id' => $product->id, 'quantity' => '2']]));
+            (new CreateSale($audit, app(QueueAutomaticWhatsAppReceipt::class)))->execute($seller, $this->payload($customer, [['product_id' => $product->id, 'quantity' => '2']]));
             $this->fail('The sale should roll back.');
         } catch (RuntimeException) {
             $this->assertSame('5.000', $product->fresh()->current_stock);

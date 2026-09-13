@@ -87,14 +87,18 @@ class InventorySalesReadinessTest extends TestCase
         $this->assertSame('9,999,999,999,999.99', Money::format('9999999999999.99'));
     }
 
-    public function test_archived_sku_cannot_be_reused_and_route_binding_returns_not_found(): void
+    public function test_an_archived_sku_cannot_be_reused_and_the_product_stays_reachable(): void
     {
         $admin = User::factory()->create(['role' => UserRole::Admin]);
         $category = ProductCategory::factory()->create();
         $product = Product::factory()->create(['category_id' => $category, 'sku' => 'PERMANENT-1']);
         $this->actingAs($admin)->delete(route('inventory.products.destroy', $product))->assertRedirect();
 
-        $this->get(route('inventory.products.show', $product))->assertNotFound();
+        // Archiving retires the product without removing it: its SKU stays spoken for, and the
+        // record remains readable so history and reactivation keep working.
+        $this->assertFalse($product->fresh()->is_active);
+        $this->assertNotSoftDeleted($product);
+        $this->get(route('inventory.products.show', $product))->assertOk();
         $this->post(route('inventory.products.store'), $this->payload($category, ['sku' => 'PERMANENT-1']))
             ->assertSessionHasErrors('sku');
     }

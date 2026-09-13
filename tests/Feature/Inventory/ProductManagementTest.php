@@ -85,6 +85,45 @@ class ProductManagementTest extends TestCase
         $this->assertSame('8.000', $product->fresh()->current_stock);
     }
 
+    public function test_edit_screen_hides_unit_and_description_but_saving_never_erases_them(): void
+    {
+        // Unit and Description are not part of this screen's visible design, but Unit remains a
+        // required, non-nullable column and the update action treats an absent Description key as
+        // an explicit null — so both must round-trip through hidden inputs, or an ordinary save
+        // (touching only, say, the price) would silently wipe a product's existing description.
+        $product = Product::factory()->create([
+            'category_id' => $this->category,
+            'description' => 'A well-loved product description.',
+        ]);
+
+        $html = $this->get(route('inventory.products.edit', $product))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('>Unit<', $html);
+        $this->assertStringNotContainsString('>Description<', $html);
+        $this->assertStringNotContainsString('To change stock, use Adjust Stock', $html);
+
+        preg_match('/name="unit" value="([^"]*)"/', $html, $unitMatch);
+        preg_match('/name="description" value="([^"]*)"/', $html, $descriptionMatch);
+        $this->assertSame($product->unit->value, $unitMatch[1] ?? null);
+        $this->assertSame($product->description, html_entity_decode($descriptionMatch[1] ?? ''));
+
+        // Saving the exact values the hidden fields carried changes only what the visible fields
+        // changed — the selling price here — and leaves Unit and Description untouched.
+        $payload = $this->payload([
+            'name' => $product->name,
+            'sku' => $product->sku,
+            'selling_price' => '1999.99',
+            'unit' => $unitMatch[1],
+            'description' => $descriptionMatch[1],
+        ]);
+        unset($payload['initial_stock']);
+
+        $this->put(route('inventory.products.update', $product), $payload)->assertRedirect();
+        $this->assertSame('1999.99', $product->fresh()->selling_price);
+        $this->assertSame($product->unit, $product->fresh()->unit);
+        $this->assertSame('A well-loved product description.', $product->fresh()->description);
+    }
+
     public function test_low_stock_is_derived_at_below_equal_and_above_reorder_level(): void
     {
         $below = Product::factory()->create(['current_stock' => '4', 'reorder_level' => '5']);
@@ -103,9 +142,15 @@ class ProductManagementTest extends TestCase
         $movementId = $product->movements()->firstOrFail()->id;
 
         $this->delete(route('inventory.products.destroy', $product))->assertRedirect(route('inventory.index'));
-        $this->assertSoftDeleted($product);
+        // Archiving retires the product in place: the row stays, the movement ledger is untouched,
+        // and an Administrator still sees it in the listing marked as archived.
+        $this->assertFalse($product->fresh()->is_active);
+        $this->assertNotSoftDeleted($product);
         $this->assertDatabaseHas('inventory_movements', ['id' => $movementId, 'product_id' => $product->id]);
-        $this->get('/inventory')->assertOk()->assertDontSee($product->sku);
+        $this->get('/inventory')->assertOk()->assertSee($product->sku);
+        // A Sales Representative, who only ever sees active products, no longer finds it.
+        $this->actingAs(User::factory()->create(['role' => UserRole::SalesRep]))
+            ->get('/inventory')->assertOk()->assertDontSee($product->sku);
     }
 
     public function test_manager_can_deactivate_and_reactivate_a_product_with_audit_history(): void

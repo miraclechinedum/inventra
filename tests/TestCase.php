@@ -23,18 +23,31 @@ abstract class TestCase extends BaseTestCase
         $allowedHosts = ['127.0.0.1', 'localhost', '::1'];
         $host = (string) $connection->getConfig('host');
 
-        if ($connection->getDriverName() !== 'mysql' || ! in_array($host, $allowedHosts, true)) {
-            throw new RuntimeException('Automated tests require MySQL on an explicitly permitted local host.');
+        // Exactly two targets are permitted, each pinned to its own driver so a
+        // MariaDB run can never fall back to the MySQL test database and a MySQL
+        // run can never reach the disposable MariaDB compatibility database.
+        // `inventra` (development) is reachable by neither.
+        $allowedTargets = [
+            'mysql' => 'inventra_test',
+            'mariadb' => 'inventra_mariadb_compat',
+        ];
+
+        $driver = $connection->getDriverName();
+
+        if (! array_key_exists($driver, $allowedTargets) || ! in_array($host, $allowedHosts, true)) {
+            throw new RuntimeException('Automated tests require MySQL or MariaDB on an explicitly permitted local host.');
         }
 
-        if ($connection->getDatabaseName() !== 'inventra_test') {
-            throw new RuntimeException('Automated tests may only use the inventra_test database.');
+        $expectedDatabase = $allowedTargets[$driver];
+
+        if ($connection->getDatabaseName() !== $expectedDatabase) {
+            throw new RuntimeException("Automated tests on {$driver} may only use the {$expectedDatabase} database.");
         }
 
         $activeDatabase = $connection->selectOne('select database() as database_name');
 
-        if (($activeDatabase->database_name ?? null) !== 'inventra_test') {
-            throw new RuntimeException('The resolved test connection is not using inventra_test.');
+        if (($activeDatabase->database_name ?? null) !== $expectedDatabase) {
+            throw new RuntimeException("The resolved test connection is not using {$expectedDatabase}.");
         }
 
         return $app;

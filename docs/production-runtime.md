@@ -59,15 +59,30 @@ Check both web and CLI SAPIs; passing CLI checks does not prove web configuratio
 
 SMTP uses PHP sockets/streams and OpenSSL; no ext-sockets requirement was found. GD, Imagick and ZIP are not application requirements. OPcache is useful but is not a correctness dependency. `composer check-platform-reqs --no-dev` is a required deployment gate, complemented by actual SMTP/HTTP transport checks.
 
-## MySQL contract
+## Database contract
 
-**Minimum accepted feature version: MySQL 8.0.16. MariaDB is intentionally unsupported**, even with a `mysql` protocol connection; scaffolded alternative database configs are not a support promise. Prefer a provider-maintained MySQL release. The minimum feature floor is not proof of current vendor security support.
+Two engines are supported, each validated independently. Neither statement generalises beyond the versions named.
 
-Evidence: product nonnegative-stock checks, sale/payment integrity checks, return/refund and expense positive-value checks, business-settings singleton check and operational-alert lifecycle checks all use enforced CHECK constraints. MySQL began enforcing CHECK in 8.0.16. Migrations also use MySQL ENUM modification, `DROP CHECK`, `UPDATE ... INNER JOIN`, `AFTER`, native JSON audit metadata, decimal fields, unique indexes and restrictive foreign keys. No generated-column, spatial, full-text, partitioning or MySQL 9.6-only feature requirement was found.
+| Engine | Minimum accepted | Validated against | Connection driver |
+| --- | --- | --- | --- |
+| MySQL | 8.0.16 | 9.6.0 (local dev/test) | `DB_CONNECTION=mysql` |
+| MariaDB | 11.4.x | 11.4.13 (isolated compatibility instance) | `DB_CONNECTION=mariadb` |
+
+**MariaDB 11.4.x is supported as of the 2026-09-09 compatibility pass**, superseding this document's earlier "MariaDB is intentionally unsupported" position. That position was recorded before any MariaDB instance had been tested; it is withdrawn on evidence, not on preference. MariaDB releases outside 11.4.x, and MariaDB reached through the `mysql` driver rather than `mariadb`, remain unvalidated. Prefer a provider-maintained release of whichever engine is used. A minimum feature floor is not proof of current vendor security support.
+
+Evidence: product nonnegative-stock checks, sale/payment integrity checks, return/refund and expense positive-value checks, business-settings singleton check and operational-alert lifecycle checks all use enforced CHECK constraints. MySQL began enforcing CHECK in 8.0.16; MariaDB has enforced them since 10.2.1. Migrations also use ENUM modification, `UPDATE ... INNER JOIN`, `AFTER`, JSON audit metadata, decimal fields, unique indexes and restrictive foreign keys. No generated-column, spatial, full-text, partitioning, window-function, CTE or MySQL-9-only feature requirement was found. Report SQL uses only `SUM`, `COUNT`, `COUNT(DISTINCT …)`, `ABS` and `COALESCE`.
+
+### Cross-engine differences that are documented, not defects
+
+- **`DROP CHECK` is MySQL-only.** Migrations use the SQL-standard `ALTER TABLE … DROP CONSTRAINT`, which both engines accept. `DROP CHECK` raises MariaDB error 1064 and must not be reintroduced.
+- **JSON storage differs.** MySQL uses its native `json` type; MariaDB stores `LONGTEXT` plus an implicit `json_valid()` CHECK constraint, so `information_schema` reports four extra CHECK constraints named after the JSON columns. Both reject malformed JSON and accept NULL. Inventra uses JSON only for storage/serialisation through Laravel's `array` cast — no `JSON_EXTRACT`, `->>`, `whereJson*` or JSON index anywhere — so the difference has no application consequence.
+- **JSON object key order differs.** MySQL's native type reorders object keys; MariaDB preserves insertion order. Assertions on audit/security metadata must compare key membership and values, never key order.
+- **CHECK-violation error codes differ.** MySQL raises SQLSTATE `HY000`/3819; MariaDB raises `23000`/4025. Because SQLSTATE class `23000` also covers duplicate keys, the three duplicate-detection handlers (`StaffController`, `CustomerController`, `Inventory\ProductController`) would classify a CHECK violation as a duplicate on MariaDB. Not currently reachable: `users` and `customers` carry no CHECK constraints, and product stock/reorder validation rejects negatives before the write. Narrowing those handlers to the duplicate-entry code (1062) would remove the ambiguity if a CHECK is ever added to those tables.
+- **Introspection text differs cosmetically.** `information_schema` reports `CURRENT_TIMESTAMP` vs `current_timestamp()` and quotes string defaults differently. Effective defaults are identical, and there are zero true generated columns on either engine.
 
 All domain tables must use **InnoDB**, including sessions/cache. Configuration currently inherits the server engine (`engine=null`), so verify `@@default_storage_engine` and actual table engines. Require transactions, row-level `SELECT ... FOR UPDATE`, deterministic product lock ordering and FK enforcement. Never disable checks/FKs for deployment. Financial values use DECIMAL plus BCMath; do not convert them to floating point.
 
-Laravel strict mode establishes `ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION` on MySQL >=8.0.11. Verify this on the application connection. Use `utf8mb4` / `utf8mb4_unicode_ci` as configured; comparisons are case/accent insensitive. Identity canonicalization remains server-side; changing collation is a separate reviewed change. Transactions use the server isolation default; no custom isolation requirement was found.
+Laravel strict mode establishes `ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION` on MySQL >=8.0.11, and the identical mode was observed on MariaDB 11.4.13 through the `mariadb` driver. Verify this on the application connection. Use `utf8mb4` / `utf8mb4_unicode_ci` as configured; comparisons are case/accent insensitive. Identity canonicalization remains server-side; changing collation is a separate reviewed change. Transactions use the server isolation default; no custom isolation requirement was found.
 
 Migration account needs CREATE/ALTER/INDEX/REFERENCES and normal DML, including migration backfills. Runtime needs SELECT/INSERT/UPDATE/DELETE for legitimate workflows, sessions/cache and scheduled pruning. Application immutability controls protect business ledgers; no TRIGGER privilege is required. Validate host limits on a disposable database outside this phase before any first production migration.
 
@@ -76,7 +91,7 @@ Migration account needs CREATE/ALTER/INDEX/REFERENCES and normal DML, including 
 | Project requires | Host verified | Host unverified |
 | --- | --- | --- |
 | PHP >=8.4.1, matching CLI/web extensions | None | cPanel PHP selector, CLI absolute path, extension and disabled-function lists |
-| MySQL >=8.0.16, InnoDB, strict mode, CHECK/FK enforcement | None | SELECT VERSION(), server vendor, engines, SQL modes, grants |
+| MySQL >=8.0.16 or MariaDB 11.4.x, InnoDB, strict mode, CHECK/FK enforcement | MariaDB 11.4.12 reported by cPanel (2026-09-09) | SELECT VERSION() on the production DB, engines, SQL modes, grants |
 | Domain document root at release/public; rewrite support | None | cPanel root configuration, .htaccess AllowOverride, directory listing disabled |
 | HTTPS for every request before credentials reach PHP | None | Certificate, HTTP redirect, proxy topology and forwarded-header behavior |
 | Writable storage and bootstrap/cache outside public access | None | Ownership, quotas, permissions, release-switch capability |
@@ -92,7 +107,7 @@ Do not copy local `.env.example` unchanged. Store secrets outside the document r
 
 - `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://<exact-public-origin>`, `APP_NAME` set to the installation name. Generate APP_KEY once on first installation; retain it across releases and back it up. APP_PREVIOUS_KEYS is optional for a separately planned rotation, never a substitute for preserving keys.
 - Keep technical `config/app.php` timezone UTC; `BUSINESS_TIMEZONE=Africa/Lagos` and fixed NGN business currency. Do not reinterpret existing dates by changing timezone. `APP_LOCALE=en`, `APP_FALLBACK_LOCALE=en`; APP_FAKER_LOCALE is development-only.
-- `DB_CONNECTION=mysql`; exact host-assigned DB name/user/password; host-supplied host/port or optional DB_SOCKET. DB_URL empty when using discrete values. DB_CHARSET=utf8mb4, DB_COLLATION=utf8mb4_unicode_ci. MYSQL_ATTR_SSL_CA only where verified remote-DB TLS is required. Do not configure testing credentials in production.
+- `DB_CONNECTION` must match the server: `mysql` for MySQL, **`mariadb` for MariaDB** (the `mariadb` driver selects Laravel's MariaDB grammar; pointing the `mysql` driver at a MariaDB server is unvalidated). Exact host-assigned DB name/user/password; host-supplied host/port or optional DB_SOCKET. DB_URL empty when using discrete values. DB_CHARSET=utf8mb4, DB_COLLATION=utf8mb4_unicode_ci. MYSQL_ATTR_SSL_CA only where verified remote-DB TLS is required. Do not configure testing credentials in production.
 - `SESSION_DRIVER=database`, `SESSION_LIFETIME=120`, `SESSION_SECURE_COOKIE=true`, `SESSION_HTTP_ONLY=true`, `SESSION_SAME_SITE=lax`, `SESSION_PATH=/`, `SESSION_DOMAIN=null` (host-only). SESSION_ENCRYPT=false is the current server-side payload setting; cookies are protected through Laravel. No plaintext one-time secrets belong in sessions. Leave SESSION_CONNECTION/TABLE overrides unset to use the authoritative connection and sessions table.
 - `CACHE_STORE=database`; use a unique CACHE_PREFIX if installations share cache tables. Leave DB_CACHE_CONNECTION/TABLE/LOCK_CONNECTION/LOCK_TABLE unset unless a reviewed equivalent is configured. Cache powers throttles and scheduler overlap locks; array/file substitutions are not the launch contract.
 - `QUEUE_CONNECTION=sync`, `BROADCAST_CONNECTION=log`, `FILESYSTEM_DISK=local`, `APP_MAINTENANCE_DRIVER=file`. No worker is required. Optional Redis/Memcached/AWS scaffold values in the example are unused by this profile; they are not missing services.
@@ -138,8 +153,9 @@ All scheduled times below are **UTC**, because the scheduler uses the applicatio
 | model:prune --model=App\Models\SaleReturnRequest | Daily 02:45 UTC | Same, for Returns | Yes | Unused rows accumulate |
 | model:prune --model=App\Models\SaleRefundRequest | Daily 02:50 UTC | Same, for Refunds | Yes | Unused rows accumulate |
 | inventra:reconcile-operational-alerts | Hourly | Repair derived alert state; detect ledger divergence | Yes | Delayed/missing alerts until next success |
+| inventra:dispatch-whatsapp-receipts | Every minute | Send WhatsApp receipts queued by completed sales | Only if WhatsApp is configured | Automatic receipts are not sent; sales are unaffected; manual Send still works |
 
-Consumed/result-linked request rows are retained. No scheduled pruning exists for audit_logs or operational alerts. No extra payment/WhatsApp request-pruning schedule was found. `inspire` is registered but not scheduled. All six scheduled jobs use withoutOverlapping with persistent database cache locks.
+Consumed/result-linked request rows are retained. No scheduled pruning exists for audit_logs or operational alerts. No extra payment/WhatsApp request-pruning schedule was found. `inspire` is registered but not scheduled. All seven scheduled jobs use withoutOverlapping with persistent database cache locks.
 
 Future cPanel cron (replace both absolute paths with verified values; do not paste placeholders):
 
@@ -147,7 +163,36 @@ Future cPanel cron (replace both absolute paths with verified values; do not pas
 * * * * * cd /home/ACCOUNT/inventra && /ABSOLUTE/PHP84/bin/php artisan schedule:run >> /home/ACCOUNT/logs/inventra-scheduler.log 2>&1
 ```
 
-Once per minute is sufficient for current schedules. Rotate this private operational log and monitor job failures/last success; do not discard all cron evidence. Host minute-cadence permission remains unverified.
+Once per minute is sufficient for current schedules, and is now **required** rather than merely sufficient: automatic WhatsApp receipt delivery runs on this cadence. Rotate this private operational log and monitor job failures/last success; do not discard all cron evidence. Host minute-cadence permission remains unverified.
+
+### Automatic WhatsApp receipts — exact cron requirement
+
+Completing a sale does not call Meta. It commits the sale, then persists an eligible delivery as
+`whatsapp_deliveries` row with `origin = 'automatic'`, `status = 'pending'` and
+`dispatch_claimed_at = NULL`. `inventra:dispatch-whatsapp-receipts` is what actually sends it.
+
+- **The single once-per-minute `schedule:run` cron above is the only cron required.** There is no
+  second cron entry, no queue worker, no Supervisor and no Horizon.
+- If that cron is absent, sales still complete normally and receipts simply queue and wait. No sale,
+  payment, return, refund or stock figure is affected. Staff can still send each receipt by hand.
+- If WhatsApp credentials are empty, the command exits immediately without contacting Meta and
+  nothing is queued in the first place.
+- Duplicate sending is prevented **in the database**, not by the scheduler: a delivery is taken with
+  a conditional `UPDATE ... WHERE dispatch_claimed_at IS NULL`, and the row is only dispatched if
+  that update matched exactly one row. Overlapping runs, a re-run after an interrupted command, or a
+  manually invoked command therefore cannot send the same receipt twice. `withoutOverlapping()` is a
+  courtesy on top of this, not the safety mechanism.
+- If the process dies between claiming and sending, the receipt is never sent rather than sent
+  twice. Such a row stays visible as `pending` in WhatsApp history for manual follow-up.
+- Consent is re-checked at dispatch time, not just when queued. A customer who opts out in the
+  interval, or a sale voided in the interval, closes the delivery as `failed` with the reason
+  recorded (`consent_withdrawn` / `sale_no_longer_completed`) and Meta is never contacted.
+
+To dispatch by hand (for example while verifying a deployment):
+
+```
+php artisan inventra:dispatch-whatsapp-receipts --limit=25
+```
 
 **QUEUE WORKER NOT REQUIRED FOR CURRENT LAUNCH SCOPE**
 
@@ -155,7 +200,26 @@ No application ShouldQueue jobs/notifications or queued dispatches were found. P
 
 ## Filesystem and future deployment
 
-**storage:link is not required for current launch scope.** No current application upload/store workflow or public uploaded asset dependency was found. Brand images are repository public assets. Keep storage/app/private, storage/framework and storage/logs plus bootstrap/cache writable by the application user; avoid world-writable permissions. Storage must persist across releases. Never serve the project root. No release symlink is inherently required, but the chosen release-switch mechanism must preserve these paths and the document-root boundary.
+**storage:link is still not required.** Product photographs and staff profile photographs are the
+only upload workflows, and both write to the **private** `local` disk at `storage/app/private`,
+which no web server maps to a URL. They are read back exclusively through authorized controller
+routes (`inventory.products.image`, `users.photo`) that run the relevant policy first, so there is
+no public uploaded asset and no symlink to create. Brand images remain repository public assets.
+
+Two directories are created on first upload and must persist across releases:
+
+| Path | Contents | Served by |
+| --- | --- | --- |
+| `storage/app/private/product-images` | Product photographs | `GET /inventory/products/{product}/image`, gated by ProductPolicy@view |
+| `storage/app/private/staff-photos` | Staff profile photographs | `GET /users/{user}/photo`, gated by UserPolicy@viewPhoto |
+
+Filenames are generated by the server (40 random characters plus an extension derived from the
+file's *detected* type), so a client-supplied name never reaches the filesystem. Uploads are capped
+at 2 MB and 4000x4000 pixels and restricted to JPEG, PNG and WebP; SVG is refused because it can
+carry script. Responses are sent with `Cache-Control: private` and `X-Content-Type-Options: nosniff`
+so a proxy never retains an image only some users may see.
+
+Keep storage/app/private, storage/framework and storage/logs plus bootstrap/cache writable by the application user; avoid world-writable permissions. Storage must persist across releases — **losing storage/app/private loses every uploaded photograph**, and the database will then reference files that are gone (the routes answer 404 and the initials placeholder is shown, so nothing breaks). Never serve the project root. No release symlink is inherently required, but the chosen release-switch mechanism must preserve these paths and the document-root boundary.
 
 These are future instructions, not commands executed in this phase. Do not run Composer's setup/dev/test scripts on production; setup includes migrations and development tooling, and tests may reset schemas.
 
@@ -164,7 +228,7 @@ First deployment:
 1. Verify every host gate above; take an initial backup and confirm recovery access. Prepare a release outside the document root. Install the production .env securely and establish writable paths.
 2. On a trusted build machine use the unchanged composer.lock/package-lock.json: `composer install --no-dev --optimize-autoloader`, `npm ci`, `npm run build`. Alternatively run Composer on the host with the verified PHP binary. Deploy vendor, code, public assets and manifests together. Node/npm and tests are not runtime requirements.
 3. Run `composer check-platform-reqs --no-dev` with the target PHP; verify DB identity explicitly before migration. Generate `php artisan key:generate --force` only for this new installation, never an existing one.
-4. With maintenance/traffic protection in place, run `php artisan migrate --force`; do not run demo/factory seeders. This phase did not execute this command.
+4. With maintenance/traffic protection in place, run `php artisan migrate --force`; do not run demo/factory seeders. This phase did not execute this command. The project now ships **29** migrations.
 5. Run `php artisan inventra:create-admin` interactively using its secret prompt; do not pass passwords in command-line arguments. Complete Business Settings through the protected UI.
 6. Run `php artisan config:cache`, `php artisan route:cache`, `php artisan view:cache` after final environment values. Verify public/hot is absent. Configure document root, HTTPS, scheduler and mail only through an authorized future deployment.
 7. Perform smoke checks below before opening access.
@@ -198,7 +262,7 @@ Future smoke checklist (never against Namecheap in this phase):
 - [Livewire CSP](https://livewire.laravel.com/docs/4.x/csp) and the installed FrontendAssets implementation establish CSP-runtime/nonce handling.
 - [PHP supported versions](https://www.php.net/supported-versions.php) must be checked when selecting the actual patched production binary.
 
-Host evidence remains mandatory: CLI/web versions and extensions, MySQL vendor/version/engines/modes/grants, public root/rewrite/HTTPS/proxy behavior, cron limits, SMTP delivery, filesystem ownership/quotas and backup restoration. Local compatibility checks do not certify Namecheap. Production rollout remains blocked until these are evidenced and the report-only CSP checklist is completed before enforcement.
+Host evidence remains mandatory: CLI/web versions and extensions, database vendor/version/engines/modes/grants, public root/rewrite/HTTPS/proxy behavior, cron limits, SMTP delivery, filesystem ownership/quotas and backup restoration. Local compatibility checks do not certify Namecheap. Production rollout remains blocked until these are evidenced and the report-only CSP checklist is completed before enforcement.
 
 
 ## Validation record
@@ -216,3 +280,24 @@ The temporary test harness verifies local MySQL and SELECT DATABASE()=inventra_t
 Excluded unsafe suites: ExpenseConcurrencyTest, ExpenseMigrationTest, PurchaseConcurrencyTest, PurchaseMigrationTest, SupplierConcurrencyTest, ReturnRefundMigrationTest, SalePaymentMigrationTest and WhatsAppMigrationTest; also ReturnRefundFoundationTest::test_independent_processes_cannot_over_return_or_over_refund. They contain schema reset/reversal or commit/reset behavior and were not run. This is not an unrestricted full-suite claim.
 
 Final database verification remained inventra_test, with no pending migrations and zero users/sales after rollback. No development database connection/mutation, production migration, deployment, Meta activation, dependency update, commit, stash or reset occurred. Host evidence and complete CSP rollout remain outstanding; do not treat the passing local checks as deployment approval.
+
+## MariaDB 11.4 compatibility pass (2026-09-09)
+
+Triggered by verified Namecheap host evidence: PHP 8.4.24 (web) and **MariaDB 11.4.12-MariaDB-cll-lve** over a local UNIX socket.
+
+Method: MariaDB 11.4.13 installed keg-only via Homebrew and run as a disposable instance on 127.0.0.1:3307 with its own datadir, against database `inventra_mariadb_compat` and a dedicated least-privilege user. The existing MySQL 9.6 install on 3306 was never modified; `inventra` (development) was never connected to. Docker was unavailable on the machine. Every destructive step printed and asserted vendor, version and database name first. `tests/TestCase.php` pins the `mariadb` driver to `inventra_mariadb_compat` and the `mysql` driver to `inventra_test`, so neither run can reach the other's database or the development database. The tested patch (11.4.13) is one patch ahead of the host's 11.4.12; both are 11.4.x.
+
+Single incompatibility found and fixed: `ALTER TABLE … DROP CHECK` is MySQL-only and fails on MariaDB with error 1064. Ten occurrences across five migrations were changed to the SQL-standard `DROP CONSTRAINT`, which both engines accept. Two were in `up()` and would have aborted a fresh production migration at `2026_09_04_010000`; eight were in `down()` and would have blocked rollback. No migration was added, since the schema has never been deployed to production. No constraint, foreign key, lock, ENUM or report calculation was weakened.
+
+Results on MariaDB 11.4.13:
+
+- All 25 migrations apply forward, and all 25 roll back.
+- 35 tables, all InnoDB, all `utf8mb4_unicode_ci`. 65 foreign keys (44 RESTRICT, 17 SET NULL, 4 CASCADE), 171 distinct indexes (72 unique), 35 DECIMAL columns at 15,2 and 15,3, 15 ENUM columns, zero generated columns, zero FULLTEXT. Identical to MySQL apart from the documented differences above.
+- All 30 application CHECK constraints present, plus MariaDB's 4 implicit `json_valid()` constraints.
+- 19 deliberate invalid writes were rejected on both engines with equivalent semantics: stock/reorder non-negativity, the business-settings singleton and blank-name checks, expense and purchase totals, JSON validity, ENUM strictness, foreign keys and RESTRICT, varchar truncation, non-numeric DECIMAL, and operational-alert type/occurrence. Zero invariants were unenforced.
+- Full suite: **483 tests, 5094 assertions passing** — the same totals as MySQL 9.6. This included the migration and concurrency suites that earlier phases excluded, because the target was disposable. `lockForUpdate()` (40 sites) and `DB::transaction` (46 sites) behaved identically.
+- All ten reports execute, including the grouped supplier/product/receiver breakdowns.
+
+One test assertion was corrected, not weakened: `SecurityEventLifecycleTest` compared sanitised metadata with an order-sensitive `assertSame`, which relied on MySQL reordering JSON keys. It now asserts the key set canonically and each value with `assertSame`, so it is order-independent and type-strict on both engines.
+
+Not validated by this pass: MariaDB versions outside 11.4.x, the `mysql` driver against a MariaDB server, Galera/replication topologies, and the production host itself. `SELECT VERSION()` must still be run on the real production database before first migration.
