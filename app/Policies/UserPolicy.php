@@ -5,9 +5,12 @@ namespace App\Policies;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Policies\Concerns\DeniesOtherBusinesses;
 
 class UserPolicy
 {
+    use DeniesOtherBusinesses;
+
     public function viewAny(User $actor): bool
     {
         return $actor->role === UserRole::Admin;

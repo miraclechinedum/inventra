@@ -40,6 +40,12 @@ class ImageStore
     /** Directory (relative to the disk root) for staff profile photographs. */
     public const STAFF = 'staff-photos';
 
+    /** Directory (relative to the disk root) for customer profile photographs. */
+    public const CUSTOMERS = 'customer-photos';
+
+    /** The business's own logo. One file, but stored under the same rules as every other image. */
+    public const BUSINESS = 'business-logo';
+
     /**
      * The one set of upload rules every image field uses, so a product photo and a profile photo
      * can never drift into accepting different things. Only the presence requirement varies: an
@@ -80,7 +86,7 @@ class ImageStore
     /**
      * Validates and stores one upload, returning the disk-relative path to record.
      *
-     * @param  self::PRODUCTS|self::STAFF  $directory
+     * @param  self::PRODUCTS|self::STAFF|self::CUSTOMERS  $directory
      */
     public function put(UploadedFile $file, string $directory): string
     {
@@ -140,14 +146,14 @@ class ImageStore
     private function isManagedPath(string $path): bool
     {
         $extensions = implode('|', array_unique(array_values(self::ALLOWED_TYPES)));
-        $directories = implode('|', [preg_quote(self::PRODUCTS, '/'), preg_quote(self::STAFF, '/')]);
+        $directories = implode('|', [preg_quote(self::PRODUCTS, '/'), preg_quote(self::STAFF, '/'), preg_quote(self::CUSTOMERS, '/'), preg_quote(self::BUSINESS, '/')]);
 
         return preg_match('/^('.$directories.')\/[A-Za-z0-9]{40}\.('.$extensions.')$/D', $path) === 1;
     }
 
     private function assertKnownDirectory(string $directory): void
     {
-        if (! in_array($directory, [self::PRODUCTS, self::STAFF], true)) {
+        if (! in_array($directory, [self::PRODUCTS, self::STAFF, self::CUSTOMERS, self::BUSINESS], true)) {
             throw new RuntimeException('Unknown image directory.');
         }
     }

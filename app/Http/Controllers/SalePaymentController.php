@@ -27,7 +27,7 @@ class SalePaymentController extends Controller
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
         $methods = array_column(PaymentMethod::cases(), 'value');
 
-        $payments = SalePayment::query()->with('sale:id,sale_number,customer_name_snapshot')
+        $payments = SalePayment::query()->with('sale:id,public_id,sale_number,customer_name_snapshot')
             ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
                 ->where('payment_number', 'like', mb_strtoupper($escaped).'%')
                 ->orWhereHas('sale', fn ($query) => $query->where('sale_number', 'like', mb_strtoupper($escaped).'%')
@@ -40,7 +40,7 @@ class SalePaymentController extends Controller
 
         return view('sale-payments.index', [
             'payments' => $payments,
-            'recorders' => User::query()->orderBy('name')->get(['id', 'name']),
+            'recorders' => User::query()->inCurrentBusiness()->orderBy('name')->get(['id', 'name']),
             'filters' => compact('search', 'from', 'to', 'recordedBy', 'paymentMethod'),
         ]);
     }

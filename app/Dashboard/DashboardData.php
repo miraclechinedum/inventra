@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Reports\BusinessReports;
 use App\Reports\ReportFilters;
 use App\Support\Money;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,6 +33,11 @@ class DashboardData
 
     public function __construct(private readonly BusinessReports $reports) {}
 
+    private function businessId(): int
+    {
+        return app(CurrentBusiness::class)->id();
+    }
+
     public function for(User $user, ReportFilters $filters): array
     {
         return $user->role === UserRole::SalesRep
@@ -45,15 +51,19 @@ class DashboardData
     {
         [$start, $end] = [$filters->utcStart(), $filters->utcEnd()];
 
-        $sales = DB::table('sales')->where('status', 'completed')->whereBetween('created_at', [$start, $end])
+        // `sale_date`: the period figures answer "what did the shop trade this month", so they
+        // must agree with the Sales Report, which keys off the trading day. The alert and recent
+        // lists below stay on `created_at` — those are about what was keyed in lately.
+        $sales = DB::table('sales')->where('sales.business_id', $this->businessId())->where('status', 'completed')->whereBetween('sale_date', [$filters->from, $filters->to])
             ->selectRaw('COALESCE(SUM(total_amount), 0) total, COUNT(*) sale_count')->first();
-        $receivables = DB::table('sales')->where('status', 'completed')->where('balance_due', '>', 0)
+        $receivables = DB::table('sales')->where('sales.business_id', $this->businessId())->where('status', 'completed')->where('balance_due', '>', 0)
             ->selectRaw('COALESCE(SUM(balance_due), 0) total, COUNT(*) sale_count')->first();
-        $credit = DB::table('sales')->where('status', 'completed')->where('refundable_credit', '>', 0)
+        $credit = DB::table('sales')->where('sales.business_id', $this->businessId())->where('status', 'completed')->where('refundable_credit', '>', 0)
             ->selectRaw('COALESCE(SUM(refundable_credit), 0) total, COUNT(*) sale_count')->first();
-        $stock = DB::table('products')->whereNull('deleted_at')->where('is_active', true)
+        // Raw builder queries are not reached by the tenant scope, so they name the Business.
+        $stock = DB::table('products')->where('business_id', $this->businessId())->whereNull('deleted_at')->where('is_active', true)
             ->selectRaw('SUM(current_stock <= reorder_level) low, SUM(current_stock <= 0) zero')->first();
-        $staff = DB::table('users')
+        $staff = DB::table('users')->where('business_id', $this->businessId())
             ->selectRaw("SUM(status = 'active') active, SUM(status = 'inactive') inactive, SUM(status = 'locked') locked")->first();
 
         return [
@@ -71,7 +81,7 @@ class DashboardData
                 $this->money('Current Outstanding Receivables', $receivables->total, 'Return-adjusted balances owed right now, across all periods.'),
                 $this->money('Refundable Customer Credit', $credit->total, 'Credit currently owed back to customers, across all periods.'),
                 $this->count('Low-stock Products', (int) $stock?->low, 'Active Products at or below their reorder level right now.'),
-                $this->count('Active Customers', DB::table('customers')->where('is_active', true)->count(), 'Customers currently active.'),
+                $this->count('Active Customers', DB::table('customers')->where('business_id', $this->businessId())->where('is_active', true)->count(), 'Customers currently active.'),
                 $this->count('Active Staff', (int) $staff?->active, 'Staff accounts currently active.'),
             ],
             'alerts' => $this->managementAlerts($stock, $staff, $receivables, $credit),
@@ -114,10 +124,10 @@ class DashboardData
             'items' => $alerts,
             'outstandingSales' => Sale::query()->where('status', 'completed')->where('balance_due', '>', 0)
                 ->orderBy('created_at')->orderBy('id')->limit(self::ALERT_LIMIT)
-                ->get(['id', 'sale_number', 'customer_name_snapshot', 'balance_due', 'created_at']),
+                ->get(['id', 'public_id', 'sale_number', 'customer_name_snapshot', 'balance_due', 'created_at']),
             'creditSales' => Sale::query()->where('status', 'completed')->where('refundable_credit', '>', 0)
                 ->orderByDesc('refundable_credit')->orderBy('id')->limit(self::ALERT_LIMIT)
-                ->get(['id', 'sale_number', 'customer_name_snapshot', 'refundable_credit', 'updated_at']),
+                ->get(['id', 'public_id', 'sale_number', 'customer_name_snapshot', 'refundable_credit', 'updated_at']),
             'lowStockProducts' => Product::query()->active()->lowStock()->orderBy('current_stock')->orderBy('id')
                 ->limit(self::ALERT_LIMIT)->get(['id', 'public_id', 'sku', 'name', 'unit', 'current_stock', 'reorder_level']),
         ];
@@ -127,8 +137,8 @@ class DashboardData
     {
         return [
             'sales' => Sale::query()->where('status', 'completed')->latest('created_at')->latest('id')->limit(self::RECENT_LIMIT)
-                ->get(['id', 'sale_number', 'customer_name_snapshot', 'total_amount', 'balance_due', 'payment_status', 'created_at']),
-            'collections' => SalePayment::query()->with('sale:id,sale_number')->latest('paid_at')->latest('id')->limit(self::RECENT_LIMIT)
+                ->get(['id', 'public_id', 'sale_number', 'customer_name_snapshot', 'total_amount', 'balance_due', 'payment_status', 'created_at']),
+            'collections' => SalePayment::query()->with('sale:id,public_id,sale_number')->latest('paid_at')->latest('id')->limit(self::RECENT_LIMIT)
                 ->get(['id', 'sale_id', 'payment_number', 'amount', 'payment_method', 'paid_at']),
             'returns' => SaleReturn::query()->latest('returned_at')->latest('id')->limit(self::RECENT_LIMIT)
                 ->get(['id', 'return_number', 'sale_number_snapshot', 'customer_name_snapshot', 'merchandise_value', 'returned_at']),
@@ -147,16 +157,16 @@ class DashboardData
     {
         [$start, $end] = [$filters->utcStart(), $filters->utcEnd()];
 
-        $sales = DB::table('sales')->where('status', 'completed')->where('sold_by', $user->id)
-            ->whereBetween('created_at', [$start, $end])
+        $sales = DB::table('sales')->where('sales.business_id', $this->businessId())->where('status', 'completed')->where('sold_by', $user->id)
+            ->whereBetween('sale_date', [$filters->from, $filters->to])
             ->selectRaw('COALESCE(SUM(total_amount), 0) total, COUNT(*) sale_count')->first();
         // Seller-attributed collections: receipts against Sales this representative sold,
         // matching the Staff Performance report rather than inventing a new attribution.
-        $collections = (string) DB::table('sale_payments')
+        $collections = (string) DB::table('sale_payments')->where('sale_payments.business_id', $this->businessId())
             ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
             ->where('sales.sold_by', $user->id)->whereBetween('sale_payments.paid_at', [$start, $end])
             ->selectRaw('COALESCE(SUM(sale_payments.amount), 0) total')->value('total');
-        $receivables = DB::table('sales')->where('status', 'completed')->where('sold_by', $user->id)
+        $receivables = DB::table('sales')->where('sales.business_id', $this->businessId())->where('status', 'completed')->where('sold_by', $user->id)
             ->where('balance_due', '>', 0)
             ->selectRaw('COALESCE(SUM(balance_due), 0) total, COUNT(*) sale_count')->first();
         $lowStock = Product::query()->active()->lowStock()->count();
@@ -180,13 +190,13 @@ class DashboardData
             'currentMetrics' => [
                 $this->money('My Outstanding Receivables', $receivables->total, 'Return-adjusted balances owed on Sales you sold, across all periods.'),
                 $this->count('Low-stock Products', $lowStock, 'Active Products at or below their reorder level right now.'),
-                $this->count('Active Customers', DB::table('customers')->where('is_active', true)->count(), 'Customers currently active.'),
+                $this->count('Active Customers', DB::table('customers')->where('business_id', $this->businessId())->where('is_active', true)->count(), 'Customers currently active.'),
             ],
             'alerts' => [
                 'items' => $alerts,
                 'outstandingSales' => Sale::query()->where('status', 'completed')->where('sold_by', $user->id)
                     ->where('balance_due', '>', 0)->orderBy('created_at')->orderBy('id')->limit(self::ALERT_LIMIT)
-                    ->get(['id', 'sale_number', 'customer_name_snapshot', 'balance_due', 'created_at']),
+                    ->get(['id', 'public_id', 'sale_number', 'customer_name_snapshot', 'balance_due', 'created_at']),
                 'creditSales' => collect(),
                 'lowStockProducts' => Product::query()->active()->lowStock()->orderBy('current_stock')->orderBy('id')
                     ->limit(self::ALERT_LIMIT)->get(['id', 'public_id', 'sku', 'name', 'unit', 'current_stock', 'reorder_level']),
@@ -194,7 +204,7 @@ class DashboardData
             'recent' => [
                 'sales' => Sale::query()->where('status', 'completed')->where('sold_by', $user->id)
                     ->latest('created_at')->latest('id')->limit(self::RECENT_LIMIT)
-                    ->get(['id', 'sale_number', 'customer_name_snapshot', 'total_amount', 'balance_due', 'payment_status', 'created_at']),
+                    ->get(['id', 'public_id', 'sale_number', 'customer_name_snapshot', 'total_amount', 'balance_due', 'payment_status', 'created_at']),
                 'collections' => collect(), 'returns' => collect(), 'refunds' => collect(),
                 'expenses' => collect(), 'purchases' => collect(),
             ],

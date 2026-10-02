@@ -10,7 +10,6 @@ use App\Models\Product;
 use App\Models\PurchaseRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -91,9 +90,7 @@ class PurchaseConcurrencyTest extends TestCase
                 unlink($barrier);
             }
 
-            DB::purge();
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            DB::connection()->beginTransaction();
+            $this->rebuildTestSchema();
         }
     }
 

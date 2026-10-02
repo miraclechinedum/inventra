@@ -15,14 +15,26 @@ use App\Models\SalePayment;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Money;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class BusinessReports
 {
+    /** Raw builder queries are not reached by the tenant scope, so every one names the Business. */
+    private function businessId(): int
+    {
+        return app(CurrentBusiness::class)->id();
+    }
+
     public function sales(ReportFilters $filters): array
     {
-        $base = Sale::query()->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()]);
+        // `sale_date`, not `created_at`: a report covering 1-31 August must contain the sales the
+        // shop transacted in August, including one backdated to 30 August but keyed in on 2
+        // September. It is a plain DATE, so the business-day strings compare directly and no UTC
+        // conversion is involved. Voids below still key off `voided_at`, because when a sale was
+        // cancelled is a real instant, not a trading day the operator gets to choose.
+        $base = Sale::query()->whereBetween('sale_date', [$filters->from, $filters->to]);
         $this->idFilter($base, 'sold_by', $filters->staff);
         $this->idFilter($base, 'customer_id', $filters->customer);
         $voids = Sale::query()->where('status', 'voided')
@@ -39,7 +51,7 @@ class BusinessReports
             $this->count('Partial', (clone $active)->where('payment_status', 'partial')->count()),
             $this->count('Unpaid', (clone $active)->where('payment_status', 'unpaid')->count()),
             $this->count('Voided in Period', $voids->count()),
-        ], $base->latest('created_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'sales');
+        ], $base->latest('sale_date')->latest('id')->paginate($filters->perPage)->withQueryString(), 'sales');
     }
 
     public function collections(ReportFilters $filters): array
@@ -56,7 +68,7 @@ class BusinessReports
             $metrics[] = $this->money($method->label(), $this->sum((clone $base)->where('payment_method', $method->value), 'amount'));
         }
 
-        return $this->payload('Collections Report', $filters, $metrics, $base->with('sale:id,sale_number,customer_name_snapshot,sold_by_name_snapshot')->latest('paid_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'collections');
+        return $this->payload('Collections Report', $filters, $metrics, $base->with('sale:id,public_id,sale_number,customer_name_snapshot,sold_by_name_snapshot')->latest('paid_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'collections');
     }
 
     public function receivables(ReportFilters $filters): array
@@ -64,7 +76,9 @@ class BusinessReports
         $base = $this->currentReceivables();
         $this->idFilter($base, 'sold_by', $filters->staff);
         $this->idFilter($base, 'customer_id', $filters->customer);
-        $mismatches = $this->paymentIntegrityMismatches(clone $base);
+        // Divergence anywhere in this business's completed sales is worth surfacing here, not only
+        // on the balances this report lists: a settled sale can drift too.
+        $mismatches = $this->ledgerIntegrityMismatches();
 
         $payload = $this->payload('Outstanding Receivables', $filters, [
             $this->money('Current Outstanding Receivables', $this->sum($base, 'balance_due')),
@@ -106,12 +120,12 @@ class BusinessReports
         $base = Purchase::query()->whereBetween('received_at', [$filters->utcStart(), $filters->utcEnd()]);
         $this->idFilter($base, 'received_by', $filters->staff);
         $this->idFilter($base, 'supplier_id', $filters->supplier);
-        $quantity = DB::table('purchase_items')->joinSub((clone $base)->select('id'), 'filtered_purchases', 'filtered_purchases.id', '=', 'purchase_items.purchase_id')->sum('quantity');
+        $quantity = DB::table('purchase_items')->where('purchase_items.business_id', $this->businessId())->joinSub((clone $base)->select('id'), 'filtered_purchases', 'filtered_purchases.id', '=', 'purchase_items.purchase_id')->sum('quantity');
 
         $filteredIds = (clone $base)->select('id');
         $bySupplier = (clone $base)->select('supplier_name_snapshot as label', DB::raw('SUM(total_amount) value'))->groupBy('supplier_name_snapshot')->orderByDesc('value')->get()->each(fn ($row) => $row->format = 'money');
         $byReceiver = (clone $base)->select('received_by_name_snapshot as label', DB::raw('SUM(total_amount) value'))->groupBy('received_by_name_snapshot')->orderByDesc('value')->get()->each(fn ($row) => $row->format = 'money');
-        $byProduct = DB::table('purchase_items')->joinSub($filteredIds, 'filtered_purchases', 'filtered_purchases.id', '=', 'purchase_items.purchase_id')->selectRaw('product_name_snapshot label, SUM(quantity) value')->groupBy('product_name_snapshot')->orderByDesc('value')->get()->each(fn ($row) => $row->format = 'quantity');
+        $byProduct = DB::table('purchase_items')->where('purchase_items.business_id', $this->businessId())->joinSub($filteredIds, 'filtered_purchases', 'filtered_purchases.id', '=', 'purchase_items.purchase_id')->selectRaw('product_name_snapshot label, SUM(quantity) value')->groupBy('product_name_snapshot')->orderByDesc('value')->get()->each(fn ($row) => $row->format = 'quantity');
 
         return $this->payload('Purchase Report', $filters, [$this->money('Inventory Purchases', $this->sum($base, 'total_amount')), $this->count('Purchases', (clone $base)->count()), $this->quantity('Units Received', (string) $quantity)], $base->withCount('items')->latest('received_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'purchases', ['By Supplier' => $bySupplier, 'By Product Quantity' => $byProduct, 'By Receiver' => $byReceiver]);
     }
@@ -128,7 +142,7 @@ class BusinessReports
 
     public function products(ReportFilters $filters): array
     {
-        $base = SaleItem::query()->join('sales', 'sales.id', '=', 'sale_items.sale_id')->join('products', 'products.id', '=', 'sale_items.product_id')->where('sales.status', 'completed')->whereBetween('sales.created_at', [$filters->utcStart(), $filters->utcEnd()])
+        $base = SaleItem::query()->join('sales', 'sales.id', '=', 'sale_items.sale_id')->join('products', 'products.id', '=', 'sale_items.product_id')->where('products.business_id', app(CurrentBusiness::class)->id())->where('sales.status', 'completed')->whereBetween('sales.sale_date', [$filters->from, $filters->to])
             ->when(ctype_digit($filters->product), fn ($q) => $q->where('sale_items.product_id', (int) $filters->product));
         $gross = (string) (clone $base)->sum('sale_items.line_total');
         $rows = $base->select(['sale_items.product_id', 'product_sku_snapshot', 'product_name_snapshot', 'products.current_stock', DB::raw('SUM(quantity) quantity_sold'), DB::raw('SUM(line_total) sales_value'), DB::raw('COUNT(DISTINCT sale_id) transaction_count')])
@@ -137,10 +151,25 @@ class BusinessReports
         return $this->payload('Product Performance', $filters, [$this->money('Gross Product Sales', $gross)], $rows, 'products');
     }
 
+    /**
+     * Walk-in sales are deliberately excluded from this report rather than folded into a synthetic
+     * "Walk-in customer" row.
+     *
+     * The report is called Customer Performance and every column it shows is about a relationship:
+     * how much this named customer bought, what they still owe, when they last traded. A walk-in has
+     * no relationship to measure — "outstanding" against an anonymous buyer is not a receivable
+     * anyone can chase, and "latest sale" for a row that is really thousands of unrelated strangers
+     * says nothing. Collapsing them into one pseudo-customer would also dominate the default
+     * sales_value ordering and push the genuine top customers down the page.
+     *
+     * Walk-in revenue is not lost: it is counted in full by the Sales Report, Product Performance,
+     * Staff Sales Performance and the Business Summary, none of which filter on customer identity.
+     * No Customer row is invented for them.
+     */
     public function customers(ReportFilters $filters): array
     {
-        $sales = DB::table('sales')->selectRaw('customer_id, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding, MAX(created_at) latest_sale')->where('status', 'completed')->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('customer_id');
-        $payments = DB::table('sale_payments')->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sale_payments.customer_id, SUM(sale_payments.amount) collected')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sale_payments.customer_id');
+        $sales = DB::table('sales')->where('sales.business_id', $this->businessId())->selectRaw('customer_id, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding, MAX(sale_date) latest_sale')->where('status', 'completed')->whereBetween('sale_date', [$filters->from, $filters->to])->whereNotNull('customer_id')->groupBy('customer_id');
+        $payments = DB::table('sale_payments')->where('sale_payments.business_id', $this->businessId())->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sale_payments.customer_id, SUM(sale_payments.amount) collected')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sale_payments.customer_id');
         $rows = Customer::query()->select(['customers.id', 'customer_code', 'first_name', 'last_name'])->leftJoinSub($sales, 'sales_report', 'sales_report.customer_id', '=', 'customers.id')->leftJoinSub($payments, 'payment_report', 'payment_report.customer_id', '=', 'customers.id')->where(fn ($query) => $query->whereNotNull('sales_report.customer_id')->orWhereNotNull('payment_report.customer_id'))
             ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), 'latest_sale', DB::raw('COALESCE(collected, 0) collected')])->when(ctype_digit($filters->customer), fn ($q) => $q->where('customers.id', (int) $filters->customer))->orderByDesc('sales_value')->orderBy('customers.id')->paginate($filters->perPage)->withQueryString();
 
@@ -149,9 +178,9 @@ class BusinessReports
 
     public function staff(ReportFilters $filters): array
     {
-        $sales = DB::table('sales')->selectRaw('sold_by, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding')->where('status', 'completed')->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sold_by');
-        $collections = DB::table('sale_payments')->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sales.sold_by, SUM(sale_payments.amount) seller_sale_collections')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sales.sold_by');
-        $rows = User::query()->select(['users.id', 'users.name'])->leftJoinSub($sales, 'sales_report', 'sales_report.sold_by', '=', 'users.id')->leftJoinSub($collections, 'collections_report', 'collections_report.sold_by', '=', 'users.id')->where(fn ($query) => $query->whereNotNull('sales_report.sold_by')->orWhereNotNull('collections_report.sold_by'))
+        $sales = DB::table('sales')->where('sales.business_id', $this->businessId())->selectRaw('sold_by, COUNT(*) sale_count, SUM(total_amount) sales_value, SUM(balance_due) outstanding')->where('status', 'completed')->whereBetween('sale_date', [$filters->from, $filters->to])->groupBy('sold_by');
+        $collections = DB::table('sale_payments')->where('sale_payments.business_id', $this->businessId())->join('sales', 'sales.id', '=', 'sale_payments.sale_id')->selectRaw('sales.sold_by, SUM(sale_payments.amount) seller_sale_collections')->where('sales.status', 'completed')->whereBetween('sale_payments.paid_at', [$filters->utcStart(), $filters->utcEnd()])->groupBy('sales.sold_by');
+        $rows = User::query()->inCurrentBusiness()->select(['users.id', 'users.name'])->leftJoinSub($sales, 'sales_report', 'sales_report.sold_by', '=', 'users.id')->leftJoinSub($collections, 'collections_report', 'collections_report.sold_by', '=', 'users.id')->where(fn ($query) => $query->whereNotNull('sales_report.sold_by')->orWhereNotNull('collections_report.sold_by'))
             ->addSelect([DB::raw('COALESCE(sale_count, 0) sale_count'), DB::raw('COALESCE(sales_value, 0) sales_value'), DB::raw('COALESCE(outstanding, 0) outstanding'), DB::raw('COALESCE(seller_sale_collections, 0) seller_sale_collections')])->when(ctype_digit($filters->staff), fn ($q) => $q->where('users.id', (int) $filters->staff))->orderByDesc('sales_value')->orderBy('users.id')->paginate($filters->perPage)->withQueryString();
 
         return $this->payload('Staff Sales Performance', $filters, [$this->count('Staff With Period Activity', $rows->total())], $rows, 'staff');
@@ -159,7 +188,7 @@ class BusinessReports
 
     public function summary(ReportFilters $filters): array
     {
-        $sales = Sale::query()->where('status', 'completed')->whereBetween('created_at', [$filters->utcStart(), $filters->utcEnd()]);
+        $sales = Sale::query()->where('status', 'completed')->whereBetween('sale_date', [$filters->from, $filters->to]);
         $collections = SalePayment::query()->whereBetween('paid_at', [$filters->utcStart(), $filters->utcEnd()]);
         $expenses = Expense::query()->whereBetween('incurred_at', [$filters->from, $filters->to]);
         $purchases = Purchase::query()->whereBetween('received_at', [$filters->utcStart(), $filters->utcEnd()]);
@@ -174,7 +203,7 @@ class BusinessReports
             $this->count('Sales', (clone $sales)->count()), $this->count('Low-stock Products', Product::query()->active()->lowStock()->count()),
         ], null, 'summary');
 
-        $payload['integrityWarning'] = $this->paymentIntegrityMismatches(clone $receivables) > 0 ? 'Sale aggregate and ledger inconsistency detected. No records were changed.' : null;
+        $payload['integrityWarning'] = $this->ledgerIntegrityMismatches() > 0 ? 'Sale aggregate and ledger inconsistency detected. No records were changed.' : null;
 
         return $payload;
     }
@@ -183,7 +212,7 @@ class BusinessReports
     {
         $options = ['staffOptions' => collect(), 'customerOptions' => collect(), 'productOptions' => collect(), 'categoryOptions' => collect(), 'supplierOptions' => collect()];
         if (in_array($type, ['sales', 'collections', 'receivables', 'expenses', 'purchases', 'staff'], true)) {
-            $options['staffOptions'] = User::orderBy('name')->limit(200)->get(['id', 'name']);
+            $options['staffOptions'] = User::query()->inCurrentBusiness()->orderBy('name')->limit(200)->get(['id', 'name']);
         }
         if (in_array($type, ['sales', 'collections', 'receivables', 'customers'], true)) {
             $options['customerOptions'] = Customer::orderBy('first_name')->limit(200)->get(['id', 'customer_code', 'first_name', 'last_name']);
@@ -224,6 +253,31 @@ class BusinessReports
     }
 
     /**
+     * What is owed right now, and by how many distinct debtors.
+     *
+     * The same `currentReceivables()` scope the Receivables report and the Business Summary use, so
+     * the dashboard card cannot disagree with either. `balance_due` has already been settled by
+     * payments, returns, refunds and corrections — nothing is recomputed from the original total.
+     *
+     * Debtors are counted as registered customers plus each unattributed walk-in sale, because a
+     * walk-in has no identity to group by and merging them would invent a customer.
+     *
+     * @return array{amount: string, debtors: int}
+     */
+    public function outstandingReceivables(): array
+    {
+        $base = $this->currentReceivables();
+
+        $registered = (clone $base)->whereNotNull('customer_id')->distinct()->count('customer_id');
+        $walkIns = (clone $base)->whereNull('customer_id')->count();
+
+        return [
+            'amount' => Money::zero((string) $this->sum(clone $base, 'balance_due')),
+            'debtors' => $registered + $walkIns,
+        ];
+    }
+
+    /**
      * Read-only reuse point for surfaces outside Reporting (for example the operational dashboard).
      * Detects only; it never repairs or mutates.
      */
@@ -253,16 +307,18 @@ class BusinessReports
     /** Sales whose amount_paid, returned_amount or refunded_amount disagrees with their ledger. */
     private function ledgerMismatches(Builder $sales): Builder
     {
-        $payments = DB::table('sale_payments')->selectRaw('sale_id, SUM(amount) ledger_paid')->groupBy('sale_id');
-        $returns = DB::table('sale_returns')->selectRaw('sale_id, SUM(merchandise_value) ledger_returned')->groupBy('sale_id');
-        $refunds = DB::table('sale_refunds')->selectRaw('sale_id, SUM(amount) ledger_refunded')->groupBy('sale_id');
+        $payments = DB::table('sale_payments')->where('sale_payments.business_id', $this->businessId())->selectRaw('sale_id, SUM(amount) ledger_paid')->groupBy('sale_id');
+        $returns = DB::table('sale_returns')->where('sale_returns.business_id', $this->businessId())->selectRaw('sale_id, SUM(merchandise_value) ledger_returned')->groupBy('sale_id');
+        $refunds = DB::table('sale_refunds')->where('sale_refunds.business_id', $this->businessId())->selectRaw('sale_id, SUM(amount) ledger_refunded')->groupBy('sale_id');
 
         return $sales->leftJoinSub($payments, 'payment_ledger', 'payment_ledger.sale_id', '=', 'sales.id')
             ->leftJoinSub($returns, 'return_ledger', 'return_ledger.sale_id', '=', 'sales.id')
             ->leftJoinSub($refunds, 'refund_ledger', 'refund_ledger.sale_id', '=', 'sales.id')
-            ->whereRaw('sales.amount_paid <> COALESCE(payment_ledger.ledger_paid, 0)
+            // Grouped: an ungrouped OR would escape both the business scope and the status filter,
+            // flagging voided sales and other businesses' sales as this one's mismatches.
+            ->whereRaw('(sales.amount_paid <> COALESCE(payment_ledger.ledger_paid, 0)
                 OR sales.returned_amount <> COALESCE(return_ledger.ledger_returned, 0)
-                OR sales.refunded_amount <> COALESCE(refund_ledger.ledger_refunded, 0)');
+                OR sales.refunded_amount <> COALESCE(refund_ledger.ledger_refunded, 0))');
     }
 
     private function idFilter(Builder $query, string $column, string $value): void

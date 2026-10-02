@@ -11,6 +11,8 @@ use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\SecurityEventRecorder;
+use App\Subscriptions\Entitlements;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -292,7 +294,7 @@ class StaffManagementTest extends TestCase
         $locked = User::factory()->create(['status' => UserStatus::Locked, 'failed_login_attempts' => 5]);
 
         foreach ([
-            [new ActivateStaff($events, app(AuditLogger::class)), $inactive],
+            [new ActivateStaff($events, app(AuditLogger::class), app(Entitlements::class), app(CurrentBusiness::class)), $inactive],
             [new UnlockStaff($events, app(AuditLogger::class)), $locked],
         ] as [$action, $subject]) {
             try {

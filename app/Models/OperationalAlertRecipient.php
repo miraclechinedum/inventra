@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OperationalAlertType;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class OperationalAlertRecipient extends Model
 {
+    use ScopedToCurrentBusiness;
+
     protected $guarded = ['*'];
 
     public function alert(): BelongsTo

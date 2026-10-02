@@ -6,6 +6,7 @@ use App\Enums\OperationalAlertStatus;
 use App\Enums\OperationalAlertType;
 use App\Models\OperationalAlert;
 use App\Models\User;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -103,11 +104,13 @@ class OperationalAlertProjector
     }
 
     /** Resolves every active alert of a type whose subject id is not in the still-true set. */
-    public function resolveMissing(OperationalAlertType $type, string $subjectType, array $stillTrueIds): int
+    public function resolveMissing(OperationalAlertType $type, string $subjectType, array $stillTrueIds, ?Builder $withinSubjects = null): int
     {
         $stale = OperationalAlert::query()->active()
             ->where('type', $type->value)
             ->where('subject_type', $subjectType)
+            // A sweep that only examined some subjects — one Business's — may only resolve theirs.
+            ->when($withinSubjects !== null, fn (Builder $query) => $query->whereIn('subject_id', $withinSubjects->select($withinSubjects->getModel()->getQualifiedKeyName())))
             ->when($stillTrueIds !== [], fn (Builder $query) => $query->whereNotIn('subject_id', $stillTrueIds))
             ->pluck('subject_id');
 
@@ -128,13 +131,15 @@ class OperationalAlertProjector
      *
      * @return list<int>
      */
-    private function recipientIdsFor(OperationalAlertType $type): array
+    private function recipientIdsFor(OperationalAlertType $type, int $businessId): array
     {
         $roles = array_map(static fn ($role): string => $role->value, $type->recipientRoles());
         sort($roles);
-        $key = implode(',', $roles);
+        // One Business's staff only: an alert is delivered inside the Business it is about.
+        $key = $businessId.'|'.implode(',', $roles);
 
         return $this->recipientCache[$key] ??= User::query()
+            ->where('business_id', $businessId)
             ->whereIn('role', $roles)
             // Inactive and locked accounts cannot sign in at all, so delivering to them would only
             // create rows nobody can ever read. Existing rows are never removed.
@@ -157,6 +162,8 @@ class OperationalAlertProjector
 
         $alert = new OperationalAlert;
         $alert->forceFill([
+            // The Business being evaluated; the model refuses it unless the subject agrees.
+            'business_id' => app(CurrentBusiness::class)->id(),
             'type' => $condition->type,
             'severity' => $condition->severity,
             'status' => OperationalAlertStatus::Active,
@@ -200,7 +207,7 @@ class OperationalAlertProjector
     /** Delivers to every active account holding a role this alert type is meant for. */
     private function attachRecipients(OperationalAlert $alert, OperationalAlertType $type): void
     {
-        $userIds = $this->recipientIdsFor($type);
+        $userIds = $this->recipientIdsFor($type, (int) $alert->business_id);
 
         $existing = $alert->recipients()->pluck('user_id')->all();
         $now = now();
@@ -213,6 +220,7 @@ class OperationalAlertProjector
             }
 
             $rows[] = [
+                'business_id' => $alert->business_id,
                 'operational_alert_id' => $alert->getKey(),
                 'user_id' => $userId,
                 'read_at' => null,

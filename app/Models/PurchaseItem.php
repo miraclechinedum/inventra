@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
 class PurchaseItem extends Model
 {
+    use ScopedToCurrentBusiness;
+
     public $timestamps = false;
 
     protected $guarded = ['*'];

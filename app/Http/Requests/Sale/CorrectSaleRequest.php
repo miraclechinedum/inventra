@@ -5,8 +5,9 @@ namespace App\Http\Requests\Sale;
 use App\Http\Requests\Concerns\NormalizesScalarInput;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Tenancy\TenantRules;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class CorrectSaleRequest extends FormRequest
 {
@@ -17,6 +18,23 @@ class CorrectSaleRequest extends FormRequest
         return $this->user()?->can('correct', $this->route('sale')) ?? false;
     }
 
+    /**
+     * A rejected correction returns to wherever it was started from — Laravel redirects back, which
+     * for the side panel is the Sales list and for the full page is the form. Old input comes with
+     * it either way, so nothing the operator typed is lost.
+     *
+     * The extra flash names the Sale so the list can reopen its panel on the right row. It is a
+     * public identifier, not a URL, so it cannot redirect anywhere the application did not choose.
+     */
+    protected function failedValidation(Validator $validator): void
+    {
+        if ($this->input('return_to') === 'index') {
+            $this->session()->flash('correctionFailedFor', $this->route('sale')?->public_id);
+        }
+
+        parent::failedValidation($validator);
+    }
+
     protected function prepareForValidation(): void
     {
         $this->mergeStringNormalizations(['reason', 'notes']);
@@ -25,12 +43,14 @@ class CorrectSaleRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Ownership comes from the acting user and the parent document, never from the form.
+            'business_id' => ['prohibited'],
             'reason' => ['required', 'string', 'min:10', 'max:500'],
             'notes' => ['nullable', 'string', 'max:1000'],
-            'customer_id' => ['nullable', 'integer', Rule::exists(Customer::class, 'id')->where('is_active', true)],
+            'customer_id' => ['nullable', 'integer', TenantRules::exists(Customer::class)->where('is_active', true)],
 
             'products' => ['required', 'array', 'min:1', 'max:100'],
-            'products.*.product_id' => ['required', 'integer', Rule::exists(Product::class, 'id')],
+            'products.*.product_id' => ['required', 'integer', TenantRules::exists(Product::class)],
             'products.*.quantity' => ['required', 'decimal:0,3', 'gt:0', 'max:999999999999.999'],
 
             // Money and stock are derived on the server from the lines above. Accepting any of

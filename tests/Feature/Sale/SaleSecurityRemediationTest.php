@@ -50,10 +50,48 @@ class SaleSecurityRemediationTest extends TestCase
         $this->assertSame($seller->name, $sale->sold_by_name_snapshot);
     }
 
-    public function test_sale_numbers_do_not_truncate_ids_beyond_six_digits(): void
+    public function test_sale_numbers_are_random_over_the_declared_display_alphabet(): void
     {
-        $this->assertSame('SALE-1000000', SaleNumber::fromId(1000000));
-        $this->assertSame('SALE-999999999999', SaleNumber::fromId(999999999999));
+        // Sale references are random rather than derived from the primary key, so one sale's number
+        // reveals nothing about another's and none advertises how many exist.
+        $numbers = collect(range(1, 50))->map(fn (): string => SaleNumber::generate());
+
+        $this->assertCount(50, $numbers->unique(), 'every reference must be distinct');
+
+        foreach ($numbers as $number) {
+            // S- plus exactly eight characters: ten visible in total.
+            $this->assertMatchesRegularExpression('/^S-[ABCDEFGHJKMNPQRSTUVWXYZ23456789@!%#]{8}$/', $number);
+            $this->assertSame(10, mb_strlen($number));
+            // No confusable characters in the random portion.
+            $this->assertDoesNotMatchRegularExpression('/[OIL01]/', mb_substr($number, 2));
+            // Nothing that would have to be escaped in HTML, a CSV cell, a URL or a log line, and
+            // no leading character a spreadsheet would read as a formula.
+            $this->assertDoesNotMatchRegularExpression('/[\s\/\\?&=\'"<>:;,+]/', $number);
+            $this->assertStringStartsWith('S-', $number);
+        }
+    }
+
+    public function test_sale_number_generation_matches_the_pattern_the_class_publishes(): void
+    {
+        // The generator and the shape it advertises must not be able to drift apart.
+        $this->assertMatchesRegularExpression(SaleNumber::pattern(), SaleNumber::generate());
+        // And a historical reference is deliberately *not* of that shape — it is left as recorded.
+        $this->assertDoesNotMatchRegularExpression(SaleNumber::pattern(), 'SALE-000001');
+    }
+
+    public function test_historical_sale_numbers_are_never_rewritten(): void
+    {
+        // Receipts already in customers' hands carry these. Reformatting them would make those
+        // receipts unverifiable, so the new generator applies only to new sales.
+        $legacy = Sale::factory()->create(['sale_number' => 'SALE-000001']);
+
+        $legacy->refresh();
+        $this->assertSame('SALE-000001', $legacy->sale_number);
+
+        // A new sale alongside it takes the new format without disturbing the old one.
+        $fresh = Sale::factory()->create();
+        $this->assertMatchesRegularExpression(SaleNumber::pattern(), $fresh->sale_number);
+        $this->assertSame('SALE-000001', $legacy->fresh()->sale_number);
     }
 
     public function test_sales_search_escapes_wildcards_and_ignores_array_filters(): void

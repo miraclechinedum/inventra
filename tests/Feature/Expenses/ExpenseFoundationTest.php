@@ -13,6 +13,7 @@ use App\Models\ExpenseRequest;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Tenancy\CurrentBusiness;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -268,7 +269,7 @@ class ExpenseFoundationTest extends TestCase
         $audit = Mockery::mock(AuditLogger::class);
         $audit->shouldReceive('record')->andThrow(new \RuntimeException('audit failed'));
         try {
-            (new RecordExpense($audit))->execute($actor, $data, 'expense-session');
+            (new RecordExpense($audit, app(CurrentBusiness::class)))->execute($actor, $data, 'expense-session');
             $this->fail('Audit failure accepted.');
         } catch (\RuntimeException) {
             $this->assertTrue(true);

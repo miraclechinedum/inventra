@@ -5,8 +5,8 @@ namespace App\Http\Requests;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Supplier;
+use App\Tenancy\TenantRules;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class ReceivePurchaseRequest extends FormRequest
 {
@@ -46,13 +46,15 @@ class ReceivePurchaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'supplier_id' => ['required', 'integer', Rule::exists(Supplier::class, 'id')],
+            // Ownership comes from the acting user and the parent document, never from the form.
+            'business_id' => ['prohibited'],
+            'supplier_id' => ['required', 'integer', TenantRules::exists(Supplier::class)],
             'reference_number' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:1000'],
             'request_token' => ['required', 'string', 'size:64'],
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*' => ['array:product_id,quantity,unit_cost'],
-            'items.*.product_id' => ['required', 'integer', 'distinct:strict', Rule::exists(Product::class, 'id')],
+            'items.*.product_id' => ['required', 'integer', 'distinct:strict', TenantRules::exists(Product::class)],
             'items.*.quantity' => ['required', 'decimal:0,3', 'gt:0', 'max:999999999999.999'],
             'items.*.unit_cost' => ['required', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'],
             'purchase_number' => ['prohibited'],

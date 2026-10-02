@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -9,6 +10,8 @@ use LogicException;
 
 class AuditLog extends Model
 {
+    use ScopedToCurrentBusiness;
+
     public $timestamps = false;
 
     protected $guarded = ['*'];

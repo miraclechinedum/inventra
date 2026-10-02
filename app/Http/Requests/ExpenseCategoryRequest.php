@@ -30,7 +30,7 @@ class ExpenseCategoryRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:500'],
-            'category_code' => ['prohibited'], 'is_active' => ['prohibited'],
+            'category_code' => ['prohibited'], 'is_active' => ['prohibited'], 'business_id' => ['prohibited'],
             'created_by' => ['prohibited'], 'updated_by' => ['prohibited'],
         ];
     }

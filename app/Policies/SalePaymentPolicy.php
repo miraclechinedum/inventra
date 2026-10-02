@@ -5,9 +5,12 @@ namespace App\Policies;
 use App\Enums\UserRole;
 use App\Models\SalePayment;
 use App\Models\User;
+use App\Policies\Concerns\DeniesOtherBusinesses;
 
 class SalePaymentPolicy
 {
+    use DeniesOtherBusinesses;
+
     public function viewAny(User $user): bool
     {
         return in_array($user->role, [UserRole::Admin, UserRole::Manager], true);

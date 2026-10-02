@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Business;
 use App\Models\Customer;
 use App\Models\User;
 use App\Support\CustomerCode;
@@ -27,6 +28,7 @@ class CustomerFactory extends Factory
         $id = fake()->unique()->numberBetween(10000000, 99999999);
 
         return [
+            'business_id' => fn (): int => BusinessFactory::installationId(),
             'customer_code' => 'PENDING-'.fake()->unique()->regexify('[A-Za-z0-9]{20}'),
             'first_name' => fake()->firstName(),
             'last_name' => fake()->lastName(),
@@ -37,7 +39,12 @@ class CustomerFactory extends Factory
             'notes' => null,
             'is_active' => true,
             'whatsapp_opt_in' => false,
-            'created_by' => User::factory(),
+            'created_by' => fn (array $attributes) => User::factory()->state(['business_id' => $attributes['business_id']]),
         ];
+    }
+
+    public function forBusiness(Business $business): static
+    {
+        return $this->state(fn (): array => ['business_id' => $business->getKey()]);
     }
 }

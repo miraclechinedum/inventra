@@ -22,6 +22,8 @@ use App\Services\AuditLogger;
 use App\Services\SecurityEventRecorder;
 use App\Support\PerPage;
 use App\Support\TableSort;
+use App\Support\UnavailableIdentifier;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -53,7 +55,7 @@ class StaffController extends Controller
         $escapedSearch = $this->escapeLikePrefix($search);
         $normalizedPhone = User::normalizePhone($search);
         $sort = TableSort::resolve($request, self::SORTABLE, 'name');
-        $staff = User::query()
+        $staff = User::query()->inCurrentBusiness()
             ->with('creator:id,name')
             ->when($search !== '', function ($query) use ($escapedSearch, $normalizedPhone): void {
                 $query->where(function ($query) use ($escapedSearch, $normalizedPhone): void {
@@ -73,7 +75,13 @@ class StaffController extends Controller
             ->paginate(PerPage::resolve($request))
             ->withQueryString();
 
-        return view('staff.index', ['staff' => $staff, 'sort' => $sort]);
+        return view('staff.index', [
+            'staff' => $staff,
+            'sort' => $sort,
+            // The team's real size, reported in the header. Deliberately the unfiltered total: the
+            // subtitle describes the business, not the current page of a filtered search.
+            'memberCount' => User::query()->inCurrentBusiness()->count(),
+        ]);
     }
 
     public function create(): View
@@ -99,7 +107,7 @@ class StaffController extends Controller
             }
 
             throw ValidationException::withMessages([
-                'email' => 'An account with that email address or phone number already exists.',
+                'email' => UnavailableIdentifier::EITHER,
             ]);
         }
 
@@ -153,7 +161,7 @@ class StaffController extends Controller
             }
 
             throw ValidationException::withMessages([
-                'email' => 'An account with that email address or phone number already exists.',
+                'email' => UnavailableIdentifier::EITHER,
             ]);
         }
 
@@ -230,7 +238,9 @@ class StaffController extends Controller
     public function activity(Request $request, User $user, EmployeeActivity $employeeActivity): View
     {
         Gate::authorize('viewActivity', $user);
-        $events = $user->securityEvents()
+        // This Business's events only. Pre-authentication events carry no business and never
+        // appear here; they belong to a future platform security surface.
+        $events = $user->securityEvents()->where('security_events.business_id', app(CurrentBusiness::class)->id())
             ->with('actor:id,name')
             ->latest('created_at')
             ->latest('id')

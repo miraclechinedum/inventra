@@ -21,6 +21,7 @@ final class Quantity
             ? rtrim(rtrim($value, '0'), '.')
             : $value;
 
-        return $trimmed === '' || $trimmed === '-' ? '0' : $trimmed;
+        // "-0" reads as a mistake rather than a quantity; a zero has no sign worth showing.
+        return $trimmed === '' || $trimmed === '-' || $trimmed === '-0' ? '0' : $trimmed;
     }
 }

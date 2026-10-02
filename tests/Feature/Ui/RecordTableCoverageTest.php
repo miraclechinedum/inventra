@@ -108,7 +108,9 @@ class RecordTableCoverageTest extends TestCase
 
         // Every listing whose rows are <tr>s carries the S/N header cell ahead of its own columns.
         $tabular = [
-            'staff.index' => 'Staff name',
+            // Staff & roles was rebuilt to the Figma, whose first own column is "Member". S/N
+            // still comes first, which is what this test is about.
+            'staff.index' => 'Member',
             'inventory.index' => 'SKU',
             'customers.index' => 'Customer',
             'sales.index' => null,
@@ -125,7 +127,15 @@ class RecordTableCoverageTest extends TestCase
 
         foreach ($tabular as $name => $firstOwnColumn) {
             $html = $this->actingAs($admin)->get(route($name))->assertOk()->getContent();
-            $snAt = mb_strpos($html, '<th class="ui-sn">S/N</th>');
+            // Matched on the header cell itself rather than on one class name. The rule being
+            // enforced is that S/N comes first, not that every table reaches it through the shared
+            // `.ui-sn` class — Sales styles its own columns through a `<colgroup>` and a scoped
+            // class, and still owes the reader an S/N ahead of its own columns.
+            $this->assertMatchesRegularExpression('/<th[^>]*>\s*S\/N\s*<\/th>/', $html,
+                "{$name} must render an S/N header");
+            $snAt = (int) preg_match('/<th[^>]*>\s*S\/N\s*<\/th>/', $html, $matches, PREG_OFFSET_CAPTURE)
+                ? $matches[0][1]
+                : false;
             $this->assertNotFalse($snAt, "{$name} must render an S/N header");
 
             if ($firstOwnColumn !== null) {

@@ -573,7 +573,7 @@ class NotificationDeliveryTest extends TestCase
         for ($i = 0; $i < $count; $i++) {
             $created = $identicalTimestamps ? $now : $now->copy()->subMinutes($count - $i);
             $alerts[] = [
-                'type' => 'inventory_low_stock', 'severity' => 'warning', 'status' => 'active',
+                'business_id' => $user->business_id, 'type' => 'inventory_low_stock', 'severity' => 'warning', 'status' => 'active',
                 'subject_type' => 'product', 'subject_id' => $startAt + $offset + $i + 1,
                 'subject_label_snapshot' => 'Bulk '.$i, 'title' => 'Bulk alert '.$i, 'message' => 'Bulk message '.$i,
                 'active_key' => 'bulk:'.$startAt.':'.($offset + $i), 'occurrence' => 1,
@@ -587,7 +587,7 @@ class NotificationDeliveryTest extends TestCase
 
         $recipients = OperationalAlert::query()->whereNotIn('id', OperationalAlertRecipient::query()->select('operational_alert_id'))
             ->pluck('id')->map(fn ($id): array => [
-                'operational_alert_id' => $id, 'user_id' => $user->id,
+                'business_id' => $user->business_id, 'operational_alert_id' => $id, 'user_id' => $user->id,
                 'created_at' => $now, 'updated_at' => $now,
             ])->all();
 

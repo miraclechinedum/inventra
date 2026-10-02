@@ -4,7 +4,7 @@ namespace Tests\Feature\Staff;
 
 use App\Actions\Sale\CreateSale;
 use App\Actions\Sale\VoidSale;
-use App\Contracts\WhatsAppClient;
+use App\Contracts\WhatsAppConnectionProvider;
 use App\Enums\UserRole;
 use App\Models\Customer;
 use App\Models\Product;
@@ -12,7 +12,7 @@ use App\Models\Sale;
 use App\Models\User;
 use App\Reports\EmployeeActivity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Fakes\FakeWhatsAppClient;
+use Tests\Fakes\FakeWhatsAppProvider;
 use Tests\TestCase;
 
 /**
@@ -29,10 +29,11 @@ class EmployeeActivityTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Keeps sale completion from queueing WhatsApp work that is irrelevant here.
-        $client = new FakeWhatsAppClient;
-        $client->configured = false;
-        $this->app->instance(WhatsAppClient::class, $client);
+        // Keeps sale completion from queueing WhatsApp work that is irrelevant here. With no
+        // connected business number the automations never produce a message at all.
+        $provider = new FakeWhatsAppProvider;
+        $provider->configured = false;
+        $this->app->instance(WhatsAppConnectionProvider::class, $provider);
     }
 
     private function recordSale(User $seller, string $unitPrice, string $paid): void

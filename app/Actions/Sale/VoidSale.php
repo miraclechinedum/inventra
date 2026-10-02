@@ -54,6 +54,7 @@ class VoidSale
                 $after = bcadd($before, $item->quantity, 3);
 
                 $movement = new InventoryMovement;
+                $movement->business_id = $product->business_id;
                 $movement->product_id = $product->id;
                 $movement->type = InventoryMovementType::SaleVoid;
                 $movement->quantity_change = $item->quantity;

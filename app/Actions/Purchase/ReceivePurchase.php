@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\Money;
 use App\Support\PurchaseNumber;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -21,14 +22,19 @@ use Illuminate\Validation\ValidationException;
 
 class ReceivePurchase
 {
-    public function __construct(private AuditLogger $audit) {}
+    public function __construct(
+        private AuditLogger $audit,
+        private readonly CurrentBusiness $currentBusiness,
+    ) {}
 
     public function execute(User $actor, array $data, string $sessionId): Purchase
     {
         Gate::forUser($actor)->authorize('create', Purchase::class);
 
-        return DB::transaction(function () use ($actor, $data, $sessionId) {
-            $request = PurchaseRequest::query()->where('token_hash', hash('sha256', $data['request_token']))->lockForUpdate()->first();
+        $business = $this->currentBusiness->forActor($actor);
+
+        return DB::transaction(function () use ($actor, $data, $sessionId, $business) {
+            $request = PurchaseRequest::query()->where('token_hash', hash('sha256', $data['request_token']))->where('business_id', $actor->business_id)->lockForUpdate()->first();
             if (! $request || $request->actor_id !== $actor->id || ! hash_equals($request->session_id, $sessionId)) {
                 throw ValidationException::withMessages(['request_token' => 'This receiving confirmation is invalid.']);
             }
@@ -96,6 +102,7 @@ class ReceivePurchase
             }
 
             $purchase = new Purchase;
+            $purchase->business_id = $business->getKey();
             $purchase->purchase_number = 'PENDING-'.Str::random(20);
             $purchase->supplier_id = $supplier->id;
             $purchase->supplier_code_snapshot = $supplier->supplier_code;
@@ -116,6 +123,7 @@ class ReceivePurchase
             $purchase->save();
             foreach ($lines as $line) {
                 $item = new PurchaseItem;
+                $item->business_id = $purchase->business_id;
                 $item->purchase_id = $purchase->id;
                 $item->product_id = $line['product']->id;
                 $item->product_sku_snapshot = $line['product']->sku;
@@ -128,6 +136,7 @@ class ReceivePurchase
                 $item->save();
 
                 $movement = new InventoryMovement;
+                $movement->business_id = $line['product']->business_id;
                 $movement->product_id = $line['product']->id;
                 $movement->type = InventoryMovementType::Purchase;
                 $movement->quantity_change = $line['quantity'];

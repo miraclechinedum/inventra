@@ -13,15 +13,26 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Tests\Concerns\UnwindsTenancyMigrations;
 use Tests\TestCase;
 
 class PurchaseMigrationTest extends TestCase
 {
-    use DatabaseMigrations;
+    use DatabaseMigrations, UnwindsTenancyMigrations;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These tests run migration down() and up() directly, so the live connection is re-proven first.
+        static::assertSafeTestDatabase(DB::connection());
+    }
 
     public function test_empty_procurement_tables_can_roll_back_and_reapply(): void
     {
         $migration = $this->migration();
+        // Tenancy was layered onto the procurement tables later, so it is unwound around the base.
+        $this->unwindTenancyFrom('2026_09_29_070000_add_business_ownership_to_parties');
 
         try {
             $migration->down();
@@ -29,6 +40,7 @@ class PurchaseMigrationTest extends TestCase
             $this->assertFalse(Schema::hasTable('purchases'));
         } finally {
             $migration->up();
+            $this->restoreTenancyFrom('2026_09_29_070000_add_business_ownership_to_parties');
         }
     }
 

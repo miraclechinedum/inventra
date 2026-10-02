@@ -5,17 +5,25 @@ namespace App\Models;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\SaleStatus;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Database\Factories\SaleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Str;
 use LogicException;
 
 class Sale extends Model
 {
+    /** Identity snapshots used when a Sale has no registered customer. */
+    public const WALK_IN_NAME = 'Walk-in customer';
+
+    public const WALK_IN_CODE = 'WALK-IN';
+
     /** @use HasFactory<SaleFactory> */
-    use HasFactory;
+    use HasFactory, ScopedToCurrentBusiness;
 
     private bool $paymentAggregateTransition = false;
 
@@ -23,11 +31,29 @@ class Sale extends Model
 
     private bool $correctionTransition = false;
 
+    private bool $pickupTransition = false;
+
     protected $guarded = ['*'];
 
     protected static function booted(): void
     {
+        // The public identifier is the server's to assign, never the client's. `$guarded = ['*']`
+        // already blocks mass assignment; this only guarantees every Sale has one however it was
+        // created.
+        static::creating(function (Sale $sale): void {
+            if (blank($sale->public_id)) {
+                $sale->public_id = (string) Str::ulid();
+            }
+        });
+
         static::updating(function (Sale $sale): void {
+            // Once a receipt has been printed or a link shared, that URL must keep resolving. The
+            // identifier is fixed at creation, and is deliberately absent from every `$allowed`
+            // list below so no transition can carry it.
+            if ($sale->isDirty('public_id')) {
+                throw new LogicException('A sale public identifier is immutable once assigned.');
+            }
+
             $allowed = ['status', 'voided_by', 'voided_at', 'void_reason', 'updated_at'];
             if ($sale->paymentAggregateTransition) {
                 $allowed = [...$allowed, 'amount_paid', 'balance_due', 'payment_status', 'returned_amount', 'refunded_amount', 'refundable_credit'];
@@ -48,21 +74,50 @@ class Sale extends Model
                     'notes', 'subtotal', 'total_amount', 'balance_due', 'payment_status', 'refundable_credit',
                 ];
             }
-            $dirty = array_keys($sale->getDirty());
-            $initialNumberAssignment = str_starts_with((string) $sale->getOriginal('sale_number'), 'PENDING-')
-                && in_array('sale_number', $dirty, true)
-                && array_diff($dirty, ['sale_number', 'updated_at']) === [];
-
-            if (! $initialNumberAssignment && array_diff(array_keys($sale->getDirty()), $allowed) !== []) {
+            // Fulfilment. Marking an order ready for collection records something that becomes
+            // true AFTER the sale is complete, so it is not a rewrite of what was sold: no money,
+            // no goods and no identity moves. It has its own flag rather than joining the base
+            // list, so only markPickupReady() can set these columns.
+            if ($sale->pickupTransition) {
+                $allowed = [...$allowed, 'pickup_ready_at', 'pickup_ready_by'];
+            }
+            // `sale_number` is absent from every `$allowed` list above and has no exception here.
+            // It is assigned once at creation and then fixed: it is printed on receipts, quoted in
+            // support and recorded in the audit trail, so changing it would orphan all three. The
+            // previous placeholder-then-rename escape hatch is gone with the sequential scheme that
+            // needed it.
+            if (array_diff(array_keys($sale->getDirty()), $allowed) !== []) {
                 throw new LogicException('Completed sales are immutable.');
             }
         });
         static::deleting(fn (): never => throw new LogicException('Sales cannot be deleted.'));
     }
 
+    /**
+     * Sales are addressed publicly by their ULID, so `/sales/1` becomes `/sales/01K5H2…`. A URL no
+     * longer says how many sales the business has made, nor lets one be guessed from another.
+     *
+     * Internal relationships are untouched: `sale_items.sale_id`, payments, returns, refunds,
+     * corrections and every report still join on the numeric primary key. Only route binding and
+     * URL generation change. The number a person reads on a receipt remains `sale_number`.
+     */
+    public function getRouteKeyName(): string
+    {
+        return 'public_id';
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * A walk-in Sale has no Customer row to reach, so anything asking about the buyer must ask the
+     * Sale itself and fall back to its identity snapshots.
+     */
+    public function isWalkIn(): bool
+    {
+        return (bool) $this->is_walk_in;
     }
 
     public function seller(): BelongsTo
@@ -96,9 +151,20 @@ class Sale extends Model
         return $this->hasMany(SaleCorrection::class);
     }
 
+    /**
+     * Historical receipt deliveries from the WhatsApp module this replaced. The table is preserved
+     * read-only so past records are never destroyed; nothing writes to it any more. New messages
+     * live in `whatsappMessages()` below.
+     */
     public function whatsappDeliveries(): HasMany
     {
         return $this->hasMany(WhatsAppDelivery::class);
+    }
+
+    /** WhatsApp automation messages caused by this sale (post-purchase, pickup reminder). */
+    public function whatsappMessages(): MorphMany
+    {
+        return $this->morphMany(WhatsAppMessage::class, 'subject');
     }
 
     public function payments(): HasMany
@@ -119,6 +185,26 @@ class Sale extends Model
     public function discountRequests(): HasMany
     {
         return $this->hasMany(SaleDiscountRequest::class);
+    }
+
+    /**
+     * Records that this order is ready for collection.
+     *
+     * The only way `pickup_ready_at` is ever written, which is what keeps the timestamp and the
+     * actor coherent — MySQL would not accept a CHECK constraint pairing them alongside the actor's
+     * ON DELETE SET NULL foreign key, so this method is the guarantee instead.
+     */
+    public function markPickupReady(\DateTimeInterface $readyAt, int $actorId): void
+    {
+        $this->pickupTransition = true;
+
+        try {
+            $this->pickup_ready_at = $readyAt;
+            $this->pickup_ready_by = $actorId;
+            $this->save();
+        } finally {
+            $this->pickupTransition = false;
+        }
     }
 
     public function synchronizePaymentAggregates(string $amountPaid, string $balanceDue, PaymentStatus $status): void
@@ -208,6 +294,8 @@ class Sale extends Model
     {
         return [
             'status' => SaleStatus::class,
+            'is_walk_in' => 'boolean',
+            'sale_date' => 'date',
             'payment_method' => PaymentMethod::class,
             'payment_status' => PaymentStatus::class,
             'subtotal' => 'decimal:2',

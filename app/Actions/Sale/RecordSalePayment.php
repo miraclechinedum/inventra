@@ -2,6 +2,7 @@
 
 namespace App\Actions\Sale;
 
+use App\Actions\WhatsAppAutomation\WhatsAppAutomationTriggers;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\SalePaymentType;
@@ -22,7 +23,10 @@ use Illuminate\Validation\ValidationException;
 
 class RecordSalePayment
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly WhatsAppAutomationTriggers $whatsapp,
+    ) {}
 
     public function execute(User $actor, Sale $sale, array $data, string $sessionId): SalePayment
     {
@@ -30,8 +34,10 @@ class RecordSalePayment
             throw new AuthorizationException;
         }
 
-        return DB::transaction(function () use ($actor, $sale, $data, $sessionId): SalePayment {
-            $request = SalePaymentRequest::query()->where('token_hash', hash('sha256', $data['request_token']))->lockForUpdate()->first();
+        $settled = null;
+
+        $payment = DB::transaction(function () use ($actor, $sale, $data, $sessionId, &$settled): SalePayment {
+            $request = SalePaymentRequest::query()->where('token_hash', hash('sha256', $data['request_token']))->where('business_id', $actor->business_id)->lockForUpdate()->first();
             if (! $request || $request->sale_id !== $sale->id || $request->actor_id !== $actor->id
                 || ! hash_equals($request->session_id, $sessionId)) {
                 throw ValidationException::withMessages(['request_token' => 'This payment confirmation has expired. Refresh the Sale and try again.']);
@@ -47,7 +53,11 @@ class RecordSalePayment
             if ($lockedSale->status !== SaleStatus::Completed) {
                 throw ValidationException::withMessages(['sale' => 'Payments can only be recorded for completed Sales.']);
             }
-            if ($lockedSale->customer_id === null) {
+            // A null customer is legitimate on a walk-in Sale and a corruption on a registered one.
+            // The database CHECK already keeps `is_walk_in` and `customer_id` in step, so asking the
+            // Sale which kind it is distinguishes the two rather than refusing both. The payment row
+            // simply inherits the null, and reads its identity from its own snapshots.
+            if (! $lockedSale->isWalkIn() && $lockedSale->customer_id === null) {
                 throw ValidationException::withMessages(['sale' => 'The Sale customer relationship is invalid.']);
             }
 
@@ -71,6 +81,7 @@ class RecordSalePayment
             $status = bccomp($balance, '0.00', 2) === 0 ? PaymentStatus::Paid : PaymentStatus::Partial;
 
             $payment = new SalePayment;
+            $payment->business_id = $lockedSale->business_id;
             $payment->payment_number = 'PENDING-'.Str::random(20);
             $payment->sale_id = $lockedSale->id;
             $payment->customer_id = $lockedSale->customer_id;
@@ -104,7 +115,22 @@ class RecordSalePayment
                 'resulting_payment_status' => $status->value,
             ]);
 
+            // A replay returns above and a paid Sale is refused above, so reaching Paid here is the
+            // Sale's one transition into the settled state.
+            if ($lockedSale->payment_status === PaymentStatus::Paid) {
+                $settled = $lockedSale;
+            }
+
             return $payment;
         });
+
+        // After commit, as CreateSale does: the scheduler sends it later and the trigger swallows its
+        // own failures, so WhatsApp can never affect a recorded payment. Its idempotency key is the
+        // Sale, so a Sale paid in full at creation can never be messaged a second time here.
+        if ($settled !== null) {
+            $this->whatsapp->salePaid($settled);
+        }
+
+        return $payment;
     }
 }

@@ -25,6 +25,8 @@ class RecordSalePaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Ownership comes from the acting user and the parent document, never from the form.
+            'business_id' => ['prohibited'],
             'amount' => ['required', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'],
             'payment_method' => ['required', Rule::enum(PaymentMethod::class)],
             'note' => ['nullable', 'string', 'max:500'],

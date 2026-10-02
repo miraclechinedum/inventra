@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\PaymentMethod;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
+use App\Tenancy\TenantRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,7 +30,9 @@ class RecordExpenseRequest extends FormRequest
         $businessDate = now(config('business.timezone'))->toDateString();
 
         return [
-            'expense_category_id' => ['required', 'integer', Rule::exists(ExpenseCategory::class, 'id')],
+            // Ownership comes from the acting user and the parent document, never from the form.
+            'business_id' => ['prohibited'],
+            'expense_category_id' => ['required', 'integer', TenantRules::exists(ExpenseCategory::class)],
             'amount' => ['required', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'],
             'payment_method' => ['required', Rule::enum(PaymentMethod::class)],
             'payee' => ['nullable', 'string', 'max:255'],

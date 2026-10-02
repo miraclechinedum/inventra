@@ -1,4 +1,4 @@
-<x-auth-layout title="Welcome back 👋" subtitle="Sign in to Akin Auto Parts">
+<x-auth-layout title="Welcome back 👋" subtitle="Sign in to your Inventra workspace">
     @if (session('status'))<div class="inventra-login-status">{{ session('status') }}</div>@endif
     <form method="POST" action="{{ route('login.store') }}" class="inventra-login-form" x-data="{ submitting: false, reveal: false }" x-on:submit="submitting = true">
         @csrf
@@ -9,4 +9,5 @@
     </form>
     <div class="inventra-auth-divider"><span>or</span></div>
     <button type="button" class="inventra-pin-unlock" disabled><img src="{{ asset('images/figma/auth-fingerprint.svg') }}" alt="">Unlock with PIN</button>
+    <p class="inventra-auth-switch">New to Inventra? <a href="{{ route('register') }}">Create an account</a></p>
 </x-auth-layout>

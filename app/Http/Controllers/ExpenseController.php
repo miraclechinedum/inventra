@@ -33,7 +33,7 @@ class ExpenseController extends Controller
         $count = (clone $query)->count();
         $expenses = $query->latest('incurred_at')->latest('id')->paginate(PerPage::resolve($request))->withQueryString();
 
-        return view('expenses.index', ['expenses' => $expenses, 'total' => $total, 'count' => $count, 'filters' => $filters, 'categories' => ExpenseCategory::orderBy('name')->get(['id', 'name']), 'recorders' => User::whereIn('role', ['admin', 'manager'])->orderBy('name')->get(['id', 'name'])]);
+        return view('expenses.index', ['expenses' => $expenses, 'total' => $total, 'count' => $count, 'filters' => $filters, 'categories' => ExpenseCategory::orderBy('name')->get(['id', 'name']), 'recorders' => User::query()->inCurrentBusiness()->whereIn('role', ['admin', 'manager'])->orderBy('name')->get(['id', 'name'])]);
     }
 
     public function create(Request $request, IssueExpenseRequest $tokens): View

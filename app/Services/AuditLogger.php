@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use LogicException;
 
 class AuditLogger
 {
@@ -38,9 +40,17 @@ class AuditLogger
         'returned_amount', 'refunded_amount', 'refundable_credit',
         'requested_amount', 'reason', 'decision_note',
         // Server-generated random image filenames. They contain no client-supplied text.
-        'image_path', 'photo_path',
+        'image_path', 'photo_path', 'logo_path',
         'business_name', 'business_phone', 'business_email', 'business_address',
         'state', 'receipt_footer',
+        // The remaining Business profile settings. Without these an Administrator could change the
+        // currency, the business type, the tax number or the low-stock alert destination and the
+        // audit row would record the event with an empty diff — evidence that something happened
+        // but not what. All are short business configuration; none carry personal data, and the
+        // alert number is the business's own published contact, not a customer's.
+        'business_type', 'currency', 'tax_number', 'manager_alert_number',
+        // Subscription transitions: the stable plan key only, never provider data.
+        'plan_key',
     ];
 
     private const SAFE_METADATA = [
@@ -86,6 +96,7 @@ class AuditLogger
     ): void {
         $request = app()->bound('request') ? request() : null;
         $log = new AuditLog;
+        $log->business_id = $this->owningBusiness($auditable, $actor);
         $log->actor_id = $actor?->getKey();
         $log->actor_name_snapshot = mb_substr($actor?->name ?? self::SYSTEM_ACTOR, 0, 120);
         $log->actor_role_snapshot = $actor?->role?->value;
@@ -100,6 +111,32 @@ class AuditLogger
         $log->ip_address = $request instanceof Request ? $request->ip() : null;
         $log->user_agent = $request instanceof Request ? mb_substr((string) $request->userAgent(), 0, 512) : null;
         $log->save();
+    }
+
+    /**
+     * The Business this evidence belongs to, from the record it describes wherever that record is
+     * tenant-owned, then the actor, then the Business a legitimate system action established. Every
+     * source present must agree: evidence that points two ways is refused, not filed under one.
+     */
+    private function owningBusiness(Model $auditable, ?User $actor): int
+    {
+        $current = app(CurrentBusiness::class);
+
+        $sources = array_filter([
+            'record' => array_key_exists('business_id', $auditable->getAttributes()) ? $auditable->getAttribute('business_id') : null,
+            'actor' => $actor?->business_id,
+            'context' => $current->has() ? $current->id() : null,
+        ], static fn (mixed $id): bool => $id !== null);
+
+        if ($sources === []) {
+            throw new LogicException('An audit record needs a business: none could be established.');
+        }
+
+        if (count(array_unique(array_map('intval', $sources))) > 1) {
+            throw new LogicException('An audit record cannot belong to more than one business.');
+        }
+
+        return (int) reset($sources);
     }
 
     private function subjectLabel(Model $auditable): string

@@ -7,6 +7,7 @@ use App\Http\Requests\Concerns\NormalizesScalarInput;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Support\ImageStore;
+use App\Tenancy\TenantRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,9 +31,11 @@ class StoreProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category_id' => ['required', 'integer', Rule::exists(ProductCategory::class, 'id')->where('is_active', true)],
+            // Ownership is the acting user's Business, never a submitted value.
+            'business_id' => ['prohibited'],
+            'category_id' => ['required', 'integer', TenantRules::exists(ProductCategory::class)->where('is_active', true)],
             'name' => ['required', 'string', 'max:255'],
-            'sku' => ['required', 'string', 'max:64', 'regex:/^[A-Z0-9][A-Z0-9._\/-]*$/', Rule::unique(Product::class, 'sku')],
+            'sku' => ['required', 'string', 'max:64', 'regex:/^[A-Z0-9][A-Z0-9._\/-]*$/', TenantRules::unique(Product::class, 'sku')],
             'description' => ['nullable', 'string', 'max:2000'],
             'cost_price' => ['required', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
             'selling_price' => ['required', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],

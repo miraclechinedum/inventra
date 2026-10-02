@@ -21,6 +21,8 @@ class VoidSaleRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Ownership comes from the acting user and the parent document, never from the form.
+            'business_id' => ['prohibited'],
             'reason' => ['required', 'string', 'max:500'],
             'voided_by' => ['prohibited'],
             'voided_at' => ['prohibited'],

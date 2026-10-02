@@ -65,7 +65,7 @@ class SaleRoleAuthorizationRegressionTest extends TestCase
 
         $item = new SaleItem;
         foreach ([
-            'sale_id' => $sale->id, 'product_id' => $product->id,
+            'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id,
             'product_sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name,
             'unit_snapshot' => $product->unit->value, 'quantity' => '2.000',
             'unit_price' => '50000.00', 'line_total' => '100000.00', 'created_at' => now(),
@@ -76,7 +76,7 @@ class SaleRoleAuthorizationRegressionTest extends TestCase
 
         $payment = new SalePayment;
         foreach ([
-            'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'sale_id' => $sale->id,
+            'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'business_id' => $sale->business_id, 'sale_id' => $sale->id,
             'customer_id' => $customer->id, 'amount' => '60000.00',
             'payment_method' => PaymentMethod::Cash, 'payment_type' => SalePaymentType::Initial,
             'recorded_by' => $seller->id, 'recorded_by_name_snapshot' => $seller->name,

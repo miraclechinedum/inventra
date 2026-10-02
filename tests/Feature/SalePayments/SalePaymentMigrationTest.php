@@ -11,16 +11,30 @@ use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\UnwindsTenancyMigrations;
 use Tests\TestCase;
 
 class SalePaymentMigrationTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, UnwindsTenancyMigrations;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These tests run migration down() and up() directly, so the live connection is re-proven first.
+        static::assertSafeTestDatabase(DB::connection());
+    }
 
     public function test_migration_truthfully_backfills_paid_and_partial_sales_once_without_changing_aggregates(): void
     {
         $migration = require database_path('migrations/2026_09_03_010000_create_sale_payments_table.php');
         $constraints = require database_path('migrations/2026_09_03_011000_add_sale_payment_integrity_constraints.php');
+        // Tenancy was layered onto sale_payments later, so the transaction tenancy is unwound around
+        // the base migration; alert, audit and security tenancy do not touch these tables.
+        // Request-token ownership references these tables' business keys, so it is unwound first.
+        $this->unwindTenancyFrom('2026_09_29_223000_add_business_ownership_to_request_tokens');
+        $this->unwindTenancyFrom('2026_09_29_110000_add_business_ownership_to_sale_children', '2026_09_29_160000_enforce_expense_tenancy');
         $migration->down();
         $seller = User::factory()->create(['role' => UserRole::SalesRep]);
         $customer = Customer::factory()->create();
@@ -31,6 +45,8 @@ class SalePaymentMigrationTest extends TestCase
 
         $migration->up();
         $constraints->up();
+        $this->restoreTenancyFrom('2026_09_29_110000_add_business_ownership_to_sale_children', '2026_09_29_160000_enforce_expense_tenancy');
+        $this->restoreTenancyFrom('2026_09_29_223000_add_business_ownership_to_request_tokens');
 
         $this->assertDatabaseCount('sale_payments', 2);
         foreach ([[$paid, '100.00', 'pos'], [$partial, '40.00', 'transfer']] as [$sale, $amount, $method]) {

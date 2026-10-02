@@ -608,7 +608,7 @@ class AuditTrailTest extends TestCase
     {
         $rows = [];
         foreach (range(1, $count) as $index) {
-            $rows[] = ['actor_id' => $actor->id, 'action' => 'legacy_event',
+            $rows[] = ['business_id' => $actor->business_id, 'actor_id' => $actor->id, 'action' => 'legacy_event',
                 'auditable_type' => Sale::class, 'auditable_id' => $index, 'created_at' => now()];
         }
         DB::table('audit_logs')->insert($rows);
@@ -791,7 +791,7 @@ class AuditTrailTest extends TestCase
         $ids = [];
         for ($index = 0; $index < $count; $index++) {
             DB::table('audit_logs')->insert([
-                'actor_id' => $actor->id, 'actor_name_snapshot' => $actor->name,
+                'business_id' => $actor->business_id, 'actor_id' => $actor->id, 'actor_name_snapshot' => $actor->name,
                 'actor_role_snapshot' => $actor->role->value, 'action' => 'sale_created',
                 'auditable_type' => Sale::class, 'auditable_id' => $index + 1,
                 'subject_label_snapshot' => sprintf('SALE-TIE-%04d', $index + 1),

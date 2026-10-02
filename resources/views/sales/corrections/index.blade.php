@@ -26,7 +26,7 @@
                         <p class="text-xs uppercase text-slate-500">Lines replaced</p>
                         <div class="mt-2 space-y-1 text-sm">
                             @forelse($correction->supersededItems as $item)
-                                <p class="text-slate-600 line-through">{{ $item->product_name_snapshot }} · {{ $item->quantity }} {{ $item->unit_snapshot }} · &#8358;{{ \App\Support\Money::format($item->line_total) }}</p>
+                                <p class="text-slate-600 line-through">{{ $item->product_name_snapshot }} · {{ \App\Support\Quantity::trim($item->quantity) }} {{ $item->unit_snapshot }} · &#8358;{{ \App\Support\Money::format($item->line_total) }}</p>
                             @empty
                                 <p class="text-slate-500">None</p>
                             @endforelse
@@ -36,7 +36,7 @@
                         <p class="text-xs uppercase text-slate-500">Lines recorded instead</p>
                         <div class="mt-2 space-y-1 text-sm">
                             @forelse($correction->addedItems as $item)
-                                <p class="font-medium">{{ $item->product_name_snapshot }} · {{ $item->quantity }} {{ $item->unit_snapshot }} · &#8358;{{ \App\Support\Money::format($item->line_total) }}</p>
+                                <p class="font-medium">{{ $item->product_name_snapshot }} · {{ \App\Support\Quantity::trim($item->quantity) }} {{ $item->unit_snapshot }} · &#8358;{{ \App\Support\Money::format($item->line_total) }}</p>
                             @empty
                                 <p class="text-slate-500">None</p>
                             @endforelse

@@ -46,7 +46,8 @@ class RecordTableStandardTest extends TestCase
 
         $this->assertStringContainsString('<th class="ui-sn">S/N</th>', $html);
         // First column: the S/N header precedes every other heading in the row.
-        $this->assertLessThan(mb_strpos($html, 'Staff name'), mb_strpos($html, '<th class="ui-sn">S/N</th>'));
+        // The screen was rebuilt to the Figma, whose first own column is "Member".
+        $this->assertLessThan(mb_strpos($html, 'Member'), mb_strpos($html, '<th class="ui-sn">S/N</th>'));
         $this->assertSame(['1', '2', '3', '4'], $this->serialNumbers($html));
     }
 
@@ -287,7 +288,7 @@ class RecordTableStandardTest extends TestCase
         // No supplier factory exists; insert the two rows the ordering assertions need.
         foreach ([['SUP-Z', 'Zeta Supply'], ['SUP-A', 'Alpha Supply']] as [$code, $name]) {
             DB::table('suppliers')->insert([
-                'supplier_code' => $code, 'name' => $name, 'is_active' => true,
+                'business_id' => $admin->business_id, 'supplier_code' => $code, 'name' => $name, 'is_active' => true,
                 'created_by' => $admin->id, 'created_at' => now(), 'updated_at' => now(),
             ]);
         }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\PurchaseStatus;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,6 +11,8 @@ use LogicException;
 
 class Purchase extends Model
 {
+    use ScopedToCurrentBusiness;
+
     protected $guarded = ['*'];
 
     protected static function booted(): void

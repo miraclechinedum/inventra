@@ -36,6 +36,6 @@ class SupplierRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['name' => ['required', 'string', 'max:255'], 'contact_person' => ['nullable', 'string', 'max:255'], 'phone' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/'], 'email' => ['nullable', 'email', 'max:255'], 'address' => ['nullable', 'string', 'max:500'], 'city' => ['nullable', 'string', 'max:255'], 'notes' => ['nullable', 'string', 'max:1000'], 'supplier_code' => ['prohibited'], 'created_by' => ['prohibited'], 'updated_by' => ['prohibited'], 'is_active' => ['prohibited']];
+        return ['name' => ['required', 'string', 'max:255'], 'contact_person' => ['nullable', 'string', 'max:255'], 'phone' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/'], 'email' => ['nullable', 'email', 'max:255'], 'address' => ['nullable', 'string', 'max:500'], 'city' => ['nullable', 'string', 'max:255'], 'notes' => ['nullable', 'string', 'max:1000'], 'supplier_code' => ['prohibited'], 'business_id' => ['prohibited'], 'created_by' => ['prohibited'], 'updated_by' => ['prohibited'], 'is_active' => ['prohibited']];
     }
 }

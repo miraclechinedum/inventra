@@ -6,11 +6,16 @@ use App\Enums\InventoryMovementType;
 use App\Enums\ProductUnit;
 use App\Models\InventoryMovement;
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Subscriptions\Entitlement;
+use App\Subscriptions\Entitlements;
 use App\Support\ImageStore;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class CreateProduct
@@ -18,6 +23,8 @@ class CreateProduct
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly ImageStore $images,
+        private readonly CurrentBusiness $currentBusiness,
+        private readonly Entitlements $entitlements,
     ) {}
 
     /**
@@ -31,11 +38,21 @@ class CreateProduct
      */
     public function execute(User $actor, array $data, ?UploadedFile $image = null): Product
     {
+        $business = $this->currentBusiness->forActor($actor);
         $imagePath = $image !== null ? $this->images->put($image, ImageStore::PRODUCTS) : null;
 
         try {
-            return DB::transaction(function () use ($actor, $data, $imagePath): Product {
+            return DB::transaction(function () use ($actor, $data, $imagePath, $business): Product {
+                // The plan's product allowance, serialised on the Business's subscription row lock.
+                $this->entitlements->claim($business, Entitlement::MaxProducts);
+
+                // Scoped to the Business, so another tenant's category reads as absent.
+                if (! ProductCategory::query()->whereKey($data['category_id'])->exists()) {
+                    throw ValidationException::withMessages(['category_id' => 'The selected category is invalid.']);
+                }
+
                 $product = new Product;
+                $product->business_id = $business->getKey();
                 $product->category_id = $data['category_id'];
                 $product->name = $data['name'];
                 $product->sku = $data['sku'];
@@ -51,6 +68,7 @@ class CreateProduct
                 $product->save();
 
                 $movement = new InventoryMovement;
+                $movement->business_id = $product->business_id;
                 $movement->product_id = $product->id;
                 $movement->type = InventoryMovementType::Initial;
                 $movement->quantity_change = $data['initial_stock'];

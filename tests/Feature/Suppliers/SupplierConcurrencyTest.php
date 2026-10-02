@@ -9,7 +9,6 @@ use App\Models\AuditLog;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -74,9 +73,7 @@ class SupplierConcurrencyTest extends TestCase
                 unlink($barrier);
             }
 
-            DB::purge();
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            DB::connection()->beginTransaction();
+            $this->rebuildTestSchema();
         }
     }
 }

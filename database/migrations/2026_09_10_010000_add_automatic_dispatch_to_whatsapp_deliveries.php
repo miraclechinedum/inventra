@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\WhatsAppDeliveryOrigin;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -26,8 +25,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('whatsapp_deliveries', function (Blueprint $table) {
-            $table->enum('origin', array_column(WhatsAppDeliveryOrigin::cases(), 'value'))
-                ->default(WhatsAppDeliveryOrigin::Manual->value)
+            // Literal values rather than the WhatsAppDeliveryOrigin enum, which was removed with
+            // the receipt feature this table belonged to. A historical migration must keep running
+            // on a fresh database long after the application code it once referenced is gone.
+            $table->enum('origin', ['manual', 'automatic'])
+                ->default('manual')
                 ->after('request_id');
             $table->timestamp('dispatch_claimed_at')->nullable()->after('requested_at');
             $table->index(['origin', 'status', 'dispatch_claimed_at'], 'whatsapp_deliveries_dispatch_queue_index');

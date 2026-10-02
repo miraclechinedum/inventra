@@ -5,8 +5,10 @@ namespace App\Actions\Alerts;
 use App\Alerts\OperationalAlertEvaluator;
 use App\Alerts\OperationalAlertProjector;
 use App\Enums\OperationalAlertType;
+use App\Models\Business;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -26,6 +28,7 @@ class ReconcileOperationalAlerts
     public function __construct(
         private readonly OperationalAlertEvaluator $evaluator,
         private readonly OperationalAlertProjector $projector,
+        private readonly CurrentBusiness $currentBusiness,
     ) {}
 
     /** @return array{evaluated:int, resolved:int, failed:int} */
@@ -35,22 +38,30 @@ class ReconcileOperationalAlerts
         $failed = 0;
 
         // Every Product, not just the low ones: a Product that recovered needs its alert resolved,
-        // and only looking at currently-low stock would never see it.
-        foreach (Product::query()->withTrashed()->orderBy('id')->cursor() as $product) {
-            $failed += $this->guard(fn () => $this->evaluator->evaluateProduct($product), 'product', (int) $product->getKey());
-            $evaluated++;
+        // and only looking at currently-low stock would never see it. Products are tenant-owned, so
+        // each Business is swept inside its own explicit context — a console run has no request.
+        $resolved = 0;
+
+        foreach (Business::query()->orderBy('id')->cursor() as $business) {
+            $this->currentBusiness->run($business, function () use (&$evaluated, &$failed, &$resolved): void {
+                foreach (Product::query()->withTrashed()->orderBy('id')->cursor() as $product) {
+                    $failed += $this->guard(fn () => $this->evaluator->evaluateProduct($product), 'product', (int) $product->getKey());
+                    $evaluated++;
+                }
+
+                foreach (Sale::query()->orderBy('id')->cursor() as $sale) {
+                    $failed += $this->guard(fn () => $this->evaluator->evaluateSale($sale), 'sale', (int) $sale->getKey());
+                    $evaluated++;
+                }
+
+                // The ledger comparison is a per-Business aggregate, like every other report.
+                $failed += $this->guard(fn () => $this->evaluator->evaluateIntegrity(), 'integrity', 0);
+
+                // A subject that disappeared entirely (a hard-deleted row) leaves an active alert
+                // pointing at nothing; close those so the list only shows conditions that still exist.
+                $resolved += $this->resolveOrphans();
+            });
         }
-
-        foreach (Sale::query()->orderBy('id')->cursor() as $sale) {
-            $failed += $this->guard(fn () => $this->evaluator->evaluateSale($sale), 'sale', (int) $sale->getKey());
-            $evaluated++;
-        }
-
-        $failed += $this->guard(fn () => $this->evaluator->evaluateIntegrity(), 'integrity', 0);
-
-        // A subject that disappeared entirely (a hard-deleted row) leaves an active alert pointing
-        // at nothing; close those so the operational list only shows conditions that still exist.
-        $resolved = $this->resolveOrphans();
 
         return ['evaluated' => $evaluated, 'resolved' => $resolved, 'failed' => $failed];
     }
@@ -59,6 +70,7 @@ class ReconcileOperationalAlerts
     {
         $resolved = 0;
 
+        // Runs inside one Business: its alerts are compared with its own products and sales only.
         $resolved += $this->projector->resolveMissing(
             OperationalAlertType::InventoryLowStock, 'product',
             Product::query()->withTrashed()->pluck('id')->map(static fn ($id): int => (int) $id)->all(),

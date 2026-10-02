@@ -70,7 +70,11 @@
 .inventra-content :is(dd, h1, h2, h3, h4, p) { overflow-wrap: anywhere; }
 .inventra-content .font-mono { font-size: 12px; letter-spacing: -.1px; }
 .inventra-content [role=alert] { border: 1px solid #fecaca; border-left: 3px solid #ef4444; border-radius: 10px; margin-block: 16px; }
-.inventra-alert-success { border-left: 3px solid #10b981; padding: 14px 16px; }
+/* Success banner. A white surface with a small green check, as in the design —
+   the confirmation should read as a quiet note, not a coloured alert block. */
+.inventra-alert-success { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; padding: 13px 16px; border: 1px solid #e7ecf3; border-left: 1px solid #e7ecf3; border-radius: 11px; background: #fff; box-shadow: 0 1px 2px #0f172a0d; color: #0f172a; font-size: 13.5px; font-weight: 400; }
+.inventra-alert-icon { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #dcfce7; color: #16a34a; padding: 3px; }
+.inventra-alert-success strong, .inventra-alert-success b { font-weight: 600; }
 .ui-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; padding: 30px 16px; text-align: center; }
 .ui-empty-state > img { width: 32px; height: 32px; padding: 7px; background: #eff6ff; border-radius: 9px; opacity: .75; }
 .ui-empty-state > p { color: #334155; font-size: 14px; font-weight: 600; }
@@ -405,8 +409,9 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
 .ui-combobox-option.is-create:not(:only-child) { margin-top: 4px; border-top: 1px solid #eef1f6; border-radius: 0 0 7px 7px; padding-top: 4px; }
 
 /* Success flash: dismissible by hand, and clears itself after a few seconds. */
-.inventra-alert-success { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.inventra-alert-dismiss { flex: none; border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .6; }
+.inventra-alert-success > span { flex: 1 1 auto; min-width: 0; }
+.inventra-alert-dismiss { flex: none; margin-left: auto; border: 0; background: none; color: #94a3b8; font-size: 18px; line-height: 1; cursor: pointer; }
+.inventra-alert-dismiss:hover { color: #0f172a; }
 .inventra-alert-dismiss:hover { opacity: 1; }
 .inventra-content .inventra-alert-dismiss { min-height: 0; padding: 0 2px; }
 
@@ -621,4 +626,1981 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
     .ui-metric-strip { grid-template-columns: minmax(0, 1fr); }
     .ui-metric-cell { border-left: 0; border-top: 1px solid var(--ui-border); }
     .ui-metric-cell:first-child { border-top: 0; }
+}
+
+/* ── Record Sale ─────────────────────────────────────────────────────────────
+   One flat white panel rather than stacked cards: sections are separated by
+   hairlines and named in small grey caps, and the footer actions sit on their
+   own bar. Colour carries meaning only — blue for the primary action and the
+   chosen payment tab, green/red/amber for approved, declined and pending. */
+.ui-sale-form { margin-top: 22px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-surface); }
+.ui-sale-panel-section { padding: 20px 26px; border-bottom: 1px solid #eef2f7; }
+.ui-sale-section-label { margin-bottom: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: #94a3b8; }
+.ui-sale-field-heading { display: block; margin-bottom: 9px; font-size: 13px; font-weight: 500; color: #334155; }
+
+/* Chosen buyer. Registered customer and walk-in share the slot: a sale has one buyer identity. */
+.ui-sale-chip { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #dbeafe; border-radius: 11px; background: #f8fbff; }
+.ui-sale-chip-avatar { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: #1d4ed8; color: #fff; font-size: 13px; font-weight: 700; }
+.ui-sale-chip-body { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.ui-sale-chip-name { font-size: 14px; font-weight: 600; }
+.ui-sale-chip-meta { font-size: 12px; color: var(--ui-muted); }
+.ui-sale-chip-remove { flex: none; margin-left: auto; width: 30px; height: 30px; border-radius: 8px; font-size: 19px; line-height: 1; color: #64748b; }
+.ui-sale-chip-remove:hover { background: #e2e8f0; color: #0f172a; }
+
+.ui-sale-option { justify-content: space-between; gap: 12px; }
+.ui-sale-option-main { font-weight: 500; }
+.ui-sale-option-meta { color: var(--ui-muted); font-size: 12px; }
+
+/* "+ Add new customer  or  Walk-in customer" — one baseline. The link and the
+   button are both inline-flex with the same height and no default padding, so
+   the anchor and the button cannot sit at different heights. */
+.ui-sale-alt { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 11px; font-size: 14px; line-height: 1; }
+.ui-sale-alt-link, .ui-sale-alt-action { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0; border: 0; background: none; font-size: 14px; font-weight: 600; line-height: 1; }
+.ui-sale-alt-link { color: #1d4ed8; }
+.ui-sale-alt-link:hover, .ui-sale-alt-action:hover { text-decoration: underline; }
+.ui-sale-alt-plus { font-size: 16px; font-weight: 500; }
+.ui-sale-alt-or { display: inline-flex; align-items: center; height: 20px; color: var(--ui-muted); font-weight: 400; }
+.ui-sale-alt-action { color: #0f172a; }
+
+/* Item builder. A grid rather than a table so the rows can restack on narrow screens. */
+.ui-sale-table { display: flex; flex-direction: column; }
+/* Wider gutters than the default: the product control is a 46px-tall box and the
+   stepper is another, so a tight gap reads as one run-on field. The quantity
+   column is sized to hold the stepper itself rather than guessed at, which keeps
+   it under its header instead of drifting. */
+.ui-sale-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 140px 140px 40px; align-items: center; gap: 24px; padding: 14px 0; }
+.ui-sale-head { padding: 0 0 11px; border-bottom: 1px solid #eef2f7; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: #94a3b8; }
+.ui-sale-row:not(.ui-sale-head) { border-bottom: 1px solid #f1f5f9; }
+.ui-sale-cell { min-width: 0; font-size: 14px; }
+.ui-sale-head span:nth-child(2) { text-align: center; }
+.ui-sale-row .ui-sale-cell:nth-child(2) { display: flex; justify-content: center; }
+.ui-sale-head span:nth-child(3), .ui-sale-head span:nth-child(4) { text-align: center; }
+.ui-sale-row .ui-sale-cell:nth-child(3), .ui-sale-row .ui-sale-cell:nth-child(4) { text-align: center; color: #94a3b8; }
+.ui-sale-cell-actions { display: flex; justify-content: flex-end; }
+.ui-sale-line-total { font-weight: 500; }
+.ui-sale-product-button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 46px; padding: 8px 14px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; text-align: left; }
+.ui-sale-product-button:hover { border-color: #bfdbfe; }
+.ui-sale-product-name { font-size: 14px; font-weight: 500; }
+.ui-sale-product-sku { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: var(--ui-muted); }
+.ui-sale-product-empty { font-size: 14px; color: #94a3b8; }
+.ui-sale-stock-warning { margin-top: 6px; color: #b91c1c; font-size: 12px; font-weight: 600; }
+/* Fills its column so the control lines up with the QTY header above it. */
+.ui-sale-stepper { width: 100%; max-width: none; }
+.ui-sale-add-line { margin-top: 14px; gap: 7px; border: 0; padding: 0; background: none; color: #1d4ed8; font-size: 14px; font-weight: 600; }
+.ui-sale-add-line:hover { text-decoration: underline; background: none; }
+
+/* Payment status, sale date and total. Two columns, as in the design. */
+.ui-sale-payment { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; }
+.ui-sale-payment-main, .ui-sale-payment-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* Full-width segmented control. Three equal buttons; the chosen one is solid blue. */
+.ui-segment { display: flex; width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; overflow: hidden; }
+.ui-segment-option { flex: 1 1 0; min-height: 48px; padding: 0 12px; border-right: 1px solid #e2e8f0; border-radius: 0; background: #fff; color: #334155; font-size: 14px; font-weight: 500; }
+.ui-segment-option:last-child { border-right: 0; }
+.ui-segment-option:hover { background: #f8fafc; }
+.ui-segment-option.is-active { background: var(--inventra-primary, #1d4ed8); color: #fff; font-weight: 600; }
+.ui-segment-option.is-active:hover { background: #1e40af; }
+
+.ui-sale-amount .inventra-input, .ui-sale-payment-side .inventra-input { margin-top: 0; }
+.ui-sale-balance { margin-top: 8px; font-size: 13px; font-weight: 500; }
+.ui-sale-balance.is-paid { color: #047857; }
+.ui-sale-balance.is-partial { color: #b45309; }
+.ui-sale-balance.is-unpaid { color: #b91c1c; }
+.ui-sale-date-readout { margin-top: 7px; font-size: 12px; color: var(--ui-muted); }
+
+/* The single figure the operator commits to. */
+.ui-sale-total-box { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 4px; padding: 18px 20px; border-radius: 10px; background: #f8fafc; }
+.ui-sale-total-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: #64748b; }
+.ui-sale-total-value { font-size: 18px; font-weight: 700; color: #0f172a; }
+.ui-sale-total-discount { font-size: 12px; color: #047857; }
+
+/* Footer bar: discount on the left, cancel and the primary action on the right. */
+.ui-sale-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 26px; }
+.ui-sale-footer-start, .ui-sale-footer-end { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.ui-sale-footer .ui-button, .ui-sale-footer .inventra-primary-action { min-height: 46px; padding: 0 22px; border-radius: 10px; font-size: 14px; }
+.ui-sale-submit-label, .ui-sale-spinner-label { display: inline-flex; align-items: center; gap: 9px; }
+.ui-sale-tick { font-size: 15px; }
+.ui-sale-submit:disabled, .ui-sale-footer .ui-button:disabled { opacity: .5; cursor: not-allowed; }
+.ui-sale-notice { margin: 0 26px 18px; padding: 10px 13px; border-radius: 9px; font-size: 12px; }
+.ui-sale-notice.is-stale { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.ui-sale-form > .inventra-field-error { margin: 0 26px 18px; }
+.ui-sale-hint { margin-top: 6px; font-size: 12px; color: var(--ui-muted); }
+
+/* Summary rows, used by the cart modal. */
+.ui-sale-summary-lines { display: flex; flex-direction: column; gap: 8px; }
+.ui-sale-summary-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: #475569; }
+.ui-sale-summary-row.is-discount { color: #047857; }
+.ui-sale-summary-row.is-declined { color: #b91c1c; }
+.ui-sale-summary-row.is-total { padding-top: 8px; border-top: 1px solid var(--ui-border); font-size: 16px; font-weight: 700; color: #0f172a; }
+.ui-sale-struck { text-decoration: line-through; }
+.ui-sale-tag { margin-left: 6px; padding: 1px 6px; border-radius: 5px; background: #d1fae5; color: #047857; font-size: 10px; font-weight: 700; letter-spacing: .05em; }
+.ui-sale-tag.is-declined { background: #fee2e2; color: #b91c1c; }
+
+/* Modals */
+.ui-sale-modal-body { display: flex; flex-direction: column; gap: 16px; }
+.ui-sale-modal-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: #475569; }
+.ui-sale-modal-row.is-preview { padding-top: 12px; border-top: 1px solid var(--ui-border); font-size: 15px; font-weight: 700; color: #0f172a; }
+.ui-sale-pill { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.ui-sale-pill.is-pending { background: #fef3c7; color: #92400e; }
+.ui-sale-waiting-lead { font-size: 13px; color: #475569; }
+.ui-sale-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.ui-sale-facts dt { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+.ui-sale-facts dd { margin-top: 3px; font-size: 14px; font-weight: 600; }
+
+.ui-sale-banner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 13px 22px; font-size: 13px; }
+.ui-sale-banner.is-approved { background: #ecfdf5; color: #047857; border-bottom: 1px solid #a7f3d0; }
+.ui-sale-banner.is-declined { background: #fef2f2; color: #b91c1c; border-bottom: 1px solid #fecaca; }
+.ui-sale-banner-title { font-weight: 700; }
+.ui-sale-cart-list { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.ui-sale-cart-item { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; }
+.ui-sale-cart-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-sale-cart-qty { font-size: 12px; color: var(--ui-muted); }
+
+/* Spinners. Reduced motion stops the rotation rather than hiding the indicator. */
+.ui-spinner, .ui-sale-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ui-spin .7s linear infinite; vertical-align: -2px; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ui-spinner, .ui-sale-spinner { animation: none; } }
+
+/* ── Sale complete ───────────────────────────────────────────────────────────
+   A compact confirmation, not a receipt: a green tick, what was bought, what
+   was paid, and how the customer gets their copy. Sized from the viewport so it
+   fits a phone without a desktop-only width. */
+.ui-sale-complete .ui-modal-panel { position: relative; width: min(560px, calc(100vw - 32px)); border-radius: 18px; box-shadow: 0 24px 60px #0f172a29; }
+.ui-complete-body { padding: 0 26px 26px; }
+.ui-complete-close { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #94a3b8; }
+.ui-complete-close:hover { background: #f1f5f9; color: #0f172a; }
+
+.ui-complete-head { padding: 30px 0 20px; text-align: center; }
+.ui-sale-check { display: grid; place-items: center; width: 62px; height: 62px; margin: 0 auto 16px; border-radius: 50%; background: #22c55e; color: #fff; box-shadow: 0 0 0 8px #dcfce7; }
+.ui-complete-head h2 { font-size: 21px; font-weight: 700; letter-spacing: -.01em; }
+.ui-complete-lead { margin-top: 6px; font-size: 14px; color: #64748b; }
+
+/* Summary card. A light border and generous line spacing, as in the design. */
+.ui-complete-card { border: 1px solid #e7ecf3; border-radius: 13px; padding: 16px 18px; }
+.ui-complete-business { display: flex; align-items: center; justify-content: center; gap: 9px; padding-bottom: 13px; border-bottom: 1px solid #eef2f7; font-size: 14px; font-weight: 700; }
+.ui-complete-business img { width: 20px; height: 20px; object-fit: contain; }
+.ui-complete-items { display: flex; flex-direction: column; gap: 9px; margin: 13px 0 0; padding: 0; list-style: none; }
+.ui-complete-items li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-size: 14px; }
+.ui-complete-item-name { min-width: 0; color: #334155; }
+.ui-complete-item-amount { flex: none; color: #475569; }
+.ui-complete-discount { display: flex; justify-content: space-between; gap: 16px; margin-top: 9px; color: #16a34a; font-size: 14px; font-weight: 500; }
+.ui-complete-totals { margin: 13px 0 0; padding-top: 13px; border-top: 1px solid #eef2f7; }
+.ui-complete-totals > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-size: 14px; color: #475569; }
+.ui-complete-totals > div + div { margin-top: 7px; }
+.ui-complete-totals > div.is-strong { color: #0f172a; font-size: 16px; font-weight: 700; }
+.ui-complete-totals dt { font-weight: inherit; }
+.ui-complete-totals dd { margin: 0; font-weight: 600; }
+.ui-complete-totals > div.is-strong dd { font-weight: 700; }
+
+/* WhatsApp. Green where the receipt is on its way or can safely be sent; muted
+   and plainly inert where it cannot. */
+.ui-complete-whatsapp, .ui-complete-whatsapp-action { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; margin-top: 16px; border-radius: 12px; font-size: 15px; font-weight: 600; }
+.ui-complete-whatsapp.is-queued { background: #dcfce7; color: #15803d; }
+.ui-complete-whatsapp-action { background: #4ade80; color: #14532d; }
+.ui-complete-whatsapp-action:hover { background: #22c55e; }
+.ui-complete-whatsapp.is-disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+.ui-complete-consent { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 12px; color: #16a34a; font-size: 12.5px; }
+
+.ui-complete-buyer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; padding: 13px 16px; border-radius: 12px; background: #f8fafc; }
+.ui-complete-buyer-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ui-complete-buyer-name { font-size: 12.5px; color: #64748b; }
+.ui-complete-buyer-money { font-size: 15px; font-weight: 700; }
+.ui-complete-buyer-icon { flex: none; color: #94a3b8; }
+
+.ui-complete-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; padding: 12px 14px; border: 1px solid #fde68a; border-radius: 11px; background: #fffbeb; color: #92400e; font-size: 12.5px; line-height: 1.55; }
+.ui-complete-note svg { flex: none; margin-top: 1px; }
+.ui-complete-secondary-link { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 11px; color: #1d4ed8; font-size: 14px; font-weight: 600; }
+.ui-complete-secondary-link:hover { background: #f8fafc; }
+
+/* Print and PDF, equal halves. */
+.ui-complete-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.ui-complete-action { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 50px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; color: #0f172a; font-size: 14.5px; font-weight: 600; }
+.ui-complete-action:hover { border-color: #cbd5e1; background: #f8fafc; }
+
+@media (max-width: 420px) {
+    .ui-complete-body { padding: 0 16px 18px; }
+    .ui-complete-head { padding: 26px 0 16px; }
+    .ui-complete-actions { grid-template-columns: 1fr; }
+}
+
+/* ── Record Sale, narrow screens ─────────────────────────────────────────────
+   The item rows stop being a grid and become stacked, labelled cells; the
+   payment column and the date/total column stack; the footer actions go
+   full-width so they stay reachable with a thumb. */
+@media (max-width: 900px) {
+    .ui-sale-payment { grid-template-columns: 1fr; gap: 18px; }
+    .ui-sale-panel-section { padding: 18px; }
+    .ui-sale-row { grid-template-columns: minmax(0, 1fr) 40px; gap: 12px; padding: 16px 0; }
+    .ui-sale-head { display: none; }
+    .ui-sale-cell-product { grid-column: 1; }
+    .ui-sale-cell-actions { grid-column: 2; grid-row: 1; align-self: start; }
+    .ui-sale-row .ui-sale-cell:not(.ui-sale-cell-product):not(.ui-sale-cell-actions) { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; text-align: left; }
+    .ui-sale-row .ui-sale-cell:not(.ui-sale-cell-product):not(.ui-sale-cell-actions)::before { content: attr(data-label); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
+    .ui-sale-row .ui-sale-cell:nth-child(2) { justify-content: space-between; }
+    /* Beside its label rather than filling the row, so it stays a compact control. */
+    .ui-sale-stepper { width: auto; max-width: 168px; }
+    .ui-sale-facts { grid-template-columns: 1fr; }
+    .ui-sale-footer { padding: 16px 18px; }
+    .ui-sale-footer-start, .ui-sale-footer-end { width: 100%; }
+    .ui-sale-footer-start > *, .ui-sale-footer-end > * { flex: 1 1 auto; justify-content: center; }
+    .ui-sale-notice, .ui-sale-form > .inventra-field-error { margin: 0 18px 16px; }
+}
+
+@media (max-width: 560px) {
+    .ui-sale-panel-section { padding: 16px; }
+    .ui-sale-segment-option { padding: 0 8px; }
+}
+
+.ui-sale-picker-list { max-height: 340px; overflow-y: auto; overscroll-behavior: contain; margin-top: 12px; list-style: none; padding: 0; }
+.ui-sale-picker-option { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 11px 12px; border-radius: 9px; cursor: pointer; }
+.ui-sale-picker-option.is-active { background: #f1f5f9; }
+.ui-sale-picker-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-sale-picker-name { font-size: 13px; font-weight: 600; }
+.ui-sale-picker-sku { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: var(--ui-muted); }
+.ui-sale-picker-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
+.ui-sale-picker-stock { font-size: 11px; color: var(--ui-muted); }
+.ui-sale-picker-stock.is-out { color: #b91c1c; font-weight: 600; }
+
+.ui-sale-resume { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding: 13px 18px; border: 1px solid #fde68a; border-radius: var(--ui-radius); background: #fffbeb; }
+.ui-sale-resume-lead { font-size: 13px; color: #92400e; }
+.ui-sale-resume-list { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.ui-sale-resume-item { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--ui-border); border-radius: 10px; }
+.ui-sale-resume-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 200px; }
+.ui-sale-resume-who { font-size: 13px; font-weight: 600; }
+.ui-sale-resume-meta { font-size: 12px; color: var(--ui-muted); }
+.ui-sale-pill.is-approved { background: #d1fae5; color: #047857; }
+.ui-sale-pill.is-declined { background: #fee2e2; color: #b91c1c; }
+
+/* ── Sales index ─────────────────────────────────────────────────────────────
+   Its own layout, scoped to this page. Every selector below is `sales-` or
+   `.sales-index-shell`-prefixed, so nothing here reaches the Inventory,
+   Customers or Staff tables, and no inherited table rule reaches in.
+
+   The shell is a two-column flex: the list on the left, the detail panel on the
+   right when a Sale is selected. The panel is part of the layout rather than a
+   floating overlay, so the table genuinely contracts around it. */
+.sales-index-shell { display: flex; align-items: flex-start; gap: 20px; }
+.sales-main { flex: 1 1 auto; min-width: 0; max-width: 1180px; }
+@media (min-width: 1380px) {
+/* With the panel open the list gives up the width the panel takes. The fixed
+   columns below add up to more than what is left at 1440px, so the two that can
+   afford it — Sale ID and Date — narrow, and Customer (the elastic column)
+   absorbs the rest. Nothing is hidden and nothing overflows. */
+/* Sale ID keeps its full width: the number is the row's identity and must never
+   be clipped. Date, Amount and Actions give up what they can spare, and Customer
+   (the elastic column) absorbs the remainder — it is the one value a reader can
+   still recognise from its first few words. */
+.sales-index-shell.has-panel .sales-col-date { width: 104px; }
+.sales-index-shell.has-panel .sales-col-amount { width: 110px; }
+.sales-index-shell.has-panel .sales-col-status { width: 92px; }
+.sales-index-shell.has-panel .sales-col-actions { width: 72px; }
+/* The header labels are the widest thing in these two columns once narrowed, so
+   they lose a little letter-spacing rather than being clipped. */
+.sales-index-shell.has-panel .sales-table thead th { padding: 0 8px; letter-spacing: .03em; }
+.sales-index-shell.has-panel .sales-table td, .sales-index-shell.has-panel .sales-table tbody th { padding: 0 8px; }
+}
+.sales-index-shell.has-panel .sales-col-customer { min-width: 118px; }
+/* The date drops to a compact form so it still reads in a narrower column. */
+.sales-index-shell.has-panel .sales-table td.sales-date { font-size: 12.5px; }
+/* The filter row loses the width the panel took, so Export stops being pushed
+   onto a line of its own by the `margin-left: auto` that pins it right. */
+.sales-index-shell.has-panel .sales-filter-bar { gap: 8px; }
+.inventra-content .sales-index-shell.has-panel .sales-filter-bar .sales-select.sales-select.sales-select { min-width: 132px; }
+
+/* The header is Inventory's `.ui-page-header` — same heading size, same description
+   treatment, same right-aligned primary action — so the two pages cannot drift.
+   The only local change is the bottom margin: the filter strip below already
+   carries its own top margin, and 24px on top of it opened too large a gap. */
+.sales-page-header { margin-bottom: 4px; align-items: flex-start; }
+
+/* Filter strip: one row, one control height, no labels stacked above anything. */
+.sales-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+/* One control height across the row. The export wrapper is excluded because its
+   height belongs to the trigger inside it, not to the wrapper the menu hangs from. */
+.sales-filter-bar > *:not(.sales-export-menu) { height: 42px; }
+
+/* One perceived date filter. The native inputs sit inside; the placeholder shows
+   while both are empty, and is swapped out as soon as either has a value. */
+.sales-daterange { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; color: #64748b; font-size: 13.5px; }
+.sales-daterange:focus-within { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+.sales-daterange-fields { display: inline-flex; align-items: center; gap: 6px; }
+.sales-daterange input { width: 106px; border: 0; background: transparent; padding: 0; color: #0f172a; font-size: 13px; font-family: inherit; outline: none; }
+.sales-daterange input::-webkit-calendar-picker-indicator { opacity: .45; cursor: pointer; }
+.sales-daterange-sep { color: #cbd5e1; }
+/* Empty state reads as one prompt; the inputs stay reachable but out of the way. */
+.sales-daterange[data-empty="1"] .sales-daterange-fields { position: absolute; inset: 0; opacity: 0; }
+.sales-daterange[data-empty="1"]:focus-within .sales-daterange-fields { position: static; opacity: 1; }
+.sales-daterange[data-empty="0"] .sales-daterange-placeholder,
+.sales-daterange[data-empty="1"]:focus-within .sales-daterange-placeholder { display: none; }
+
+/* The global `.inventra-content :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]), select, textarea)`
+   rule sets `min-width: 0`, `min-height: 44px` and its own padding. `:is()` takes
+   the specificity of its most specific argument, and those three `:not()` clauses
+   make that (0,3,1) — higher than the (0,3,0) of three plain classes. Repeating
+   the class once more takes this to (0,4,0), which is the plain way to outrank it
+   without an `!important` or an id, and keeps the override with the rest of the
+   sales styles. Without it the select collapses to its content width, stands 44px
+   tall in a 42px row, and the chevron is painted over the label. */
+.inventra-content .sales-filter-bar .sales-select.sales-select.sales-select { min-width: 168px; min-height: 0; border: 1px solid #e3e8ef; border-radius: 10px; background-color: #fff; padding: 0 32px 0 14px; color: #0f172a; font-size: 13.5px; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 15px; }
+.inventra-content .sales-filter-bar .sales-select.sales-select.sales-select:focus { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; outline: none; }
+.sales-clear { display: inline-flex; align-items: center; color: #475569; font-size: 13.5px; font-weight: 600; }
+.sales-clear:hover { color: #0f172a; text-decoration: underline; }
+/* Export: one trigger, a menu of formats. The wrapper is what the filter row
+   lays out and what `margin-left: auto` pushes to the far right; the menu itself
+   is taken out of flow beneath it and aligned to the trigger's right edge. */
+.sales-export-menu { position: relative; margin-left: auto; }
+.sales-export { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 16px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; color: #0f172a; font-size: 13.5px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.sales-export:hover { background: #f8fafc; }
+.sales-export:focus-visible { outline: none; border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+.sales-export-list { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; min-width: 196px; padding: 6px; border: 1px solid #e7ecf3; border-radius: 12px; background: #fff; box-shadow: 0 12px 28px -8px #0f172a26, 0 2px 6px #0f172a0f; }
+.sales-export-option { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 8px; color: #0f172a; font-size: 13.5px; font-weight: 500; white-space: nowrap; }
+.sales-export-option:hover { background: #f6f8fb; }
+.sales-export-option:focus-visible { outline: none; background: #eff5ff; }
+/* The format's own colour is the fastest way to tell the two rows apart. */
+.sales-export-option svg.is-csv { color: #16a34a; }
+.sales-export-option svg.is-pdf { color: #dc2626; }
+
+/* Table card: a thin border and a radius, nothing else. It ends after its footer
+   rather than stretching to fill the page. */
+.sales-table-card { margin-top: 14px; border: 1px solid #e7ecf3; border-radius: 12px; background: #fff; overflow: hidden; }
+.sales-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; }
+
+/* The column model, taken from the <colgroup>. `table-layout: fixed` means these
+   widths are authoritative, which is what stops S/N collapsing into Sale ID the
+   way the inherited `width: 1%` rule was doing. */
+.sales-col-sn { width: 52px; }
+.sales-col-id { width: 145px; }
+/* The only elastic column. Everything else is fixed, so the slack a wide viewport
+   leaves over is absorbed here rather than pooling as dead space mid-table. */
+.sales-col-customer { width: auto; min-width: 200px; }
+.sales-col-date { width: 145px; }
+.sales-col-amount { width: 140px; }
+.sales-col-status { width: 115px; }
+.sales-col-actions { width: 88px; }
+
+.sales-table thead th { height: 40px; padding: 0 14px; border-bottom: 1px solid #eef2f7; background: #fbfcfd; text-align: left; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; white-space: nowrap; }
+.sales-table th.sales-numeric { text-align: right; }
+.sales-table th.sales-centered, .sales-table td.sales-centered { text-align: center; }
+
+.sales-table-row { border-bottom: 1px solid #f4f7fa; cursor: pointer; }
+.sales-table tbody tr:last-child { border-bottom: 0; }
+.sales-table-row:hover { background: #fbfcfd; }
+.sales-table-row.is-selected { background: #eff5ff; box-shadow: inset 3px 0 var(--inventra-primary, #1d4ed8); }
+.sales-table td, .sales-table tbody th { height: 56px; padding: 0 14px; text-align: left; font-weight: 400; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }
+
+/* Scoped tightly enough to beat the inherited `.inventra-content th.ui-sn` rule
+   without that rule needing to change for every other table that relies on it. */
+.inventra-content .sales-table td.sales-sn { width: auto; padding: 0 14px; text-align: left; color: #94a3b8; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sales-table th.sales-id { color: var(--inventra-primary, #1d4ed8); font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+
+.sales-customer { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sales-avatar { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #e8edfb; color: #3f5ab5; font-size: 11px; font-weight: 700; }
+.sales-avatar.is-large { width: 44px; height: 44px; font-size: 14px; }
+.sales-customer-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: #0f172a; }
+.sales-date { color: #64748b; white-space: nowrap; }
+/* Right-aligned, tabular, and no border of its own inside the cell. */
+.sales-table td.sales-amount { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; border-bottom: 0; }
+
+.sales-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.sales-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.sales-badge.is-paid { background: #e8f9ef; color: #15803d; }
+.sales-badge.is-partial { background: #fef4e2; color: #b45309; }
+.sales-badge.is-unpaid { background: #eef1f6; color: #475569; }
+.sales-badge.is-voided { background: #e2e8f0; color: #475569; margin-left: 4px; }
+
+.sales-pencil { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 1px solid #e7ecf3; border-radius: 8px; background: #fff; color: #64748b; }
+.sales-pencil:hover { border-color: #cbd5e1; background: #f8fafc; color: #0f172a; }
+.sales-empty { height: auto !important; padding: 40px 14px !important; text-align: center; }
+.sales-table-card .ui-table-footer { border-top: 1px solid #eef2f7; padding: 11px 14px; }
+
+/* Detail panel: a real second column, not an overlay.
+   Sized as a band rather than a single number, so the table keeps roughly three
+   quarters of the width and the panel neither squeezes nor dominates. */
+.sales-detail-panel, .ui-sale-panel { flex: none; width: 370px; min-width: 360px; max-width: 380px; align-self: stretch; border: 1px solid #e7ecf3; border-radius: 12px; background: #fff; }
+/* Header, body and footer: only the middle region scrolls, so a fifteen-line
+   sale can never push the footer actions out of reach. */
+.ui-sale-panel-inner { display: flex; flex-direction: column; max-height: calc(100vh - 130px); }
+/* Side by side, the panel sticks against the viewport so a long list scrolls
+   inside its own body rather than growing the page and carrying the footer out of
+   reach. Below the two-column breakpoint it becomes a fixed drawer instead, which
+   the media query further down sets up — hence the min-width guard here, so the
+   two positioning models never contradict each other. */
+@media (min-width: 1380px) {
+    .sales-detail-panel, .ui-sale-panel { position: sticky; top: 24px; max-height: calc(100vh - 130px); }
+}
+.ui-sale-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex: none; padding: 22px 22px 20px; border-bottom: 1px solid #eef2f7; }
+/* The panel is focused programmatically when it opens, so Escape and assistive
+   technology land on it. That is not a keyboard focus and should not paint a
+   ring around the whole panel; `:focus-visible` inside it still does. */
+.sales-detail-panel:focus, .ui-sale-panel:focus { outline: none; }
+.ui-sale-panel-heading { min-width: 0; }
+.ui-sale-panel-head h2 { font-size: 21px; font-weight: 750; line-height: 1.2; letter-spacing: -.02em; color: #0f172a; overflow-wrap: anywhere; }
+.ui-sale-panel-when { margin-top: 5px; font-size: 14px; color: #94a3b8; }
+/* The way back from correction to the details it was opened from. */
+.ui-sale-panel-back { display: inline-flex; align-items: center; gap: 3px; margin-bottom: 5px; padding: 0; border: 0; background: none; color: #64748b; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.ui-sale-panel-back:hover { color: #0f172a; }
+.ui-sale-panel-close { display: grid; flex: none; place-items: center; width: 41px; height: 41px; border: 1px solid #e7ecf3; border-radius: 11px; background: #fff; color: #64748b; cursor: pointer; }
+.ui-sale-panel-close:hover { border-color: #cbd5e1; background: #f8fafc; color: #0f172a; }
+.ui-sale-panel-body { padding: 20px 22px 22px; }
+/* No rule under the customer: the reference separates it by space alone. */
+.ui-sale-panel-customer { display: flex; align-items: center; gap: 12px; }
+.ui-sale-panel-customer-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ui-sale-panel-customer-name { font-size: 16px; font-weight: 700; color: #0f172a; overflow-wrap: anywhere; }
+.ui-sale-panel-customer-meta { font-size: 14px; color: #94a3b8; }
+.ui-sale-panel-label { margin: 22px 0 4px; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #94a3b8; }
+/* Items: a hairline between rows rather than a card around each one. */
+.ui-sale-panel-items { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.ui-sale-panel-items li { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 50px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 15px; }
+/* The rule under the last row is what Total sits beneath, so it is kept. */
+.ui-sale-panel-items li:last-child { border-bottom: 1px solid #f1f5f9; }
+/* A long product name wraps and the amount holds its place on the right. */
+.ui-sale-panel-item-name { min-width: 0; overflow-wrap: anywhere; color: #0f172a; }
+.ui-sale-panel-item-qty { margin-left: 6px; color: #94a3b8; }
+.ui-sale-panel-items li .ui-money { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; color: #0f172a; }
+/* A shaped placeholder while the lines are fetched: the panel is never blank. */
+.ui-sale-panel-items-skeleton { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
+.ui-sale-panel-items-skeleton span { height: 12px; border-radius: 4px; background: linear-gradient(90deg, #f1f5f9, #e7ecf3, #f1f5f9); background-size: 200% 100%; animation: ui-sale-panel-shimmer 1.4s linear infinite; }
+.ui-sale-panel-items-skeleton span:nth-child(2) { width: 82%; }
+.ui-sale-panel-items-skeleton span:nth-child(3) { width: 64%; }
+@keyframes ui-sale-panel-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ui-sale-panel-items-skeleton span { animation: none; } }
+.ui-sale-panel-items-error { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: #b45309; font-size: 12.5px; }
+.ui-sale-panel-retry { padding: 0; border: 0; background: none; color: var(--inventra-primary, #1d4ed8); font: inherit; font-size: 12.5px; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.ui-sale-panel-retry-wide { margin-top: 12px; width: 100%; justify-content: center; }
+.ui-sale-panel-totals { margin: 0; padding-top: 18px; }
+.ui-sale-panel-totals > div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: #475569; }
+.ui-sale-panel-totals > div + div { margin-top: 6px; }
+.ui-sale-panel-totals > div.is-discount { color: #16a34a; }
+.ui-sale-panel-totals > div.is-total { align-items: baseline; font-size: 18px; font-weight: 750; color: #0f172a; }
+.ui-sale-panel-totals > div.is-total dd { font-size: 21px; font-weight: 750; letter-spacing: -.02em; }
+/* The settlement rows sit under the total as secondary information: muted labels,
+   right-aligned tabular amounts, and tight enough that three of them do not turn
+   the panel into a ledger. */
+.ui-sale-panel-totals > div.is-settlement { margin-top: 8px; font-size: 13.5px; color: #64748b; }
+.ui-sale-panel-totals > div.is-settlement + div.is-settlement { margin-top: 5px; }
+.ui-sale-panel-totals > div.is-settlement:first-of-type { margin-top: 12px; }
+.ui-sale-panel-totals > div.is-settlement dd { font-weight: 600; color: #0f172a; }
+/* Money the business owes the customer but has not yet handed over. */
+.ui-sale-panel-totals > div.is-owing dd { color: #b45309; }
+/* The discount breakdown, when present, is ruled off from the Total beneath it. */
+.ui-sale-panel-totals > div:not(.is-total) + .is-total { margin-top: 10px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
+.ui-sale-panel-totals dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ui-sale-panel-status { margin-top: 16px; }
+.ui-sale-panel-recorded { margin-top: 18px; padding: 13px 15px; border-radius: 11px; background: #f8fafc; font-size: 14px; color: #94a3b8; }
+.ui-sale-panel-recorded strong { color: #0f172a; font-weight: 700; }
+/* The footer sits outside the scrolling body and stays put. */
+/* One row: the correction action takes the width, the void button sits beside it. */
+.ui-sale-panel-actions { display: flex; align-items: center; gap: 10px; flex: none; margin-top: auto; padding: 18px 22px; border-top: 1px solid #eef2f7; background: #fff; }
+/* A quiet white button rather than a filled one — this panel has a single primary
+   act, so it does not need colour to be found. */
+.ui-sale-panel-correct { display: inline-flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: 9px; min-height: 48px; padding: 0 16px; border: 1px solid #e3e8ef; border-radius: 11px; background: #fff; color: #0f172a; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.ui-sale-panel-correct:hover { border-color: #cbd5e1; background: #f8fafc; }
+.ui-sale-panel-correct:focus-visible { outline: none; border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+
+@media (max-width: 1379px) {
+    /* Below this the two columns stop fitting: the table's own fixed widths need
+       roughly 1130px and the panel another 380px plus the shell's gap and gutters.
+       Squeezing both only clips the Status and Actions columns, so the panel
+       becomes an overlay and the table keeps its full, readable width. */
+    .sales-detail-panel, .ui-sale-panel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 70; width: min(400px, 100vw); min-width: 0; max-width: 100vw; max-height: 100vh; border-radius: 0; border-right: 0; box-shadow: -18px 0 48px #0f172a1f; }
+    .ui-sale-panel-inner { max-height: 100vh; height: 100%; }
+}
+
+@media (max-width: 860px) {
+    .sales-filter-bar > * { flex: 1 1 auto; }
+    .sales-export-menu { margin-left: 0; }
+    .sales-export { width: 100%; justify-content: center; }
+    .inventra-content .sales-filter-bar .sales-select.sales-select.sales-select { width: 100%; min-width: 0; }
+    .sales-daterange { width: 100%; }
+    .sales-daterange input { width: 100%; min-width: 0; }
+    /* The table stops being a grid of columns and becomes one card per sale. */
+    .sales-table { table-layout: auto; }
+    .sales-table colgroup { display: none; }
+    .sales-table thead { display: none; }
+    .sales-table, .sales-table tbody, .sales-table tr, .sales-table td, .sales-table tbody th { display: block; width: auto; }
+    .sales-table-row { padding: 12px 14px; }
+    .sales-table td, .sales-table tbody th { height: auto; padding: 3px 0; text-align: left !important; }
+    .sales-table td.sales-amount { text-align: left !important; font-size: 15px; }
+    .sales-table td.sales-centered { text-align: left !important; }
+    .ui-sale-panel { width: 100vw; }
+}
+
+/* ── Return inside the Sales panel ───────────────────────────────────────────
+   Item-level: a list of what was sold, a stepper on each chosen line, a reason,
+   and a plain statement of what the return will do to the money. Flat, like the
+   details panel it replaces — no cards, hairlines between rows. */
+.ui-return-form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.ui-return-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 22px 22px; }
+.ui-return-heading { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: #0f172a; }
+.ui-return-heading + .ui-return-reasons, .ui-return-heading + .ui-return-items { margin-top: 12px; }
+.ui-return-items + .ui-return-heading { margin-top: 22px; }
+
+.ui-return-items { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.ui-return-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+.ui-return-item:last-child { border-bottom: 0; }
+/* A line with nothing left to send back stays visible but cannot be chosen. */
+.ui-return-item.is-exhausted { opacity: .55; }
+
+.ui-return-pick { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; cursor: pointer; }
+.ui-return-item.is-exhausted .ui-return-pick { cursor: not-allowed; }
+/* The real input stays in the page for keyboard and assistive technology; the
+   box beside it is what is painted. */
+.ui-return-check { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ui-return-box { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border: 1.5px solid #cbd5e1; border-radius: 7px; background: #fff; color: transparent; transition: background .12s, border-color .12s; }
+.ui-return-check:checked + .ui-return-box { border-color: var(--inventra-primary, #1d4ed8); background: var(--inventra-primary, #1d4ed8); color: #fff; }
+.ui-return-check:focus-visible + .ui-return-box { box-shadow: 0 0 0 3px #dbeafe; }
+.ui-return-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-return-item-name { font-size: 15px; font-weight: 600; color: #0f172a; overflow-wrap: anywhere; }
+.ui-return-item-meta { font-size: 13px; color: #94a3b8; }
+
+.ui-return-stepper { display: inline-flex; flex: none; align-items: center; gap: 2px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; }
+.ui-return-stepper button { display: grid; place-items: center; width: 32px; height: 36px; border: 0; background: none; color: #475569; font: inherit; font-size: 16px; cursor: pointer; }
+.ui-return-stepper button:disabled { color: #cbd5e1; cursor: default; }
+.ui-return-stepper button:not(:disabled):hover { color: #0f172a; }
+.ui-return-stepper > span { min-width: 26px; text-align: center; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ui-return-dash { flex: none; padding-right: 10px; color: #cbd5e1; }
+
+/* Reason: compact pills, the chosen one in Inventra blue. */
+.ui-return-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-return-reason { padding: 9px 15px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; color: #475569; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.ui-return-reason:hover { border-color: #cbd5e1; }
+.ui-return-reason.is-chosen { border-color: var(--inventra-primary, #1d4ed8); background: #eff5ff; color: var(--inventra-primary, #1d4ed8); font-weight: 600; }
+.ui-return-reason:focus-visible { outline: none; box-shadow: 0 0 0 3px #dbeafe; }
+
+.ui-return-disposition { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 13.5px; color: #475569; }
+.ui-return-disposition label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+
+/* The settlement preview. Its wording follows what the ledger will actually do. */
+.ui-return-summary { display: flex; align-items: center; gap: 9px; margin-top: 18px; padding: 13px 15px; border-radius: 11px; background: #f8fafc; color: #475569; font-size: 13.5px; line-height: 1.45; }
+.ui-return-summary svg { flex: none; color: var(--inventra-primary, #1d4ed8); }
+/* The sentence wraps rather than widening the panel; the amounts carry the emphasis. */
+.ui-return-summary > span { min-width: 0; }
+.ui-return-summary b { color: #0f172a; font-weight: 700; }
+.ui-return-summary.is-problem { color: #b45309; background: #fffbeb; }
+.ui-return-error { margin-top: 14px; }
+
+.ui-return-actions { display: flex; align-items: center; gap: 10px; flex: none; padding: 18px 22px; border-top: 1px solid #eef2f7; background: #fff; }
+.ui-return-actions > * { flex: 1 1 0; justify-content: center; min-height: 48px; border-radius: 11px; font-size: 15px; }
+.ui-return-submit:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ── Correction inside the Sales panel ───────────────────────────────────────
+   The same form the full page renders, restyled for a narrow column: fields
+   stack, sections are separated by hairlines rather than cards, and the actions
+   pin to the bottom of the panel. */
+.ui-sale-panel-scroll { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+/* The details footer is pinned to the bottom of the scroll region so it stays
+   reachable however many lines the sale has. */
+.ui-sale-panel-scroll > .ui-sale-panel-actions { position: sticky; bottom: 0; }
+.ui-sale-panel-loading { padding: 20px 18px; color: var(--ui-muted); font-size: 13px; }
+.ui-correct-wrap { min-width: 0; }
+.ui-correct-form { display: flex; flex-direction: column; }
+.ui-correct-note { margin: 16px 18px 0; padding: 11px 13px; border: 1px solid #fde68a; border-radius: 10px; background: #fffbeb; color: #92400e; font-size: 12px; line-height: 1.5; }
+.ui-correct-note-title { font-weight: 700; }
+.ui-correct-section { padding: 16px 18px; border-bottom: 1px solid #f1f5f9; }
+.ui-correct-heading { font-size: 13px; font-weight: 700; }
+.ui-correct-hint { margin-top: 4px; color: var(--ui-muted); font-size: 12px; line-height: 1.5; }
+.ui-correct-lines { display: flex; flex-direction: column; gap: 14px; margin-top: 13px; }
+.ui-correct-line { display: flex; flex-direction: column; gap: 8px; padding-bottom: 13px; border-bottom: 1px solid #f8fafc; }
+.ui-correct-line:last-child { border-bottom: 0; padding-bottom: 0; }
+.ui-correct-line-name { font-size: 13px; font-weight: 600; }
+.ui-correct-line-meta { font-size: 11.5px; color: var(--ui-muted); }
+.ui-correct-qty { display: block; margin-top: 11px; }
+.ui-correct-qty > span { display: block; margin-bottom: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+.ui-correct-qty .inventra-input { margin-top: 0; height: 44px; }
+.ui-correct-textarea { height: auto; min-height: 74px; padding: 10px 13px; line-height: 1.5; }
+.ui-correct-actions { display: flex; gap: 10px; padding: 14px 18px; }
+.ui-correct-actions > * { flex: 1 1 0; justify-content: center; min-height: 44px; }
+
+/* ── Reports dashboard ───────────────────────────────────────────────────────
+   Every selector below is nested under `.rpt`, so none of it can reach the
+   Sales, Inventory or Customers tables, and no global card or table rule has to
+   change to make this page look right. */
+.rpt { display: flex; flex-direction: column; gap: 18px; }
+.rpt-card { border: 1px solid #e7ecf3; border-radius: 14px; background: #fff; padding: 20px 22px; }
+.rpt-card-title { font-size: 16px; font-weight: 750; letter-spacing: -.01em; color: #0f172a; }
+
+/* Four headline figures, one row on desktop. */
+.rpt-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.rpt-kpi { border: 1px solid #e7ecf3; border-radius: 14px; background: #fff; padding: 15px 18px 16px; }
+/* The one card that links onward carries the design's blue outline. */
+.rpt-kpi.is-linked { border-color: #bfd3f5; box-shadow: 0 0 0 3px #eff5ff; }
+.rpt-kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #64748b; font-size: 13.5px; }
+.rpt-kpi-head svg { flex: none; color: #94a3b8; }
+.rpt-kpi-value { margin-top: 4px; font-size: 29px; font-weight: 800; line-height: 1.15; letter-spacing: -.03em; color: #0f172a; font-variant-numeric: tabular-nums; }
+/* Money owed to the business reads in amber, as the design has it. */
+.rpt-kpi-value.is-owing { color: #b45309; }
+.rpt-kpi-note { margin-top: 7px; font-size: 13px; color: #94a3b8; }
+.rpt-kpi-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 7px; flex-wrap: wrap; }
+.rpt-kpi-foot .rpt-change { margin-top: 0; }
+.rpt-kpi-link { color: var(--inventra-primary, #1d4ed8); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.rpt-kpi-link:hover { text-decoration: underline; }
+.rpt-kpi-link:focus-visible { outline: none; border-radius: 5px; box-shadow: 0 0 0 3px #dbeafe; }
+
+/* The comparison line always occupies its row, whatever the wording, so the four
+   cards keep a common baseline. */
+.rpt-change { display: flex; align-items: center; gap: 4px; min-height: 20px; margin-top: 7px; font-size: 13px; font-weight: 600; color: #94a3b8; }
+.rpt-change.is-up { color: #10B981; }
+.rpt-change.is-down { color: #dc2626; }
+.rpt-change.is-flat { color: #94a3b8; }
+
+/* Two thirds chart, one third products. */
+/* Roughly two thirds / one third, as the design has it. `align-items: start` keeps the
+   products card wrapped to its content instead of stretching to the chart's height. */
+.rpt-main { display: grid; grid-template-columns: minmax(0, 2.05fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+
+/* Heading and sentence on the left, the period control held to the right on one
+   line. `min-width: 0` lets the sentence wrap rather than pushing the tabs down. */
+.rpt-trend-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.rpt-trend-head > div:first-child { min-width: 0; }
+.rpt-trend-sentence { margin-top: 5px; font-size: 13.5px; color: #64748b; line-height: 1.5; text-wrap: pretty; }
+.rpt-trend-sentence b { color: #0f172a; font-weight: 700; }
+.rpt-trend-sentence b.is-up, .rpt-trend-sentence b.is-new { color: #10B981; }
+.rpt-trend-sentence b.is-down { color: #dc2626; }
+
+.rpt-tabs { display: inline-flex; flex: none; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; overflow: hidden; }
+.rpt-tab { padding: 9px 18px; border: 0; background: none; color: #475569; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.rpt-tab + .rpt-tab { border-left: 1px solid #e3e8ef; }
+.rpt-tab:hover { background: #f8fafc; }
+.rpt-tab.is-active { background: var(--inventra-primary, #1d4ed8); color: #fff; }
+.rpt-tab.is-active:hover { background: #1e40af; }
+
+/* The chart: an axis column beside a flex row of bars. No library, no canvas. */
+.rpt-chart { display: flex; gap: 14px; margin-top: 22px; }
+.rpt-axis { display: flex; flex-direction: column; justify-content: space-between; flex: none; height: 232px; padding-bottom: 26px; color: #cbd5e1; font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; }
+.rpt-bars { display: flex; align-items: flex-end; gap: 14px; flex: 1 1 auto; min-width: 0; height: 232px; border-bottom: 1px solid #eef2f7; }
+.rpt-bar-slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1 1 0; min-width: 0; height: 100%; padding-bottom: 26px; outline: none; }
+.rpt-bar-slot:focus-visible .rpt-bar { box-shadow: 0 0 0 3px #dbeafe; }
+.rpt-bar { width: 100%; min-height: 3px; border-radius: 7px 7px 0 0; background: #c7d7f5; transition: background .12s; }
+.rpt-bar.is-active { background: var(--inventra-primary, #1d4ed8); }
+/* A month that has not happened yet: a pale placeholder, never a revenue figure. */
+.rpt-bar.is-future { background: #eef2f7; }
+.rpt-bar-label { position: absolute; bottom: 0; color: #94a3b8; font-size: 12px; white-space: nowrap; }
+.rpt-bar-label.is-active { color: var(--inventra-primary, #1d4ed8); font-weight: 700; }
+.rpt-tip { position: absolute; bottom: calc(100% - 22px); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 10px; border-radius: 8px; background: #0f172a; color: #fff; font-size: 12.5px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+.rpt-tip-label { font-size: 11px; font-weight: 500; opacity: .75; }
+
+.rpt-trend-foot { display: flex; align-items: center; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid #f1f5f9; }
+.rpt-metric { display: flex; align-items: center; gap: 10px; flex: 1 1 0; min-width: 0; }
+.rpt-metric + .rpt-metric { border-left: 1px solid #f1f5f9; padding-left: 16px; }
+.rpt-metric-icon { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #ecfdf3; color: #15803d; }
+.rpt-metric-icon.is-1 { background: #eff5ff; color: var(--inventra-primary, #1d4ed8); }
+.rpt-metric-icon.is-2 { background: #fef4e2; color: #b45309; }
+.rpt-metric-body { display: flex; flex-direction: column; min-width: 0; }
+.rpt-metric-label { font-size: 12.5px; color: #94a3b8; }
+.rpt-metric-value { font-size: 14px; font-weight: 700; color: #0f172a; white-space: nowrap; }
+
+.rpt-product-list { display: flex; flex-direction: column; gap: 15px; margin: 18px 0 0; padding: 0; list-style: none; }
+.rpt-product-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.rpt-product-name { min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: #0f172a; }
+.rpt-product-value { flex: none; font-size: 14px; font-weight: 750; color: #0f172a; font-variant-numeric: tabular-nums; }
+.rpt-product-track { display: block; height: 6px; margin-top: 8px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+.rpt-product-fill { display: block; height: 100%; border-radius: 999px; background: var(--inventra-primary, #1d4ed8); }
+
+.rpt-table-scroll { margin-top: 16px; overflow-x: auto; }
+.rpt-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rpt-table thead th { padding: 11px 14px; border-bottom: 1px solid #eef2f7; background: #f8fafc; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; text-align: left; white-space: nowrap; }
+.rpt-table td { padding: 15px 14px; border-bottom: 1px solid #f4f7fa; color: #0f172a; }
+.rpt-table tbody tr:last-child td { border-bottom: 0; }
+.rpt-table .rpt-numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.rpt-table td.rpt-numeric { color: #475569; }
+.rpt-table td.rpt-owed { color: #b45309; font-weight: 700; }
+
+.rpt-empty { margin-top: 16px; color: #94a3b8; font-size: 13.5px; }
+/* The shared footer, seated in this card rather than floating below it. */
+.rpt-receivables .ui-table-footer { margin-top: 4px; padding: 14px 0 0; border-top: 1px solid #f1f5f9; }
+
+@media (max-width: 1279px) {
+    /* The chart needs the width more than the products list does. */
+    .rpt-main { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 1023px) {
+    .rpt-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 719px) {
+    .rpt-kpis { grid-template-columns: minmax(0, 1fr); }
+    .rpt-card { padding: 16px; }
+    .rpt-trend-head { flex-direction: column; }
+    .rpt-tabs { width: 100%; }
+    .rpt-tab { flex: 1 1 0; padding: 9px 0; }
+    /* The footer metrics stack rather than squeezing three to a row. */
+    .rpt-trend-foot { flex-direction: column; align-items: stretch; gap: 14px; }
+    .rpt-metric + .rpt-metric { border-left: 0; padding-left: 0; border-top: 1px solid #f1f5f9; padding-top: 14px; }
+    .rpt-bars { gap: 5px; }
+    .rpt-bar-label { font-size: 11px; }
+}
+
+/* ── Customers ───────────────────────────────────────────────────────────────
+   Everything below is nested under `.cust`, so none of it reaches the Sales,
+   Inventory or Reports tables, and no global rule has to change to make these
+   screens look right. */
+.cust { display: flex; flex-direction: column; gap: 16px; }
+.cust-card { border: 1px solid #e7ecf3; border-radius: 14px; background: #fff; padding: 20px 22px; }
+.cust-card-title { font-size: 16px; font-weight: 750; letter-spacing: -.01em; color: #0f172a; }
+.cust-muted { color: #94a3b8; }
+.cust-numeric { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Toolbar: filters left, search and actions right, one control height. */
+.cust-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cust-toolbar-filters, .cust-toolbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cust-toolbar .cust-select.cust-select.cust-select.cust-select { min-width: 156px; min-height: 0; height: 42px; border: 1px solid #e3e8ef; border-radius: 10px; background-color: #fff; padding: 0 32px 0 14px; color: #0f172a; font-size: 13.5px; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 15px; }
+.cust-toolbar .cust-select.cust-select.cust-select.cust-select:focus { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; outline: none; }
+/* One control, not two.
+   The wrapper draws the only border and the field sits inside it, sharing its
+   background. The repeated class is what makes that stick: the global
+   `.inventra-content :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]), …)`
+   rule is (0,3,1) because `:is()` takes the specificity of its most specific
+   argument, so a plain `.inventra-content .cust-search input` at (0,2,1) loses
+   and the input keeps its own 1px border, 9px radius, white background and
+   44px min-height — which is exactly what made this read as a bordered icon box
+   glued to a bordered field. */
+.cust-search { display: inline-flex; align-items: center; gap: 9px; height: 42px; width: 248px; padding: 0 14px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; color: #94a3b8; }
+.cust-search:focus-within { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+.cust-search svg { flex: none; }
+.cust-search .cust-search-input.cust-search-input.cust-search-input.cust-search-input {
+    flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; height: 100%;
+    border: 0; border-radius: 0; background: transparent; padding: 0;
+    color: #0f172a; font-size: 13.5px; outline: none; box-shadow: none;
+}
+/* The focus ring belongs to the whole control, so the field inside never draws
+   its own outline on top of it. */
+.cust-search .cust-search-input.cust-search-input.cust-search-input.cust-search-input:focus,
+.cust-search .cust-search-input.cust-search-input.cust-search-input.cust-search-input:focus-visible {
+    border: 0; outline: none; box-shadow: none;
+}
+/* Safari paints a native clear affordance on `type=search` that sits proud of
+   the shared background; the control keeps its own single presentation. */
+.cust-search-input::-webkit-search-decoration,
+.cust-search-input::-webkit-search-cancel-button { appearance: none; }
+
+.cust-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 16px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; color: #0f172a; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.cust-button:hover { border-color: #cbd5e1; background: #f8fafc; }
+.cust-button:focus-visible { outline: none; border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+.cust-button.is-primary { border-color: var(--inventra-primary, #1d4ed8); background: var(--inventra-primary, #1d4ed8); color: #fff; }
+.cust-button.is-primary:hover { background: #1e40af; }
+.cust-button.is-danger { border-color: #fecaca; background: #fef2f2; color: #dc2626; }
+.cust-button.is-danger:hover { border-color: #fca5a5; background: #fee2e2; }
+/* Nothing to export: the control stays in place but says so. */
+.cust-button.is-disabled { opacity: .5; cursor: not-allowed; }
+
+/* Table */
+.cust-table-scroll { overflow-x: auto; }
+.cust-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.cust-table thead th { padding: 12px 14px; border-bottom: 1px solid #eef2f7; background: #f8fafc; color: #94a3b8; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; text-align: left; white-space: nowrap; }
+.cust-table td { padding: 14px; border-bottom: 1px solid #f4f7fa; color: #475569; vertical-align: middle; }
+.cust-table tbody tr:last-child td { border-bottom: 0; }
+.cust-row:hover { background: #fbfcfd; }
+/* Narrow, muted and left aligned, so it numbers the rows without competing with
+   the customer beside it. Scoped to this table rather than reusing the global
+   `.ui-sn` rule, whose `width: 1%` and right alignment belong to other lists. */
+.cust-table th.cust-sn, .cust-table td.cust-sn { width: 52px; color: #94a3b8; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cust-person { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.cust-name { font-size: 14px; font-weight: 650; color: #0f172a; overflow-wrap: anywhere; }
+.cust-name:hover { color: var(--inventra-primary, #1d4ed8); }
+.cust-phone { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cust-spent { font-weight: 700; color: #0f172a; }
+/* The number relationship, never consent. */
+.cust-same { display: inline-flex; align-items: center; gap: 5px; color: #10B981; font-weight: 600; }
+.cust-chevron { width: 1%; text-align: right; }
+.cust-chevron a { color: #cbd5e1; }
+.cust-row:hover .cust-chevron a { color: #94a3b8; }
+
+/* Avatars: a photograph, or initials when there is none. */
+.cust-avatar { display: grid; flex: none; place-items: center; border-radius: 50%; object-fit: cover; background: #e8edfb; color: #3f5ab5; font-weight: 700; text-transform: uppercase; }
+.cust-avatar.is-sm { width: 34px; height: 34px; font-size: 11.5px; }
+.cust-avatar.is-md { width: 44px; height: 44px; font-size: 14px; }
+.cust-avatar.is-lg { width: 64px; height: 64px; font-size: 20px; }
+
+.cust-empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 64px 24px; text-align: center; }
+.cust-empty.is-inline { padding: 40px 16px; }
+.cust-empty-icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 10px; border-radius: 14px; background: #eff5ff; color: var(--inventra-primary, #1d4ed8); }
+.cust-empty h2, .cust-empty h3 { font-size: 16px; font-weight: 750; color: #0f172a; }
+.cust-empty p { max-width: 380px; color: #94a3b8; font-size: 13.5px; line-height: 1.55; }
+.cust-empty > a, .cust-empty > .inventra-primary-action { margin-top: 12px; }
+
+/* ── Form ─────────────────────────────────────────────────────────────────── */
+.cust-form-page { max-width: 780px; }
+.cust-form-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid #eef2f7; }
+.cust-crumbs { display: flex; align-items: center; gap: 7px; font-size: 14px; color: #64748b; }
+.cust-crumbs a { color: #64748b; }
+.cust-crumbs a:hover { color: #0f172a; }
+.cust-crumbs b { color: var(--inventra-primary, #1d4ed8); font-weight: 650; }
+.cust-crumbs svg { color: #cbd5e1; }
+.cust-close { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #e7ecf3; border-radius: 9px; color: #64748b; }
+.cust-close:hover { border-color: #cbd5e1; background: #f8fafc; color: #0f172a; }
+
+.cust-form { display: flex; flex-direction: column; }
+.cust-form-body { display: flex; flex-direction: column; gap: 16px; padding: 22px 0; }
+.cust-photo-row { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.cust-photo-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cust-photo-hint { flex-basis: 100%; color: #94a3b8; font-size: 12.5px; }
+/* The real input stays reachable by keyboard; the label is what is painted. */
+.cust-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.cust-button:focus-within { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+
+.cust-field { display: flex; flex-direction: column; gap: 7px; }
+.cust-label { font-size: 13.5px; font-weight: 600; color: #334155; }
+.cust-label i { color: #dc2626; font-style: normal; }
+.inventra-content .cust-field input { width: 100%; min-height: 48px; border: 1px solid #e3e8ef; border-radius: 10px; padding: 0 14px; color: #0f172a; font-size: 14.5px; }
+.inventra-content .cust-field input:focus { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; outline: none; }
+.cust-input-icon { display: flex; align-items: center; gap: 10px; padding-left: 14px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; color: #94a3b8; }
+.cust-input-icon:focus-within { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+.inventra-content .cust-input-icon input { border: 0; box-shadow: none; padding-left: 0; }
+.inventra-content .cust-input-icon input:focus { border: 0; box-shadow: none; }
+/* A rejected field carries the error on its border as well as in words. */
+.cust-input-icon.is-invalid { border-color: #dc2626; }
+.cust-duplicate { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cust-duplicate a { color: #dc2626; font-weight: 700; text-decoration: underline; }
+
+.cust-check { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: #334155; }
+.cust-check input, .cust-consent input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.cust-check-box { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border: 1.5px solid #cbd5e1; border-radius: 7px; background: #fff; color: transparent; }
+.cust-check input:checked + .cust-check-box { border-color: var(--inventra-primary, #1d4ed8); background: var(--inventra-primary, #1d4ed8); color: #fff; }
+.cust-consent input:checked + .cust-check-box.is-green { border-color: #10B981; background: #10B981; color: #fff; }
+.cust-check input:focus-visible + .cust-check-box,
+.cust-consent input:focus-visible + .cust-check-box { box-shadow: 0 0 0 3px #dbeafe; }
+/* Consent reads as its own commitment rather than another field. */
+.cust-consent { display: flex; align-items: flex-start; gap: 12px; padding: 15px 16px; border: 1px solid #a7f3d0; border-radius: 12px; background: #f0fdf4; cursor: pointer; }
+.cust-consent-body { display: flex; flex-direction: column; gap: 3px; }
+.cust-consent-body b { font-size: 14px; color: #065f46; }
+.cust-consent-body span { font-size: 13px; color: #047857; line-height: 1.5; }
+
+.cust-form-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 0 0; border-top: 1px solid #eef2f7; }
+
+/* ── Edit customer: consent beside the profile form ─────────────────────────
+   Consent posts to its own audited endpoint, so it is a second <form> and cannot be nested inside
+   the profile form. The stack is a flex column that reorders the two so the page still reads
+   fields → consent → actions: the profile form's footer is lifted to the end, and the consent
+   block sits in the gap it leaves. Purely presentational; both forms submit independently. */
+.cust-edit-stack { display: flex; flex-direction: column; }
+.cust-edit-stack > .cust-form { display: contents; }
+.cust-edit-stack > .cust-form > .cust-form-body { order: 1; }
+.cust-edit-stack > .cust-consent-form { order: 2; padding-bottom: 22px; }
+.cust-edit-stack > .cust-form > .cust-form-foot { order: 3; }
+
+/* The consent block on edit states a recorded fact and offers the transition that changes it,
+   rather than being a checkbox that would imply the profile save carries consent. */
+.cust-consent.is-static { align-items: center; cursor: default; }
+.cust-consent.is-static .cust-check-box { border-color: #a7f3d0; background: #fff; color: transparent; }
+.cust-consent.is-static .cust-check-box.is-on { border-color: #10B981; background: #10B981; color: #fff; }
+.cust-consent.is-off { border-color: #e3e8ef; background: #f8fafc; }
+.cust-consent.is-off .cust-consent-body b { color: #334155; }
+.cust-consent.is-off .cust-consent-body span { color: #64748b; }
+.cust-consent.is-off .cust-check-box { border-color: #cbd5e1; }
+.cust-consent-action { flex: none; margin-left: auto; padding: 8px 14px; border: 1px solid #a7f3d0; border-radius: 9px; background: #fff; color: #047857; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.cust-consent-action:hover { border-color: #6ee7b7; background: #ecfdf5; }
+.cust-consent.is-off .cust-consent-action { border-color: #e3e8ef; color: #334155; }
+.cust-consent.is-off .cust-consent-action:hover { border-color: #cbd5e1; background: #f1f5f9; }
+.cust-consent-action:focus-visible { outline: none; box-shadow: 0 0 0 3px #dbeafe; }
+
+@media (max-width: 560px) {
+    .cust-consent.is-static { align-items: flex-start; flex-wrap: wrap; }
+    .cust-consent-action { margin-left: 34px; }
+}
+
+/* ── Profile ──────────────────────────────────────────────────────────────── */
+.cust-profile-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.cust-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.cust-identity-body { min-width: 0; }
+.cust-identity-body h1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 22px; font-weight: 800; letter-spacing: -.02em; color: #0f172a; }
+.cust-identity-meta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 7px; color: #64748b; font-size: 13.5px; }
+.cust-identity-meta span { display: inline-flex; align-items: center; gap: 7px; }
+.cust-identity-meta svg { color: #94a3b8; }
+.cust-profile-actions { display: flex; align-items: center; gap: 10px; }
+
+.cust-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+/* Consent, and only consent. */
+.cust-badge.is-optin { background: #ecfdf3; color: #047857; }
+.cust-badge.is-archived { background: #eef1f6; color: #475569; }
+
+.cust-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cust-kpi { border: 1px solid #e7ecf3; border-radius: 14px; background: #fff; padding: 18px 20px; }
+.cust-kpi-head { display: flex; align-items: center; gap: 10px; color: #64748b; font-size: 13.5px; }
+.cust-kpi-icon { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 10px; }
+.cust-kpi-icon.is-blue { background: #eff5ff; color: var(--inventra-primary, #1d4ed8); }
+.cust-kpi-icon.is-green { background: #ecfdf3; color: #047857; }
+.cust-kpi-icon.is-amber { background: #fef4e2; color: #b45309; }
+.cust-kpi-value { margin-top: 12px; font-size: 28px; font-weight: 800; letter-spacing: -.03em; color: #0f172a; font-variant-numeric: tabular-nums; }
+
+.cust-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.cust-history { margin-top: 14px; }
+.cust-history-link { color: #0f172a; }
+.cust-history-link:hover { color: var(--inventra-primary, #1d4ed8); }
+.cust-panel-foot { margin-top: 12px; color: #94a3b8; font-size: 12.5px; }
+
+.cust-messages { display: flex; flex-direction: column; margin: 14px 0 0; padding: 0; list-style: none; }
+.cust-message { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #f4f7fa; }
+.cust-message:last-child { border-bottom: 0; }
+.cust-message-icon { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #f1f5f9; color: #64748b; }
+.cust-message-icon.is-ok { background: #ecfdf3; color: #047857; }
+.cust-message-icon.is-bad { background: #fef2f2; color: #dc2626; }
+.cust-message-body { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.cust-message-body b { font-size: 13.5px; font-weight: 650; color: #0f172a; overflow-wrap: anywhere; }
+.cust-message-body .cust-muted { font-size: 12.5px; }
+.cust-pill { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+.cust-pill .cust-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.cust-pill.is-ok { background: #ecfdf3; color: #15803d; }
+.cust-pill.is-bad { background: #fef2f2; color: #dc2626; }
+.cust-pill.is-pending { background: #eef1f6; color: #475569; }
+
+@media (max-width: 1023px) {
+    .cust-panels { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 767px) {
+    .cust-kpis { grid-template-columns: minmax(0, 1fr); }
+    .cust-toolbar-filters, .cust-toolbar-actions { width: 100%; }
+    .cust-search { flex: 1 1 auto; min-width: 0; }
+    .cust-toolbar .cust-select.cust-select.cust-select.cust-select { flex: 1 1 auto; min-width: 0; }
+    .cust-profile-head { align-items: flex-start; }
+    .cust-profile-actions { width: 100%; }
+    .cust-profile-actions > * { flex: 1 1 0; }
+
+    /* The list becomes one card per customer rather than a table squeezed until
+       it is unreadable. Every column is still shown — nothing financial is
+       hidden, it is relabelled and stacked.
+
+       The scroll wrapper is released here: with the table stacked there is
+       nothing to scroll sideways, and leaving it would clip the values that now
+       sit at the right of each row. */
+    .cust-table-scroll { overflow-x: visible; }
+    .cust-table, .cust-table tbody, .cust-table tr, .cust-table td { display: block; width: auto; max-width: 100%; }
+    .cust-table thead { display: none; }
+    .cust-row { padding: 14px; border-bottom: 1px solid #eef2f7; }
+    .cust-table td { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 5px 0; border-bottom: 0; text-align: right; overflow-wrap: anywhere; }
+    .cust-table td::before { flex: none; }
+    .cust-table td::before { content: attr(data-label); color: #94a3b8; font-size: 12px; font-weight: 600; }
+    /* S/N leads the card as a small number rather than consuming a labelled row. */
+    .cust-table td.cust-sn { justify-content: flex-start; width: auto; padding: 0 0 2px; font-size: 12px; }
+    .cust-table td.cust-sn::before { content: none; }
+    .cust-table td:nth-child(2) { justify-content: flex-start; padding-bottom: 10px; }
+    .cust-table td:nth-child(2)::before { content: none; }
+    .cust-chevron { display: none; }
+}
+
+/* ── Add staff (create only) ─────────────────────────────────────────────────
+   Scoped under `.stf-create` and `.stf-created`. The Staff index and Edit Staff
+   share none of these selectors and are untouched by this file. */
+.stf-create { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 760px; }
+.stf-create-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.stf-crumbs { display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: #64748b; }
+.stf-crumbs a:hover { color: #0f172a; }
+.stf-crumbs b { color: var(--inventra-primary, #1d4ed8); font-weight: 650; }
+.stf-crumbs svg { color: #cbd5e1; }
+.stf-create-head h1 { margin-top: 8px; font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: #0f172a; }
+.stf-create-note { margin-top: 7px; max-width: 560px; color: #64748b; font-size: 13.5px; line-height: 1.55; }
+.stf-close { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border: 1px solid #e7ecf3; border-radius: 9px; color: #64748b; }
+.stf-close:hover { border-color: #cbd5e1; background: #f8fafc; color: #0f172a; }
+
+.stf-form { border: 1px solid #e7ecf3; border-radius: 14px; background: #fff; }
+.stf-form-body { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+
+.stf-field { display: flex; flex-direction: column; gap: 8px; }
+.stf-label { font-size: 13.5px; font-weight: 600; color: #334155; }
+.stf-label i { color: #dc2626; font-style: normal; }
+/* The repeated class outranks the global
+   `.inventra-content :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]), …)`
+   rule, which is (0,3,1) because `:is()` takes its most specific argument —
+   without it these fields keep that rule's 44px height and 9px radius. */
+/* Four classes, not an ancestor: the build strips a redundant `.inventra-content`
+   prefix, which would take the specificity with it. */
+.stf-field.stf-field.stf-field.stf-field input {
+    width: 100%; min-height: 54px; border: 1px solid #e3e8ef; border-radius: 11px;
+    padding: 0 16px; background: #fff; color: #0f172a; font-size: 15px;
+}
+.stf-field.stf-field.stf-field.stf-field input:focus {
+    border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; outline: none;
+}
+/* A refused field carries the error on its border as well as in words. */
+.stf-field.stf-field.stf-field.stf-field input.is-invalid { border-color: #dc2626; }
+.stf-error { color: #dc2626; font-size: 13px; }
+
+/* Role: two full-width cards, each a real radio inside a real label. */
+.stf-roles { display: flex; flex-direction: column; gap: 10px; border: 0; padding: 0; margin: 0; }
+.stf-roles legend { padding: 0; margin-bottom: 2px; }
+.stf-role { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; border: 1px solid #e3e8ef; border-radius: 12px; background: #fff; cursor: pointer; transition: border-color .12s, background .12s; }
+.stf-role:hover { border-color: #cbd5e1; }
+/* The real input stays in the page for the keyboard and assistive technology;
+   the ring beside it is what is painted. */
+.stf-role input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.stf-role-radio { display: grid; flex: none; place-items: center; width: 20px; height: 20px; margin-top: 1px; border: 1.5px solid #cbd5e1; border-radius: 50%; background: #fff; }
+.stf-role-radio::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: transparent; }
+/* Driven from the input's own checked state rather than `:has()` on the card, so
+   the selected styling does not depend on that support. The card is painted
+   through the radio and body it contains. */
+.stf-role.is-selected { border-color: var(--inventra-primary, #1d4ed8); background: #eef2fb; }
+.stf-role input:checked + .stf-role-radio { border-color: var(--inventra-primary, #1d4ed8); }
+.stf-role input:checked + .stf-role-radio::after { background: var(--inventra-primary, #1d4ed8); }
+.stf-role input:focus-visible + .stf-role-radio { box-shadow: 0 0 0 3px #dbeafe; }
+.stf-role-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stf-role-title { font-size: 15px; font-weight: 700; color: #0f172a; }
+.stf-create .stf-role .stf-role-description { color: #64748b; font-size: 13.5px; font-weight: 400; line-height: 1.5; }
+
+.stf-form-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 18px 24px; border-top: 1px solid #eef2f7; }
+.stf-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 20px; border: 1px solid #e3e8ef; border-radius: 11px; background: #fff; color: #0f172a; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.stf-button:hover { border-color: #cbd5e1; background: #f8fafc; }
+.stf-button:focus-visible { outline: none; border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; }
+.stf-form-foot .inventra-primary-action { min-height: 48px; border-radius: 11px; font-size: 14.5px; }
+
+/* ── The one-time credential reveal ──────────────────────────────────────── */
+.stf-created { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 640px; }
+.stf-created-card { border: 1px solid #e7ecf3; border-radius: 14px; background: #fff; padding: 26px 24px; }
+.stf-created-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 14px; border-radius: 13px; background: #ecfdf3; color: #047857; }
+.stf-created-card h1 { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: #0f172a; }
+.stf-created-sub { margin-top: 5px; color: #94a3b8; font-size: 13.5px; }
+.stf-credential { margin-top: 20px; }
+.stf-credential-row { display: flex; align-items: stretch; gap: 10px; margin-top: 8px; }
+/* Monospace and letter-spaced: a 20-character credential has to be readable
+   character by character if someone reads it aloud or types it. */
+.stf-credential-value.stf-credential-value.stf-credential-value.stf-credential-value {
+    flex: 1 1 auto; min-width: 0; min-height: 54px; border: 1px solid #e3e8ef; border-radius: 11px;
+    padding: 0 16px; background: #f8fafc; color: #0f172a;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16px; font-weight: 600; letter-spacing: .02em;
+}
+.stf-copy { flex: none; }
+.stf-credential-live { margin-top: 8px; min-height: 18px; color: #047857; font-size: 12.5px; }
+.stf-created-warning { display: flex; align-items: flex-start; gap: 9px; margin-top: 18px; padding: 13px 15px; border-radius: 11px; background: #fffbeb; color: #92400e; font-size: 13px; line-height: 1.55; }
+.stf-created-warning svg { flex: none; margin-top: 2px; }
+.stf-created-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.stf-created-actions .inventra-primary-action { min-height: 48px; border-radius: 11px; font-size: 14.5px; }
+
+@media (max-width: 639px) {
+    .stf-form-body, .stf-form-foot { padding: 18px 16px; }
+    .stf-create-head h1 { font-size: 21px; }
+    /* Actions go full width rather than crowding at one edge. */
+    .stf-form-foot, .stf-created-actions { flex-direction: column-reverse; align-items: stretch; }
+    .stf-form-foot > *, .stf-created-actions > * { width: 100%; justify-content: center; }
+    /* The credential keeps its own line so twenty characters stay readable. */
+    .stf-credential-row { flex-direction: column; }
+    .stf-copy { width: 100%; }
+}
+
+/* ── Staff index row actions ────────────────────────────────────────────────
+   The shared `.ui-icon-action` is 32px and belongs to the inventory table too,
+   so the slightly larger Staff target is scoped here rather than applied to the
+   component. `.staff-table` is repeated instead of leaning on an
+   `.inventra-content` ancestor, because the build minifier strips redundant
+   ancestors — and takes their specificity with them — which is what previously
+   let the global control rule win. */
+.staff-table .ui-row-actions { white-space: nowrap; }
+.staff-table.staff-table .ui-icon-action,
+.staff-table.staff-table .ui-icon-action.ui-icon-action { width: 36px; height: 36px; min-height: 36px; padding: 0; }
+/* The Actions column holds two 36px controls and never needs more, so it takes
+   only what it needs and leaves the rest to the staff data beside it. */
+.staff-table th:last-child, .staff-table td:last-child { width: 1%; white-space: nowrap; }
+/* The destructive and restorative actions read as such at rest, not only on hover: in a list of
+   otherwise identical grey squares, colour is what tells them apart before you touch anything. */
+.staff-table.staff-table .ui-icon-action.is-danger { border-color: #fecaca; color: #dc2626; }
+/* The restore control has no `is-danger`, so the row's own state class is the hook — the shared
+   component is left alone rather than taught a Staff-only tone. */
+.staff-table.staff-table tr.is-inactive .ui-icon-action:not([href]) { border-color: #bbf7d0; color: #15803d; }
+.staff-table.staff-table tr.is-inactive .ui-icon-action:not([href]):hover { border-color: #86efac; background: #f0fdf4; color: #166534; }
+
+/* ── WhatsApp Automation ────────────────────────────────────────────────────
+   Every selector is scoped under `.wa-module` (or `.wa-modal`, which is a
+   portal-less overlay of the same module), so nothing here can reach Sales,
+   Staff, Customers or Inventory. */
+.wa-module { --wa-border: #e6eaf1; --wa-muted: #64748b; --wa-blue: #2547d0; }
+.wa-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.wa-head h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.wa-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 999px; border: 0; font-size: 13px; font-weight: 600; }
+.wa-pill.is-connected { background: #dcfce7; color: #15803d; }
+.wa-pill.is-disconnected { background: #f1f5f9; color: #475569; cursor: pointer; }
+.wa-pill.is-disconnected:hover { background: #e2e8f0; }
+.wa-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+
+.wa-grid { display: grid; grid-template-columns: 1.08fr 1fr; gap: 20px; align-items: start; }
+.wa-card { border: 1px solid var(--wa-border); border-radius: 14px; background: #fff; overflow: hidden; }
+.wa-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--wa-border); }
+.wa-card-head h2 { font-size: 15px; font-weight: 700; }
+.wa-logs { margin-top: 20px; }
+
+/* Automation rows */
+.wa-rows { display: flex; flex-direction: column; }
+.wa-row { display: flex; align-items: center; gap: 13px; padding: 15px 20px; border-bottom: 1px solid #f1f5f9; }
+.wa-row:last-child { border-bottom: 0; }
+.wa-row-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: #eef2ff; color: #4f46e5; flex: none; }
+.wa-row-icon.is-welcome { background: #dcfce7; color: #15803d; }
+.wa-row-icon.is-post_purchase { background: #e0edff; color: #1d4ed8; }
+.wa-row-icon.is-pickup_reminder { background: #ede9fe; color: #6d28d9; }
+.wa-row-icon.is-low_stock { background: #fef3c7; color: #b45309; }
+.wa-row-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.wa-row-title { border: 0; background: 0; padding: 0; font: inherit; font-weight: 600; font-size: 14px; color: #0f172a; text-align: left; cursor: pointer; }
+.wa-row-title:hover { color: var(--wa-blue); }
+.wa-row-note { font-size: 12.5px; color: var(--wa-muted); }
+.wa-timing { border: 1px solid var(--wa-border); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; background: #fff; }
+
+/* Switch: a real checkbox, visually hidden, driving a painted track. */
+.wa-switch { position: relative; display: inline-flex; flex: none; }
+.wa-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; width: 100%; height: 100%; cursor: pointer; }
+.wa-switch-track { display: block; width: 42px; height: 24px; border-radius: 999px; background: #cbd5e1; transition: background .15s ease; }
+.wa-switch-thumb { display: block; width: 18px; height: 18px; margin: 3px; border-radius: 50%; background: #fff; transition: transform .15s ease; }
+.wa-switch input:checked + .wa-switch-track { background: var(--wa-blue); }
+.wa-switch input:checked + .wa-switch-track .wa-switch-thumb { transform: translateX(18px); }
+.wa-switch input:focus-visible + .wa-switch-track { outline: 2px solid var(--wa-blue); outline-offset: 2px; }
+
+/* Templates */
+.wa-templates { display: flex; flex-direction: column; }
+.wa-template { display: flex; align-items: center; gap: 10px; padding: 15px 20px; border-bottom: 1px solid #f1f5f9; }
+.wa-template:last-child { border-bottom: 0; }
+.wa-template-name { font-weight: 600; font-size: 14px; }
+.wa-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+.wa-badge.is-active { background: #dcfce7; color: #15803d; }
+.wa-badge.is-inactive { background: #f1f5f9; color: #64748b; }
+.wa-template-actions { margin-left: auto; display: flex; gap: 14px; }
+.wa-template-actions button { border: 0; background: 0; padding: 0; font: inherit; font-size: 13px; cursor: pointer; color: var(--wa-blue); font-weight: 500; }
+.wa-template-actions button:last-child { color: var(--wa-muted); }
+.wa-template-actions button:hover { text-decoration: underline; }
+
+/* Empty state */
+.wa-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 48px 20px; text-align: center; }
+.wa-empty-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; background: #eef2f7; color: #94a3b8; margin-bottom: 4px; }
+.wa-empty-title { font-weight: 700; font-size: 14.5px; }
+.wa-empty-note { font-size: 13px; color: var(--wa-muted); }
+
+/* Logs table */
+.wa-table-wrap { overflow-x: auto; }
+.wa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.wa-table th { text-align: left; padding: 11px 20px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; font-weight: 600; background: #fbfcfe; border-bottom: 1px solid var(--wa-border); white-space: nowrap; }
+.wa-table td { padding: 14px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.wa-table tr:last-child td { border-bottom: 0; }
+.wa-right { text-align: right; }
+.wa-table td.wa-right { color: var(--wa-muted); }
+.wa-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+.wa-status.is-delivered, .wa-status.is-read { background: #dcfce7; color: #15803d; }
+.wa-status.is-sent { background: #e0edff; color: #1d4ed8; }
+.wa-status.is-queued { background: #f1f5f9; color: #64748b; }
+.wa-status.is-failed { background: #fee2e2; color: #b91c1c; }
+.wa-retry-form { display: inline; }
+.wa-retry { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; border: 1px solid #bfdbfe; background: #fff; color: var(--wa-blue); border-radius: 7px; padding: 3px 9px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.wa-retry:hover { background: #eff6ff; }
+.wa-filters { display: flex; gap: 8px; }
+.wa-filters select { border: 1px solid var(--wa-border); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; background: #fff; }
+.wa-pagination { padding: 12px 20px; border-top: 1px solid var(--wa-border); }
+
+/* ── Modals ─────────────────────────────────────────────────────────────── */
+/* ── Modal shell ────────────────────────────────────────────────────────────
+   Shared by the connection flow and the template editor, so the shell rules
+   stay generic and only `.wa-connect` carries the connection modal's own
+   proportions. */
+.wa-modal { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; }
+/* Slate rather than black, so the page behind stays faintly legible. */
+.wa-modal-backdrop { position: absolute; inset: 0; background: #0f172ab3; }
+.wa-modal-panel { position: relative; width: 100%; background: #fff; border-radius: 14px; box-shadow: 0 24px 60px #0f172a40; max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+.wa-editor { max-width: 720px; }
+.wa-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--wa-border); }
+.wa-modal-head h2 { font-size: 16px; font-weight: 700; }
+.wa-modal-body { padding: 20px; overflow-y: auto; }
+.wa-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--wa-border); }
+.wa-modal-foot.is-stacked { flex-direction: column; border-top: 0; padding-top: 0; }
+.wa-icon-button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--wa-border); border-radius: 8px; background: #fff; color: #475569; cursor: pointer; flex: none; }
+.wa-icon-button:hover { background: #f8fafc; }
+.wa-button { border: 1px solid var(--wa-border); background: #fff; border-radius: 9px; padding: 9px 16px; font: inherit; font-size: 13.5px; font-weight: 600; color: #334155; cursor: pointer; }
+.wa-button:hover { background: #f8fafc; }
+.wa-button.is-primary { background: var(--wa-blue); border-color: var(--wa-blue); color: #fff; }
+.wa-button.is-primary:hover { background: #1e3bb0; }
+.wa-button.is-block { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.wa-button.is-small { padding: 6px 12px; font-size: 12.5px; }
+.wa-button:disabled { opacity: .6; cursor: default; }
+
+/* ── Connection modal ───────────────────────────────────────────────────────
+   The Figma composition, rebuilt to proportion rather than tweaked. Every rule
+   below is scoped under `.wa-connect`, so the template editor — which shares
+   the shell above — is untouched.
+
+   The Figma screenshot is a ~2x capture, so its measurements halve: a ~825px
+   panel is ~412px of CSS, a ~96px field is ~48px, a ~64px close button is
+   ~32px. The widths here are those halved values, which is what reproduces the
+   target proportion rather than the target pixel count. */
+.wa-connect { max-width: 412px; border-radius: 15px; overflow: hidden; }
+
+/* Header: title left, close right, generous inset. ~145px in the Figma → ~72px. */
+.wa-connect .wa-modal-head { padding: 0 22px; min-height: 72px; }
+.wa-connect .wa-modal-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; color: #0f172a; }
+.wa-connect .wa-icon-button.wa-icon-button { flex: none; width: 34px; height: 34px; min-height: 34px; border-radius: 10px; align-self: center; padding: 0; }
+
+/* One content grid: the stepper, heading, copy, field and callout all begin and
+   end on the same edges because they share this padding rather than each
+   carrying its own offset. */
+.wa-connect .wa-modal-body { padding: 26px 22px 24px; }
+
+/* Stepper. `auto 1fr auto 1fr auto` is what guarantees the two connectors are
+   the same length: both are 1fr of the same grid, so they can only ever be
+   equal. The previous flex version gave the last step no connector at all,
+   which is why the first segment looked longer. */
+.wa-connect .wa-steps { display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; gap: 0; list-style: none; padding: 0; margin: 0 0 26px; }
+.wa-connect .wa-step { display: contents; }
+.wa-connect .wa-step-dot { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #e8edf5; color: #7c8ba1; font-size: 12px; font-weight: 700; }
+.wa-connect .wa-step.is-current .wa-step-dot { background: var(--wa-blue); color: #fff; }
+.wa-connect .wa-step.is-done .wa-step-dot { background: #16a34a; color: #fff; }
+/* The connector belongs to the step that precedes it, and the last step has
+   none — which is what keeps exactly two lines across three circles. */
+.wa-connect .wa-step:not(:last-child)::after { content: ""; height: 2px; background: #e8edf5; align-self: center; }
+.wa-connect .wa-step.is-done:not(:last-child)::after { background: var(--wa-blue); }
+
+/* Typography: a clear hierarchy, scoped so no other Inventra dialog moves. */
+.wa-connect .wa-connect-title { font-size: 16px; font-weight: 700; color: #0f172a; letter-spacing: -.01em; line-height: 1.3; margin-bottom: 6px; }
+.wa-connect .wa-connect-note { max-width: 38ch; font-size: 14px; color: #64748b; line-height: 1.55; }
+.wa-connect .wa-field { display: block; margin-top: 20px; }
+.wa-connect .wa-label { display: block; font-size: 13.5px; font-weight: 600; color: #334155; margin-bottom: 9px; }
+
+/* Phone field. One control: the wrapper owns the border, radius and focus ring,
+   and the input inside is completely bare.
+   The repeated class is load-bearing. The global
+   `.inventra-content :is(input…)` rule is (0,3,1) — `:is()` takes its most
+   specific argument — and it was painting a second bordered white box inside
+   this wrapper, which is exactly the nested-box artefact being removed. A
+   single `.wa-connect .wa-input-wrap input` would lose to it, so the class is
+   repeated to outrank it without depending on an ancestor the build minifier
+   strips. */
+.wa-connect .wa-input-wrap { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; color: #94a3b8; transition: border-color .15s, box-shadow .15s; }
+.wa-connect .wa-input-wrap:focus-within { border-color: var(--wa-blue); box-shadow: 0 0 0 3px #2547d01f; }
+.wa-connect .wa-input-wrap svg { flex: none; width: 17px; height: 17px; }
+.wa-connect .wa-input-wrap input.wa-connect-input.wa-connect-input {
+    flex: 1; min-width: 0; width: 100%; height: auto; min-height: 0;
+    border: 0; outline: 0; background: transparent; box-shadow: none;
+    padding: 0; margin: 0; border-radius: 0;
+    font: inherit; font-size: 15px; font-weight: 500; color: #0f172a;
+}
+.wa-connect .wa-input-wrap input.wa-connect-input.wa-connect-input:focus,
+.wa-connect .wa-input-wrap input.wa-connect-input.wa-connect-input:focus-visible {
+    border: 0; outline: 0; box-shadow: none;
+}
+.wa-connect .wa-input-wrap input.wa-connect-input::placeholder { color: #94a3b8; font-weight: 500; }
+
+/* What Meta will do, in step 2. A plain ordered list styled to match the modal's
+   own rhythm — it replaces the OTP grid, which Inventra can no longer honestly
+   present since only Meta can grant a sending identity. */
+.wa-connect .wa-meta-steps { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.wa-connect .wa-meta-steps li { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; line-height: 1.5; color: #334155; }
+.wa-connect .wa-meta-steps li span { display: grid; place-items: center; flex: none; width: 21px; height: 21px; margin-top: 1px; border-radius: 50%; background: #eef2ff; color: var(--wa-blue); font-size: 11.5px; font-weight: 700; }
+
+/* Info callout: borderless, pale, icon aligned to the first line. */
+.wa-connect .wa-info { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 14px 16px; border: 0; border-radius: 12px; background: #f6f8fb; color: #64748b; font-size: 13px; line-height: 1.55; }
+.wa-connect .wa-info svg { flex: none; width: 15px; height: 15px; margin-top: 2px; }
+
+/* Template status in the editor. States where Meta's approval stands, so nothing
+   implies that typed text is what WhatsApp delivers. */
+.wa-template-state { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 10px; }
+.wa-template-name-label { font-size: 11.5px; color: var(--wa-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.wa-editor-pane .wa-info { margin-top: 0; margin-bottom: 12px; font-size: 12px; }
+
+/* Footer: full-width divider, right-aligned actions, generous padding. */
+/* Provider/validation refusals. Deliberately the same shape as the info callout
+   above it — pale surface, 12px radius, icon on the first line — so a refusal
+   reads as a note about the field rather than as a second input.
+
+   The repeated class outranks the global `.inventra-content [role=alert]` rule,
+   which paints a bordered block with a red left accent and 16px block margins.
+   That treatment is right elsewhere and is left alone; only this modal opts out. */
+.wa-connect .wa-form-error.wa-form-error {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin: 14px 0 0; padding: 12px 14px;
+    border: 1px solid #fecaca; border-left: 1px solid #fecaca; border-radius: 12px;
+    background: #fef2f2; color: #b91c1c;
+    font-size: 13px; line-height: 1.5; font-weight: 500;
+}
+.wa-connect .wa-form-error.wa-form-error svg { flex: none; width: 15px; height: 15px; margin-top: 1px; }
+.wa-connect .wa-form-error.wa-form-error span { min-width: 0; overflow-wrap: anywhere; }
+
+.wa-connect .wa-modal-foot { gap: 15px; padding: 18px 22px; }
+/* Cancel is a text action in the Figma, not a bordered secondary button. */
+.wa-connect .wa-modal-foot .wa-button:not(.is-primary) { border: 0; background: 0; padding: 12px 8px; color: #334155; font-size: 14px; font-weight: 600; }
+.wa-connect .wa-modal-foot .wa-button:not(.is-primary):hover { background: 0; color: #0f172a; text-decoration: underline; }
+.wa-connect .wa-modal-foot .wa-button.is-primary { min-width: 120px; height: 48px; padding: 0 24px; border-radius: 12px; font-size: 14.5px; font-weight: 700; }
+/* The success step's stacked actions keep their own full-width shape. */
+.wa-connect .wa-modal-foot.is-stacked .wa-button { border: 1px solid var(--wa-border); background: #fff; padding: 0 16px; }
+.wa-connect .wa-modal-foot.is-stacked .wa-button.is-primary { border-color: var(--wa-blue); background: var(--wa-blue); color: #fff; }
+
+/* OTP */
+.wa-otp { display: flex; gap: 8px; margin-top: 16px; }
+.wa-otp .wa-otp-cell.wa-otp-cell { width: 100%; aspect-ratio: 1; min-width: 0; padding: 0; text-align: center; font-size: 19px; font-weight: 700; border: 1px solid var(--wa-border); border-radius: 9px; background: #fff; color: #0f172a; }
+.wa-otp .wa-otp-cell.wa-otp-cell:focus { outline: 0; border-color: var(--wa-blue); box-shadow: 0 0 0 3px #2547d022; }
+.wa-otp.is-invalid.is-invalid .wa-otp-cell.wa-otp-cell { border-color: #ef4444; color: #b91c1c; }
+.wa-otp-error { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: #b91c1c; }
+.wa-resend { margin-top: 12px; font-size: 12.5px; color: var(--wa-muted); }
+.wa-link { border: 0; background: 0; padding: 0; font: inherit; font-size: inherit; color: var(--wa-blue); font-weight: 600; cursor: pointer; text-decoration: underline; }
+.wa-form-error { margin-top: 12px; font-size: 12.5px; color: #b91c1c; }
+
+/* Success */
+.wa-success { text-align: center; padding: 8px 0; }
+.wa-success-icon { display: grid; place-items: center; width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 14px; background: #dcfce7; color: #16a34a; }
+.wa-success h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.wa-success p { font-size: 13px; color: var(--wa-muted); line-height: 1.55; }
+
+/* Editor */
+.wa-editor-head { display: flex; align-items: center; gap: 11px; padding: 16px 18px; border-bottom: 1px solid var(--wa-border); }
+.wa-editor-heading { flex: 1; min-width: 0; }
+.wa-editor-heading h2 { font-size: 15px; font-weight: 700; }
+.wa-editor-heading p { font-size: 11.5px; color: var(--wa-muted); margin-top: 2px; }
+.wa-editor-switch { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--wa-muted); }
+.wa-editor-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow-y: auto; }
+.wa-editor-pane { padding: 16px 18px; border-right: 1px solid var(--wa-border); }
+.wa-editor-timing { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--wa-border); border-radius: 9px; margin-bottom: 12px; }
+.wa-editor-timing-label { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: #334155; }
+.wa-editor-timing select { border: 1px solid var(--wa-border); border-radius: 8px; padding: 5px 9px; font-size: 12.5px; background: #fff; }
+.wa-recipients { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+.wa-recipient { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border: 1px solid var(--wa-border); border-radius: 999px; font-size: 12px; cursor: pointer; }
+.wa-recipient.is-on { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.wa-recipient input { position: absolute; opacity: 0; width: 0; height: 0; }
+.wa-recipient input:focus-visible ~ span { outline: 2px solid var(--wa-blue); outline-offset: 2px; }
+.wa-recipient-initials { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--wa-blue); color: #fff; font-size: 9.5px; font-weight: 700; }
+.wa-recipient-empty { font-size: 12px; color: var(--wa-muted); }
+/* Replaces the withdrawn low-stock recipient picker: states where the alert actually goes. */
+.wa-recipient-note { font-size: 12.5px; color: var(--wa-muted); line-height: 1.55; }
+.wa-recipient-note a { color: var(--wa-blue, #2547d0); font-weight: 600; }
+.wa-editor-tools { margin-bottom: 10px; }
+.wa-editor-input { width: 100%; border: 1px solid var(--wa-blue); border-radius: 9px; padding: 11px 12px; font: inherit; font-size: 13.5px; line-height: 1.6; resize: vertical; color: #0f172a; }
+.wa-editor-input:focus { outline: 0; box-shadow: 0 0 0 3px #2547d01f; }
+.wa-editor-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 7px; font-size: 11.5px; color: var(--wa-muted); }
+.wa-editor-ok { display: inline-flex; align-items: center; gap: 5px; color: #15803d; }
+.wa-chips { margin-top: 14px; }
+.wa-chips-label { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; font-weight: 600; margin-bottom: 7px; }
+.wa-chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.wa-chip { border: 1px solid var(--wa-border); background: #fff; border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 12px; color: #334155; cursor: pointer; }
+.wa-chip:hover { border-color: #bfdbfe; background: #eff6ff; color: var(--wa-blue); }
+.wa-preview-pane { padding: 16px 18px; background: #fbfcfe; }
+.wa-preview-label { font-size: 10.5px; letter-spacing: .06em; color: #94a3b8; font-weight: 600; margin-bottom: 10px; }
+.wa-preview-canvas { background: #ece5dd; border-radius: 10px; padding: 14px; min-height: 130px; }
+.wa-bubble { background: #fff; border-radius: 9px; padding: 9px 11px; box-shadow: 0 1px 2px #0f172a1f; }
+.wa-bubble p { font-size: 13px; line-height: 1.5; color: #0f172a; white-space: pre-wrap; word-break: break-word; }
+.wa-bubble-meta { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 4px; font-size: 10.5px; color: #94a3b8; }
+.wa-preview-note { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 11.5px; color: var(--wa-muted); }
+.wa-editor-foot { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border-top: 1px solid var(--wa-border); flex-wrap: wrap; }
+.wa-editor-foot-actions { margin-left: auto; display: flex; gap: 10px; }
+.wa-test { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; }
+.wa-test:hover { text-decoration: underline; }
+.wa-test-result { font-size: 12px; font-weight: 600; }
+.wa-test-result.is-ok { color: #15803d; }
+.wa-test-result.is-bad { color: #b91c1c; }
+.wa-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* Focus visibility, everywhere in the module. */
+.wa-module :focus-visible, .wa-modal :focus-visible { outline: 2px solid var(--wa-blue); outline-offset: 2px; }
+
+@media (max-width: 1024px) {
+    .wa-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+    .wa-editor-body { grid-template-columns: 1fr; }
+    .wa-editor-pane { border-right: 0; border-bottom: 1px solid var(--wa-border); }
+    .wa-modal { padding: 12px; }
+    .wa-otp { gap: 6px; }
+    .wa-head h1 { font-size: 19px; }
+    .wa-editor-foot { flex-direction: column; align-items: stretch; }
+    .wa-editor-foot-actions { margin-left: 0; }
+}
+
+/* ── Error states ───────────────────────────────────────────────────────────
+   404, 500 and session expiry. Scoped under `.err-*` so nothing here reaches
+   another page; `.err-page` only applies to the bare unauthenticated shell. */
+.err-page { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; color: #0f172a; font-family: inherit; }
+.err-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 72px 20px; min-height: 52vh; }
+.err-code { font-size: 62px; font-weight: 800; line-height: 1; letter-spacing: -.03em; color: var(--wa-blue, #2547d0); }
+.err-title { margin-top: 10px; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.err-note { max-width: 42ch; font-size: 14px; line-height: 1.6; color: #64748b; }
+.err-icon { display: grid; place-items: center; width: 54px; height: 54px; margin-bottom: 8px; border-radius: 15px; }
+.err-icon.is-danger { background: #fef2f2; color: #dc2626; }
+.err-icon.is-warning { background: #fef3c7; color: #d97706; }
+.err-action, .err-actions { margin-top: 18px; }
+.err-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 480px) {
+    .err-state { padding: 48px 16px; }
+    .err-code { font-size: 48px; }
+    .err-actions { width: 100%; flex-direction: column; }
+    .err-actions > * { width: 100%; justify-content: center; }
+}
+
+/* ── Logout confirmation ────────────────────────────────────────────────────
+   Scoped under `.lo-*`; shares the app's dialog proportions without touching
+   the other modal systems. */
+.lo-modal { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; }
+.lo-backdrop { position: absolute; inset: 0; background: #0f172ab3; }
+.lo-panel { position: relative; width: 100%; max-width: 320px; padding: 26px 24px 22px; border-radius: 15px; background: #fff; box-shadow: 0 24px 60px #0f172a40; text-align: center; }
+.lo-icon { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 14px; background: #fef2f2; color: #dc2626; }
+.lo-panel h2 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.lo-panel p { margin-top: 6px; font-size: 13.5px; line-height: 1.55; color: #64748b; }
+.lo-actions { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 20px; }
+.lo-actions > form { margin: 0; }
+.lo-actions .wa-button { min-width: 108px; padding: 11px 18px; }
+.lo-confirm { min-width: 108px; padding: 11px 18px; border: 1px solid #dc2626; border-radius: 9px; background: #dc2626; color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.lo-confirm:hover { background: #b91c1c; border-color: #b91c1c; }
+.lo-confirm:disabled { opacity: .6; cursor: default; }
+@media (max-width: 420px) {
+    .lo-actions { flex-direction: column-reverse; }
+    .lo-actions > *, .lo-actions > form, .lo-actions > form > button { width: 100%; }
+}
+
+/* ── My profile ─────────────────────────────────────────────────────────────
+   Scoped under `.pf-*`; nothing here reaches another screen. */
+.pf-page { max-width: 1120px; }
+.pf-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.pf-head h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.pf-role-badge { padding: 5px 11px; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+
+.pf-identity { display: flex; align-items: center; gap: 16px; padding: 22px 0; border-bottom: 1px solid var(--ui-border, #e6eaf1); }
+.pf-avatar { display: grid; place-items: center; width: 72px; height: 72px; flex: none; border-radius: 50%; background: var(--wa-blue, #2547d0); color: #fff; font-size: 22px; font-weight: 700; overflow: hidden; }
+.pf-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pf-identity-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.pf-identity-body strong { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+.pf-identity-body span { font-size: 13.5px; color: #64748b; }
+.pf-photo-button { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 10px 16px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 9px; background: #fff; color: var(--wa-blue, #2547d0); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.pf-photo-button:hover { background: #f8fafc; }
+
+.pf-photo-panel { padding: 18px 0; border-bottom: 1px solid var(--ui-border, #e6eaf1); }
+.pf-photo-form { display: flex; flex-direction: column; gap: 8px; max-width: 460px; }
+.pf-photo-actions { display: flex; gap: 10px; margin-top: 6px; }
+.pf-photo-remove { margin-top: 12px; }
+
+.pf-fields { padding: 22px 0; display: flex; flex-direction: column; gap: 16px; }
+.pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pf-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.pf-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; }
+.pf-fields input { width: 100%; height: 48px; padding: 0 16px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; color: #0f172a; font: inherit; font-size: 14px; }
+.pf-fields input:focus { outline: 0; border-color: var(--wa-blue, #2547d0); box-shadow: 0 0 0 3px #2547d01f; }
+.pf-fields input.is-invalid { border-color: #ef4444; }
+/* The personal-details save sits with its own fields, right-aligned like the Business profile's. */
+.pf-fields-foot { display: flex; justify-content: flex-end; }
+.pf-hint { font-size: 12.5px; color: #64748b; line-height: 1.55; }
+.pf-error { font-size: 12.5px; color: #b91c1c; }
+
+.pf-section { padding: 22px 0 0; }
+.pf-section-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; margin-bottom: 10px; }
+.pf-row { display: flex; align-items: center; gap: 13px; padding: 15px 18px; margin-bottom: 10px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 12px; background: #fff; text-decoration: none; color: inherit; }
+.pf-row:hover:not(.is-disabled) { border-color: #bfdbfe; background: #f8fbff; }
+.pf-row-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 9px; background: #eef2ff; color: var(--wa-blue, #2547d0); }
+.pf-row-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pf-row-body strong { font-size: 14px; font-weight: 600; }
+.pf-row-body small { font-size: 12.5px; color: #64748b; }
+.pf-row-chevron { flex: none; color: #94a3b8; }
+.pf-row.is-disabled { background: #fbfcfe; cursor: default; }
+.pf-row.is-disabled .pf-row-icon { background: #f1f5f9; color: #94a3b8; }
+.pf-row.is-disabled .pf-row-body strong, .pf-row.is-disabled .pf-row-body small { color: #94a3b8; }
+
+.pf-security { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pf-security-action { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 52px; padding: 0 18px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 11px; background: #fff; color: #334155; font: inherit; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.pf-security-action:hover { background: #f8fafc; }
+.pf-security-action.is-danger { border-color: #fecaca; background: #fef2f2; color: #dc2626; }
+.pf-security-action.is-danger:hover { background: #fee2e2; }
+
+@media (max-width: 860px) {
+    .pf-grid, .pf-security { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+    .pf-identity { flex-wrap: wrap; }
+    .pf-photo-button { width: 100%; justify-content: center; }
+    .pf-photo-actions { flex-direction: column; }
+    .pf-photo-actions > * { width: 100%; justify-content: center; }
+    .pf-fields-foot > button { width: 100%; }
+}
+
+/* ── Business profile ───────────────────────────────────────────────────────
+   Scoped under `.bp-*`; nothing here reaches another screen. */
+.bp-page { max-width: 1120px; }
+.bp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.bp-back { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; color: #475569; }
+.bp-back:hover { background: #f1f5f9; }
+.bp-head h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+
+.bp-identity { display: flex; align-items: center; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--ui-border, #e6eaf1); }
+.bp-logo { display: grid; place-items: center; width: 64px; height: 64px; flex: none; border-radius: 15px; background: #eef2ff; color: var(--wa-blue, #2547d0); font-size: 19px; font-weight: 700; overflow: hidden; }
+.bp-logo img { width: 100%; height: 100%; object-fit: cover; }
+.bp-identity-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.bp-identity-body strong { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.bp-identity-body span { font-size: 13px; color: #64748b; }
+.bp-logo-button { flex: none; padding: 10px 16px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 9px; background: #fff; color: var(--wa-blue, #2547d0); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.bp-logo-button:hover { background: #f8fafc; }
+.bp-logo-panel { padding: 16px 0; border-bottom: 1px solid var(--ui-border, #e6eaf1); }
+.bp-logo-form { display: flex; flex-direction: column; gap: 8px; max-width: 460px; }
+.bp-logo-actions { display: flex; gap: 10px; margin-top: 6px; }
+.bp-logo-remove { margin-top: 12px; }
+
+.bp-form { padding-top: 20px; display: flex; flex-direction: column; gap: 16px; }
+.bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.bp-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.bp-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; }
+.bp-optional { text-transform: none; letter-spacing: 0; font-weight: 500; color: #cbd5e1; }
+.bp-form :is(input, select) { width: 100%; height: 48px; padding: 0 16px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; color: #0f172a; font: inherit; font-size: 14px; }
+.bp-form :is(input, select):focus { outline: 0; border-color: var(--wa-blue, #2547d0); box-shadow: 0 0 0 3px #2547d01f; }
+.bp-form :is(input, select).is-invalid { border-color: #ef4444; }
+.bp-hint { font-size: 12.5px; color: #64748b; line-height: 1.55; }
+.bp-error { font-size: 12.5px; color: #b91c1c; }
+
+.bp-whatsapp { margin-top: 8px; padding-top: 20px; border-top: 1px solid var(--ui-border, #e6eaf1); }
+.bp-whatsapp h2 { font-size: 15px; font-weight: 700; }
+.bp-whatsapp > .bp-hint { margin-top: 3px; margin-bottom: 14px; }
+.bp-connection { display: flex; align-items: center; gap: 13px; padding: 15px 18px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 12px; background: #fff; }
+.bp-connection-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px; background: #dcfce7; color: #15803d; }
+.bp-connection-icon.is-muted { background: #f1f5f9; color: #94a3b8; }
+.bp-connection-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bp-connection-body strong { font-size: 14.5px; font-weight: 700; }
+.bp-connection-body small { font-size: 12.5px; color: #64748b; }
+.bp-connection-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.bp-connection-actions .wa-button.is-muted { color: #94a3b8; cursor: not-allowed; }
+.bp-connection-actions .bp-hint { flex-basis: 100%; }
+/* Manager alert number: the business-level low-stock destination. A plain labelled input with a
+   leading icon, as the Figma draws it — no recipient card, no count, no second link. */
+.bp-alert-number { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--ui-border, #e6eaf1); }
+.bp-alert-number h2 { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+.bp-alert-number .bp-hint { margin-top: 8px; }
+.bp-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.bp-input-icon { position: relative; display: block; }
+.bp-input-icon > svg { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); color: #94a3b8; pointer-events: none; }
+/* Room for the glyph.
+   The layout-wide `.inventra-content :is(input:not(...):not(...):not(...), select, textarea)` rule
+   sets `padding: 10px 12px`, and `:is()` takes the specificity of its most specific argument — the
+   three `:not()` classes push it to (0,4,1), above anything a plain `.bp-*` selector reaches. This
+   therefore restates the full padding at matching weight rather than fighting it with
+   `padding-left` alone, which is what left the icon sitting on top of the value. */
+.inventra-content .bp-form .bp-input-icon > input:not([type=hidden]) { padding: 0 16px 0 44px; }
+
+.bp-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 6px; padding-top: 18px; border-top: 1px solid var(--ui-border, #e6eaf1); }
+
+@media (max-width: 860px) { .bp-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) {
+    .bp-identity { flex-wrap: wrap; }
+    .bp-logo-button, .bp-logo-actions > *, .bp-foot > * { width: 100%; justify-content: center; text-align: center; }
+    .bp-logo-actions, .bp-foot { flex-direction: column; }
+    .bp-connection { flex-wrap: wrap; }
+}
+
+/* ── Staff & roles ──────────────────────────────────────────────────────────
+   Scoped under `.sr-*`; nothing here reaches another screen. */
+.sr-page { max-width: 1120px; }
+.sr-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.sr-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.sr-back { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; color: #475569; }
+.sr-back:hover { background: #f1f5f9; }
+.sr-head-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.sr-head-body h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.sr-head-body p { font-size: 13px; color: #64748b; }
+.sr-add { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+
+.sr-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.sr-filters :is(input, select) { height: 42px; padding: 0 14px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; color: #0f172a; font: inherit; font-size: 13.5px; }
+.sr-filters input { flex: 1 1 240px; min-width: 0; }
+.sr-filters :is(input, select):focus { outline: 0; border-color: var(--wa-blue, #2547d0); box-shadow: 0 0 0 3px #2547d01f; }
+.sr-filters > button[type="submit"] { height: 42px; padding: 0 18px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; color: #334155; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.sr-filters > button[type="submit"]:hover { background: #f8fafc; }
+
+.sr-table-wrap { border: 1px solid var(--ui-border, #e6eaf1); border-radius: 14px; background: #fff; overflow-x: auto; }
+.sr-table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: left; }
+.sr-table thead th { padding: 12px 18px; border-bottom: 1px solid var(--ui-border, #e6eaf1); background: #fbfcfe; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; white-space: nowrap; }
+.sr-table tbody td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; font-size: 13.5px; vertical-align: middle; }
+.sr-table tbody tr:last-child td { border-bottom: 0; }
+.sr-table tbody tr:hover { background: #fbfcfe; }
+.sr-table tbody tr.is-inactive .sr-member-body strong { color: #64748b; }
+.sr-table tbody tr.is-inactive .sr-avatar { opacity: .65; }
+
+.sr-member { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sr-avatar { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 50%; background: #eef2ff; color: var(--wa-blue, #2547d0); font-size: 13px; font-weight: 700; overflow: hidden; }
+.sr-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.sr-member-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sr-member-body strong { font-size: 13.5px; font-weight: 600; color: #0f172a; }
+.sr-member-body small { font-size: 12.5px; color: #64748b; word-break: break-word; }
+.sr-you { margin-left: 6px; font-size: 12px; font-weight: 500; color: #64748b; }
+
+.sr-role { display: inline-block; padding: 4px 11px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.sr-role[data-role="admin"] { background: #ede9fe; color: #6d28d9; }
+.sr-role[data-role="manager"] { background: #e0f2fe; color: #0369a1; }
+
+.sr-status { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: #475569; white-space: nowrap; }
+.sr-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #94a3b8; }
+.sr-status[data-status="active"] { color: #15803d; }
+.sr-status[data-status="active"] .sr-dot { background: #16a34a; }
+.sr-status[data-status="inactive"] { color: #64748b; }
+.sr-status[data-status="inactive"] .sr-dot { background: #94a3b8; }
+.sr-status[data-status="locked"] { color: #b91c1c; }
+.sr-status[data-status="locked"] .sr-dot { background: #dc2626; }
+
+.sr-actions-cell { width: 56px; text-align: right; }
+.sr-menu { position: relative; display: inline-block; }
+.sr-menu-trigger { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid transparent; border-radius: 9px; background: none; color: #64748b; cursor: pointer; }
+.sr-menu-trigger:hover { background: #f1f5f9; color: #0f172a; }
+.sr-menu-trigger:focus-visible { outline: 2px solid var(--wa-blue, #2547d0); outline-offset: 1px; }
+.sr-menu-list { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; display: flex; flex-direction: column; min-width: 184px; padding: 6px; border: 1px solid #e7ecf3; border-radius: 12px; background: #fff; box-shadow: 0 12px 28px -8px #0f172a26, 0 2px 6px #0f172a0f; text-align: left; }
+.sr-menu-item { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 8px; color: #334155; font-size: 13.5px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.sr-menu-item:hover { background: #f8fafc; }
+.sr-menu-item.is-danger { color: #dc2626; }
+.sr-menu-item.is-danger:hover { background: #fef2f2; }
+/* A confirmation trigger rendered as a menu entry. `lifecycleConfirm` wraps its trigger in a span
+   that owns the dialog state; `display: contents` keeps that wrapper out of the menu's layout so
+   the button itself is the row, focusable and announced as the entry. */
+.sr-menu-list > span[x-data] { display: contents; }
+.sr-menu-list button.sr-menu-item { width: 100%; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; }
+.sr-menu-list button.sr-menu-item:hover { background: #f8fafc; }
+.sr-menu-list button.sr-menu-item.is-danger:hover { background: #fef2f2; }
+
+.sr-empty { padding: 56px 18px; text-align: center; color: #64748b; }
+
+@media (max-width: 720px) {
+    .sr-head { flex-wrap: wrap; }
+    .sr-add { width: 100%; justify-content: center; }
+    .sr-filters > * { flex: 1 1 100%; }
+    .sr-filters :is(input, select), .sr-filters > button[type="submit"] { width: 100%; }
+}
+
+/* ── Dashboard + navbar search/notifications ────────────────────────────────
+   Scoped under `.dash-*` / `.topbar-*`; nothing here reaches another screen.
+   Where a rule must beat the layout-wide
+   `.inventra-content :is(input:not(...):not(...):not(...), select, textarea)`
+   (specificity 0,4,1) it says so and matches that weight deliberately. */
+.dash-page { display: flex; flex-direction: column; gap: 18px; }
+.dash-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* KPI row */
+.dash-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.dash-kpi { display: flex; flex-direction: column; gap: 4px; padding: 18px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 14px; background: #fff; }
+.dash-kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; min-height: 38px; }
+.dash-kpi-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px; }
+.dash-kpi-icon.is-blue { background: #eef2ff; color: #2547d0; }
+.dash-kpi-icon.is-green { background: #dcfce7; color: #15803d; }
+.dash-kpi-icon.is-amber { background: #fef3c7; color: #b45309; }
+.dash-kpi-icon.is-slate { background: #f1f5f9; color: #475569; }
+.dash-kpi-label { font-size: 13px; color: #64748b; }
+.dash-kpi-value { font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: #0f172a; }
+.dash-kpi-value.is-amber { color: #b45309; }
+.dash-trend { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; }
+.dash-trend.is-up { color: #16a34a; }
+.dash-trend.is-down { color: #dc2626; }
+.dash-inline-trend.is-up { color: #16a34a; font-weight: 700; }
+.dash-inline-trend.is-down { color: #dc2626; font-weight: 700; }
+
+/* Shared card furniture */
+.dash-card { border: 1px solid var(--ui-border, #e6eaf1); border-radius: 14px; background: #fff; }
+.dash-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 18px 20px; }
+.dash-card-head h2 { font-size: 15.5px; font-weight: 700; color: #0f172a; }
+.dash-card-sub { margin-top: 3px; font-size: 13px; color: #64748b; }
+.dash-card-sub strong { color: #0f172a; font-weight: 700; }
+.dash-link { font-size: 13px; font-weight: 600; color: var(--wa-blue, #2547d0); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+.dash-button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 9px; background: #fff; color: #334155; font: inherit; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.dash-button:hover { background: #f8fafc; }
+.dash-button.is-primary { background: var(--wa-blue, #2547d0); border-color: var(--wa-blue, #2547d0); color: #fff; }
+.dash-button.is-primary:hover { background: #1e3bb0; }
+
+/* Chips and dots: every status carries a word as well as a colour. */
+.dash-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.dash-chip.is-amber { background: #fef3c7; color: #b45309; }
+.dash-chip.is-red { background: #fee2e2; color: #b91c1c; }
+.dash-chip.is-paid { background: #dcfce7; color: #15803d; }
+.dash-chip.is-partial { background: #fef3c7; color: #b45309; }
+.dash-chip.is-unpaid { background: #f1f5f9; color: #475569; }
+.dash-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+
+/* Empty states */
+.dash-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; padding: 40px 22px 46px; }
+.dash-empty-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 13px; background: #eef2ff; color: var(--wa-blue, #2547d0); margin-bottom: 4px; }
+.dash-empty-icon.is-green { background: #dcfce7; color: #16a34a; }
+.dash-empty strong { font-size: 16px; font-weight: 700; color: #0f172a; }
+.dash-empty p { font-size: 13px; color: #64748b; max-width: 340px; }
+.dash-empty .dash-button { margin-top: 10px; }
+
+/* Revenue + low stock split */
+.dash-split { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.dash-split > * { min-width: 0; }
+.dash-revenue, .dash-low-stock { min-height: 330px; display: flex; flex-direction: column; }
+
+/* Chart: heights are server-computed percentages, so no library is involved. */
+.dash-chart { display: flex; gap: 12px; padding: 0 20px 18px; flex: 1; min-height: 210px; }
+.dash-chart-axis { display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: #94a3b8; text-align: right; padding-bottom: 22px; flex: none; }
+.dash-chart-plot { position: relative; display: flex; align-items: flex-end; gap: 10px; flex: 1; min-width: 0; }
+.dash-chart-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; flex: 1; min-width: 0; height: 100%; }
+.dash-bar { width: 100%; max-width: 92px; border: 0; border-radius: 6px 6px 3px 3px; background: #c7d2fe; cursor: pointer; padding: 0; transition: background .15s; }
+.dash-bar:hover, .dash-bar:focus-visible, .dash-bar.is-current { background: var(--wa-blue, #2547d0); }
+.dash-bar:focus-visible { outline: 2px solid #0f172a; outline-offset: 2px; }
+.dash-chart-label { font-size: 12px; color: #94a3b8; }
+.dash-chart-label.is-current { color: var(--wa-blue, #2547d0); font-weight: 700; }
+.dash-tooltip { position: absolute; z-index: 5; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; padding: 6px 10px; border-radius: 8px; background: #0f172a; color: #fff; pointer-events: none; white-space: nowrap; }
+.dash-tooltip small { font-size: 10.5px; opacity: .75; }
+.dash-tooltip strong { font-size: 13px; font-weight: 700; }
+
+/* Low-stock panel */
+.dash-low-callout { display: flex; align-items: center; gap: 10px; margin: 0 20px 14px; padding: 12px 14px; border: 1px solid #fde68a; border-left: 3px solid #f59e0b; border-radius: 10px; background: #fffbeb; color: #92400e; font-size: 13px; font-weight: 600; }
+.dash-low-callout > span { flex: 1; min-width: 0; }
+.dash-low-table-wrap { overflow-x: auto; }
+.dash-low-table { width: 100%; border-collapse: collapse; text-align: left; }
+.dash-low-table thead th { padding: 9px 20px; background: #fbfcfe; border-top: 1px solid var(--ui-border, #e6eaf1); border-bottom: 1px solid var(--ui-border, #e6eaf1); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; white-space: nowrap; }
+.dash-low-table tbody td { padding: 12px 20px; border-bottom: 1px solid #f8fafc; font-size: 13.5px; background: #fef6f6; }
+.dash-low-table tbody tr:last-child td { border-bottom: 0; }
+.dash-low-table a { color: #0f172a; font-weight: 600; text-decoration: none; }
+.dash-low-table a:hover { color: var(--wa-blue, #2547d0); }
+.dash-low-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.dash-low-table .is-low { color: #dc2626; font-weight: 700; }
+.dash-low-table .is-muted { color: #94a3b8; }
+
+/* Recent sales */
+.dash-recent-wrap { overflow-x: auto; }
+.dash-recent-table { width: 100%; min-width: 660px; border-collapse: collapse; text-align: left; }
+.dash-recent-table thead th { padding: 10px 20px; background: #fbfcfe; border-top: 1px solid var(--ui-border, #e6eaf1); border-bottom: 1px solid var(--ui-border, #e6eaf1); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; white-space: nowrap; }
+.dash-recent-table tbody td { padding: 13px 20px; border-bottom: 1px solid #f1f5f9; font-size: 13.5px; color: #0f172a; vertical-align: middle; }
+.dash-recent-table tbody tr:last-child td { border-bottom: 0; }
+.dash-recent-table tbody tr:hover { background: #fbfcfe; }
+.dash-recent-table .is-num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dash-recent-table .is-muted { color: #64748b; }
+.dash-recent-table .is-actions { width: 48px; text-align: right; }
+/* S/N only ever shows 1-5, so it takes the least width the content needs. Scoped to this table
+   rather than reusing `.ui-sn`, whose right alignment and muted colour belong to the paginated
+   lists; here the column sits flush with the card's own padding. */
+.dash-recent-table .dash-sn { width: 1%; white-space: nowrap; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.dash-recent-table thead th.dash-sn { color: #94a3b8; }
+.dash-customer { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.dash-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%; background: #eef2ff; color: var(--wa-blue, #2547d0); font-size: 11px; font-weight: 700; }
+.dash-avatar.is-walk-in { background: #f1f5f9; color: #64748b; }
+.dash-row-action { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: #94a3b8; }
+.dash-row-action:hover { background: #f1f5f9; color: #0f172a; }
+
+/* ── Navbar search ───────────────────────────────────────────────────────── */
+.topbar-search { position: relative; flex: 0 1 300px; min-width: 0; }
+.topbar-search-field { position: relative; display: block; }
+.topbar-search-field > svg { position: absolute; top: 50%; left: 13px; transform: translateY(-50%); color: #94a3b8; pointer-events: none; }
+/* Matches the layout-wide input rule's specificity (0,4,1) so the icon gutter survives. */
+.inventra-content .topbar-search .topbar-search-field > input:not([type=hidden]),
+.topbar-search .topbar-search-field > input:not([type=hidden]) { width: 100%; height: 40px; min-height: 40px; padding: 0 14px 0 38px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; color: #0f172a; font: inherit; font-size: 13.5px; }
+.topbar-search-field > input:focus { outline: 0; border-color: var(--wa-blue, #2547d0); box-shadow: 0 0 0 3px #2547d01f; }
+.topbar-search-field > input::-webkit-search-cancel-button { display: none; }
+
+.topbar-search-panel { position: absolute; z-index: 60; top: calc(100% + 8px); right: 0; width: min(330px, calc(100vw - 32px)); padding: 6px; border: 1px solid #e7ecf3; border-radius: 12px; background: #fff; box-shadow: 0 16px 34px -10px #0f172a29, 0 2px 6px #0f172a0f; }
+.topbar-search-note { padding: 14px; font-size: 13px; color: #64748b; text-align: center; }
+.topbar-result { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 9px; color: #0f172a; text-decoration: none; }
+.topbar-result:hover, .topbar-result.is-active { background: #f5f8ff; }
+.topbar-result-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 50%; background: #eef2ff; color: var(--wa-blue, #2547d0); font-size: 11.5px; font-weight: 700; }
+.topbar-result-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.topbar-result-body strong { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-result-body small { font-size: 12px; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-result-stock { font-size: 12px; font-weight: 600; white-space: nowrap; flex: none; }
+.topbar-result-stock.is-in { color: #16a34a; }
+.topbar-result-stock.is-out { color: #dc2626; }
+.topbar-result.is-create { gap: 9px; color: var(--wa-blue, #2547d0); font-size: 13px; font-weight: 600; border-top: 1px solid #f1f5f9; margin-top: 4px; padding-top: 11px; border-radius: 0 0 9px 9px; }
+.topbar-search-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 5px; padding: 22px 16px 18px; }
+.topbar-search-empty-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #f1f5f9; color: #94a3b8; margin-bottom: 4px; }
+.topbar-search-empty strong { font-size: 14px; font-weight: 700; color: #0f172a; }
+.topbar-search-empty p { font-size: 12.5px; color: #64748b; }
+.topbar-search-empty .dash-button { margin-top: 10px; }
+
+/* ── Notification dropdown ───────────────────────────────────────────────── */
+.topbar-notifications { position: relative; flex: none; }
+.topbar-notification-panel { position: absolute; z-index: 60; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 32px)); padding: 4px; border: 1px solid #e7ecf3; border-radius: 12px; background: #fff; box-shadow: 0 16px 34px -10px #0f172a29, 0 2px 6px #0f172a0f; }
+.topbar-notification-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px 10px; border-bottom: 1px solid #f1f5f9; }
+.topbar-notification-head strong { font-size: 14.5px; font-weight: 700; }
+.topbar-notification { display: flex; align-items: flex-start; gap: 11px; padding: 11px 14px; color: #0f172a; text-decoration: none; border-bottom: 1px solid #f8fafc; }
+.topbar-notification:hover { background: #fbfcfe; }
+.topbar-notification.is-unread { background: #fbfcff; }
+.topbar-notification-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 9px; background: #f1f5f9; color: #475569; }
+.topbar-notification-icon.is-critical { background: #fee2e2; color: #b91c1c; }
+.topbar-notification-icon.is-attention { background: #fef3c7; color: #b45309; }
+.topbar-notification-icon.is-information { background: #eef2ff; color: #2547d0; }
+.topbar-notification-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.topbar-notification-body strong { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.topbar-notification-body small { font-size: 11.5px; color: #94a3b8; }
+.topbar-notification-dot { width: 7px; height: 7px; flex: none; margin-top: 6px; border-radius: 50%; background: var(--wa-blue, #2547d0); }
+.topbar-notification-all { display: block; padding: 12px; text-align: center; font-size: 13px; font-weight: 600; color: var(--wa-blue, #2547d0); text-decoration: none; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 1180px) {
+    .dash-split { grid-template-columns: 1fr; }
+}
+@media (max-width: 1000px) {
+    .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .topbar-search { flex-basis: 220px; }
+}
+@media (max-width: 720px) {
+    .dash-kpis { grid-template-columns: 1fr; }
+    .dash-card-head { flex-wrap: wrap; }
+    .dash-low-callout { flex-wrap: wrap; }
+    /* A grid child defaults to min-content width, which the chart's own columns push past the
+       viewport. `min-width: 0` lets the card shrink to its track instead. */
+    .dash-split > *, .dash-card { min-width: 0; }
+    .dash-revenue, .dash-low-stock { min-height: 0; }
+    .dash-chart { padding-left: 14px; padding-right: 14px; }
+    .dash-bar { max-width: 56px; }
+    /* The search box takes its own row so Record Sale is never pushed off screen. The shell's
+       `.inventra-top-actions { flex: none }` would otherwise forbid wrapping, and its mobile rule
+       hides every icon button — which would take the notification bell with it. Both are
+       overridden here rather than edited in the shared layout rules. */
+    .inventra-topbar { height: auto; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
+    .inventra-top-actions { flex: 1 1 100%; flex-wrap: wrap; }
+    .inventra-top-actions .topbar-notifications .inventra-icon-button { display: inline-flex; }
+    .topbar-search { flex: 1 1 100%; order: 3; }
+    .topbar-search-panel, .topbar-notification-panel { width: min(360px, calc(100vw - 24px)); }
+    /* The recent-sales table scrolls inside its own wrapper rather than squeezing every column
+       until the amounts are unreadable. */
+    .dash-recent-wrap { -webkit-overflow-scrolling: touch; }
+    .dash-recent-table { min-width: 600px; }
+    .dash-low-table { min-width: 420px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dash-bar { transition: none; }
+}
+.topbar-search-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+.topbar-search-empty-actions .dash-button { margin-top: 0; }
+
+/* ── WhatsApp logs ──────────────────────────────────────────────────────────
+   Scoped under `.wl-*`; nothing here reaches another screen. Where a rule must beat the
+   layout-wide `.inventra-content :is(input:not(…):not(…):not(…), select, textarea)` (0,4,1) it
+   matches that weight deliberately rather than fighting it with !important. */
+.wl-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.wl-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.wl-page.has-panel { grid-template-columns: minmax(0, 1fr) 380px; }
+.wl-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.wl-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.wl-head h1 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; color: #0f172a; }
+.wl-viewonly { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 12px; font-weight: 600; line-height: 1; }
+.wl-viewonly > svg { flex: none; }
+
+/* Summary cards */
+.wl-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.wl-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; }
+.wl-card p { font-size: 12px; color: #64748b; line-height: 1.3; }
+.wl-card strong { font-size: 21px; font-weight: 700; letter-spacing: -.02em; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.wl-card strong.is-green { color: #16a34a; }
+.wl-card strong.is-amber { color: #b45309; }
+.wl-card strong.is-red { color: #dc2626; }
+
+/* Filters
+   One height and one radius across the row, and the chevron is drawn by us rather than by the
+   browser: a native select arrow sits at a different offset in every engine, which is what made the
+   three controls look misaligned. `appearance: none` removes it and the caret below replaces it at
+   a fixed distance from the right edge, so all three line up exactly. */
+/* A touch more room either side of the filter strip than the 12px column gap, which is how the
+   reference separates the three bands without a divider. */
+.wl-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0; }
+.wl-search { position: relative; display: flex; align-items: center; flex: 1 1 320px; max-width: 460px; min-width: 0; }
+.wl-search > svg { position: absolute; left: 12px; color: #94a3b8; pointer-events: none; }
+/* Doubled class so the icon gutter survives the layout-wide input rule, which also sets padding. */
+.inventra-content .wl-search.wl-search > input:not([type=hidden]) { width: 100%; height: 36px; min-height: 36px; padding: 0 12px 0 34px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 8px; background: #fff; color: #0f172a; font: inherit; font-size: 13px; }
+.wl-search > input::placeholder { color: #94a3b8; }
+.wl-search > input:focus { outline: 0; border-color: var(--wa-blue, #2547d0); box-shadow: 0 0 0 3px #2547d01f; }
+.wl-search > input::-webkit-search-cancel-button { display: none; }
+
+/* The shared dropdown indicator for every select on this page — the three filters and the
+   rows-per-page control in the table footer. A rotated-border caret renders as a heavy V, because a
+   9px square turns into a ~12.7px diagonal; this is a drawn chevron instead, so its 6.5px width and
+   1.4px stroke are exactly what they say. Declared once here and referenced by both rules below, so
+   the four controls cannot drift apart. */
+.wl-page {
+    --wl-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' fill='none' stroke='%2394a3b8' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l3 3 3-3'/%3E%3C/svg%3E");
+    --wl-chevron-size: 6.5px 4.0625px;
+    --wl-chevron-inset: 11px;
+}
+
+.wl-select { position: relative; display: flex; align-items: center; flex: none; }
+.wl-select > svg { position: absolute; left: 11px; color: #94a3b8; pointer-events: none; }
+/* Painted on the select itself rather than on a pseudo-element: a background image cannot take
+   pointer events, sits in the control's own box so it is centred on the real height whatever the
+   selected text, and stays put through focus because nothing about it is state-dependent. */
+.inventra-content .wl-select.wl-select > select:not([type=hidden]) { height: 36px; min-height: 36px; padding: 0 28px 0 11px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 8px; background-color: #fff; background-image: var(--wl-chevron); background-repeat: no-repeat; background-position: right var(--wl-chevron-inset) center; background-size: var(--wl-chevron-size); color: #334155; font: inherit; font-size: 13px; appearance: none; -webkit-appearance: none; }
+/* `:has()` is unreliable through the bundler's rewriting here, so the icon variant carries its own
+   class and the gutter is stated on it directly. */
+.inventra-content .wl-select.has-icon > select:not([type=hidden]) { padding-left: 33px; }
+.wl-select > select:focus { outline: 0; border-color: var(--wa-blue, #2547d0); box-shadow: 0 0 0 3px #2547d01f; }
+/* The selected Failed filter carries its state, as the design shows. Only the surface changes:
+   `background-color`, never the shorthand, so the chevron image and its placement survive. */
+.wl-select.is-failed > select { border-color: #fecaca; background-color: #fef2f2; color: #b91c1c; font-weight: 600; }
+
+/* Rows per page. The footer is a shared component, so its own rule stays as every other list needs
+   it and only this page's copy is restyled — matched by descending from `.wl-page`. It reserved a
+   28px gutter for the browser's native arrow without drawing anything, which is what made it read
+   as a different control from the filters; the native arrow goes and the same chevron takes its
+   place at the same inset. The class is doubled to clear the layout-wide
+   `.inventra-content :is(input:not(...), select, textarea)` rule, which is specificity (0,4,1)
+   because `:is()` takes its most specific argument and would otherwise reset this padding. */
+.inventra-content .wl-page .ui-per-page.ui-per-page select:not([type=hidden]) { padding-right: 28px; background-image: var(--wl-chevron); background-repeat: no-repeat; background-position: right var(--wl-chevron-inset) center; background-size: var(--wl-chevron-size); appearance: none; -webkit-appearance: none; }
+
+/* Table */
+.wl-table-card { border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; overflow: hidden; }
+.wl-table-wrap { overflow-x: auto; }
+.wl-table { width: 100%; min-width: 640px; border-collapse: collapse; text-align: left; }
+.wl-table thead th { padding: 9px 16px; background: #fbfcfe; border-bottom: 1px solid var(--ui-border, #e6eaf1); font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; white-space: nowrap; }
+.wl-table tbody td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #0f172a; vertical-align: middle; }
+.wl-table tbody tr:last-child td { border-bottom: 0; }
+.wl-table tbody tr:hover { background: #fbfcfe; }
+.wl-table .is-muted { color: #64748b; }
+.wl-name { font-weight: 600; }
+.wl-phone { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Very pale, as the design has it: enough to group the row, never enough to shout. */
+.wl-table tbody tr.is-failed { background: #fef7f7; }
+.wl-table tbody tr.is-failed:hover { background: #fef2f2; }
+.wl-table tbody tr.is-open { background: #f5f8ff; }
+/* Kept compact so an empty log does not leave a tall blank card in a dense layout. */
+.wl-empty { padding: 30px 16px; text-align: center; }
+
+.wl-status { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.wl-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: currentColor; }
+.wl-status.is-delivered { color: #16a34a; }
+.wl-status.is-pending { color: #b45309; }
+.wl-status.is-failed { color: #dc2626; }
+
+.wl-open-cell { width: 46px; text-align: right; }
+.wl-open { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: #94a3b8; }
+.wl-open:hover { background: #f1f5f9; color: #0f172a; }
+.wl-open:focus-visible { outline: 2px solid var(--wa-blue, #2547d0); outline-offset: 1px; }
+
+.wl-helper { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: #64748b; line-height: 1.5; }
+.wl-helper > svg { flex: none; margin-top: 1px; color: #94a3b8; }
+
+/* Detail panel */
+.wl-panel { position: sticky; top: 16px; display: flex; flex-direction: column; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 14px; background: #fff; overflow: hidden; }
+.wl-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--ui-border, #e6eaf1); }
+.wl-panel-head h2 { font-size: 15px; font-weight: 700; color: #0f172a; }
+.wl-panel-close { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 8px; color: #64748b; }
+.wl-panel-close:hover { background: #f8fafc; color: #0f172a; }
+.wl-panel-body { display: flex; flex-direction: column; gap: 18px; padding: 18px; }
+
+.wl-panel-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: #64748b; }
+.wl-badge { display: inline-flex; align-items: center; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.wl-badge.is-delivered { background: #dcfce7; color: #15803d; }
+.wl-badge.is-pending { background: #fef3c7; color: #b45309; }
+.wl-badge.is-failed { background: #fee2e2; color: #b91c1c; }
+
+.wl-section { display: flex; flex-direction: column; gap: 9px; }
+.wl-section-label { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+.wl-recipient { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.wl-avatar { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 50%; background: #eef2ff; color: var(--wa-blue, #2547d0); font-size: 13px; font-weight: 700; }
+.wl-recipient-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wl-recipient-body strong { font-size: 14px; font-weight: 600; color: #0f172a; }
+.wl-recipient-body small { font-size: 12.5px; color: #64748b; }
+
+/* The sent text, wrapped as written: newlines preserved without rendering markup. */
+.wl-body { padding: 13px 15px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 11px; background: #f8fafc; color: #334155; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.wl-failure { display: flex; flex-direction: column; gap: 5px; padding: 13px 15px; border: 1px solid #fecaca; border-radius: 11px; background: #fef2f2; }
+.wl-failure-title { font-size: 13px; font-weight: 700; color: #b91c1c; }
+.wl-failure-body { font-size: 12.5px; color: #dc2626; line-height: 1.55; overflow-wrap: anywhere; }
+
+.wl-note { padding: 11px 14px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #f8fafc; font-size: 12.5px; color: #64748b; }
+
+.wl-received { display: flex; align-items: flex-start; gap: 10px; padding: 13px 15px; border: 1px solid #a7f3d0; border-radius: 11px; background: #f0fdf4; color: #16a34a; }
+.wl-received > svg { flex: none; margin-top: 1px; }
+.wl-received-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.wl-received-body strong { font-size: 13.5px; font-weight: 700; color: #065f46; }
+.wl-received-body small { font-size: 12.5px; color: #047857; line-height: 1.5; }
+
+.wl-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 10px; background: #fff; color: #334155; font: inherit; font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.wl-action:hover { background: #f8fafc; }
+.wl-action.is-primary { border-color: var(--wa-blue, #2547d0); background: var(--wa-blue, #2547d0); color: #fff; }
+.wl-action.is-primary:hover { background: #1e3bb0; }
+.wl-action:disabled { opacity: .55; cursor: not-allowed; }
+
+@media (max-width: 1180px) {
+    /* The panel drops below the table rather than squeezing both. */
+    .wl-page.has-panel { grid-template-columns: minmax(0, 1fr); }
+    .wl-panel { position: static; }
+}
+@media (max-width: 900px) {
+    .wl-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+    .wl-cards { grid-template-columns: 1fr; }
+    /* Each control takes its own row rather than being squeezed; the caret stays put because it is
+       positioned against the control, not the text. */
+    .wl-filters > * { flex: 1 1 100%; max-width: none; }
+    .wl-select { display: flex; }
+    .inventra-content .wl-select.wl-select > select:not([type=hidden]) { width: 100%; }
 }

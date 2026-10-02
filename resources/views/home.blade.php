@@ -47,7 +47,7 @@
             {{-- COMMENTED OUT: Sign in removed from the navbar.
             <a href="{{ route('login') }}" class="home-nav-signin">Sign in</a>
             --}}
-            <a href="{{ route('login') }}" class="home-btn home-btn-primary home-btn-sm">Get started</a>
+            <a href="{{ route('register') }}" class="home-btn home-btn-primary home-btn-sm">Get started</a>
         </div>
     </div>
 
@@ -62,7 +62,7 @@
             <a href="#features">Features</a>
             <div class="home-mobile-actions">
                 <a href="{{ route('login') }}" class="home-btn home-btn-ghost">Sign in</a>
-                <a href="{{ route('login') }}" class="home-btn home-btn-primary">Get started</a>
+                <a href="{{ route('register') }}" class="home-btn home-btn-primary">Get started</a>
             </div>
         </nav>
     </div>
@@ -77,7 +77,7 @@
             <h1 id="hero-title">Run your business with clarity.<span>From stock to sale.</span></h1>
             <p>Inventory, sales, customers, expenses and business insights — connected in one simple workspace built for growing businesses.</p>
             <div class="home-hero-ctas">
-                <a href="{{ route('login') }}" class="home-btn home-btn-primary">
+                <a href="{{ route('register') }}" class="home-btn home-btn-primary">
                     Get started
                     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </a>

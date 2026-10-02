@@ -12,16 +12,27 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Tests\Concerns\UnwindsTenancyMigrations;
 use Tests\TestCase;
 
 class ExpenseMigrationTest extends TestCase
 {
-    use DatabaseMigrations;
+    use DatabaseMigrations, UnwindsTenancyMigrations;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These tests run migration down() and up() directly, so the live connection is re-proven first.
+        static::assertSafeTestDatabase(DB::connection());
+    }
 
     public function test_empty_tables_can_roll_back_and_reapply(): void
     {
         $migration = $this->migration();
         $hardening = $this->hardeningMigration();
+        // Tenancy was layered onto the expense tables later, so it is unwound around the base.
+        $this->unwindTenancyFrom('2026_09_29_070000_add_business_ownership_to_parties');
         try {
             $hardening->down();
             $migration->down();
@@ -30,6 +41,7 @@ class ExpenseMigrationTest extends TestCase
         } finally {
             $migration->up();
             $hardening->up();
+            $this->restoreTenancyFrom('2026_09_29_070000_add_business_ownership_to_parties');
         }
     }
 

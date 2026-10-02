@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Enums\PaymentMethod;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 class SaleRefund extends Model
 {
+    use ScopedToCurrentBusiness;
+
     protected $guarded = ['*'];
 
     protected static function booted(): void

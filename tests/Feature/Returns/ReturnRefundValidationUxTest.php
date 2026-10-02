@@ -367,7 +367,7 @@ class ReturnRefundValidationUxTest extends TestCase
             'payment_status' => bccomp($paid, '100000.00', 2) === 0 ? PaymentStatus::Paid : ($paid === '0.00' ? PaymentStatus::Unpaid : PaymentStatus::Partial),
         ]);
         $item = new SaleItem;
-        foreach (['sale_id' => $sale->id, 'product_id' => $product->id, 'product_sku_snapshot' => $product->sku,
+        foreach (['business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id, 'product_sku_snapshot' => $product->sku,
             'product_name_snapshot' => $product->name, 'unit_snapshot' => $product->unit->value, 'quantity' => '2.000',
             'unit_price' => '50000.00', 'line_total' => '100000.00', 'created_at' => now()] as $key => $value) {
             $item->$key = $value;
@@ -375,7 +375,7 @@ class ReturnRefundValidationUxTest extends TestCase
         $item->save();
         if (bccomp($paid, '0.00', 2) > 0) {
             $payment = new SalePayment;
-            foreach (['payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'sale_id' => $sale->id,
+            foreach (['payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'business_id' => $sale->business_id, 'sale_id' => $sale->id,
                 'customer_id' => $sale->customer_id, 'amount' => $paid, 'payment_method' => PaymentMethod::Cash,
                 'payment_type' => SalePaymentType::Initial, 'recorded_by' => $actor->id,
                 'recorded_by_name_snapshot' => $actor->name, 'paid_at' => now(), 'cumulative_paid_after' => $paid,

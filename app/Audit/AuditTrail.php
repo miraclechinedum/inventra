@@ -42,7 +42,7 @@ class AuditTrail
     /** Actors that have actually recorded events, labelled from the live User where it still exists. */
     public function actorOptions(): Collection
     {
-        return User::query()
+        return User::query()->inCurrentBusiness()
             ->whereIn('id', AuditLog::query()->whereNotNull('actor_id')->distinct()->select('actor_id'))
             ->orderBy('name')
             ->limit(200)

@@ -80,7 +80,7 @@ class AlertConcurrencyTest extends TestCase
 
         // A competitor's row already occupies the dedupe key, written outside the projector.
         DB::table('operational_alerts')->insert([
-            'type' => OperationalAlertType::InventoryLowStock->value, 'severity' => 'warning', 'status' => 'active',
+            'business_id' => $product->business_id, 'type' => OperationalAlertType::InventoryLowStock->value, 'severity' => 'warning', 'status' => 'active',
             'subject_type' => 'product', 'subject_id' => $product->id,
             'subject_label_snapshot' => 'racer', 'title' => 'racer', 'message' => 'racer',
             'active_key' => $key, 'occurrence' => 1,
@@ -334,7 +334,9 @@ class AlertConcurrencyTest extends TestCase
         DB::getEventDispatcher()->forget(QueryExecuted::class);
 
         $this->assertCount(PerPage::DEFAULT, $response->viewData('notifications')->items(), 'The page must stay bounded');
-        $this->assertLessThanOrEqual(8, $queries, "Index issued {$queries} queries over 5,000 alerts");
+        // 10 = the page's own 8, plus the constant per-request Business lookup made by tenant
+        // resolution, plus the constant subscription lookup behind the layout's commercial banner.
+        $this->assertLessThanOrEqual(10, $queries, "Index issued {$queries} queries over 5,000 alerts");
         $this->assertSame('99+', app(UnreadAlertCount::class)->badge($admin));
     }
 
@@ -355,7 +357,7 @@ class AlertConcurrencyTest extends TestCase
 
         for ($i = 0; $i < $count; $i++) {
             $rows[] = [
-                'type' => 'inventory_low_stock', 'severity' => 'warning', 'status' => 'active',
+                'business_id' => $user->business_id, 'type' => 'inventory_low_stock', 'severity' => 'warning', 'status' => 'active',
                 'subject_type' => 'product', 'subject_id' => $i + 1,
                 'subject_label_snapshot' => 'Bulk '.$i, 'title' => 'Bulk alert '.$i, 'message' => 'Bulk message '.$i,
                 'active_key' => 'bulk:'.$i, 'occurrence' => 1,
@@ -368,7 +370,7 @@ class AlertConcurrencyTest extends TestCase
         }
 
         $recipients = DB::table('operational_alerts')->pluck('id')->map(fn ($id): array => [
-            'operational_alert_id' => $id, 'user_id' => $user->id, 'created_at' => $now, 'updated_at' => $now,
+            'business_id' => $user->business_id, 'operational_alert_id' => $id, 'user_id' => $user->id, 'created_at' => $now, 'updated_at' => $now,
         ])->all();
 
         foreach (array_chunk($recipients, 500) as $chunk) {

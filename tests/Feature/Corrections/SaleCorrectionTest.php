@@ -8,7 +8,7 @@ use App\Actions\Sale\RecordSaleRefund;
 use App\Actions\Sale\RecordSaleReturn;
 use App\Actions\Sale\RequestSaleDiscount;
 use App\Actions\Sale\VoidSale;
-use App\Contracts\WhatsAppClient;
+use App\Contracts\WhatsAppConnectionProvider;
 use App\Enums\InventoryMovementType;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
@@ -34,7 +34,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
-use Tests\Fakes\FakeWhatsAppClient;
+use Tests\Fakes\FakeWhatsAppProvider;
 use Tests\TestCase;
 
 /**
@@ -51,14 +51,14 @@ class SaleCorrectionTest extends TestCase
 {
     use RefreshDatabase;
 
-    private FakeWhatsAppClient $client;
+    private FakeWhatsAppProvider $client;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->client = new FakeWhatsAppClient;
+        $this->client = new FakeWhatsAppProvider;
         $this->client->configured = false;
-        $this->app->instance(WhatsAppClient::class, $this->client);
+        $this->app->instance(WhatsAppConnectionProvider::class, $this->client);
     }
 
     private function user(UserRole $role): User
@@ -96,7 +96,7 @@ class SaleCorrectionTest extends TestCase
 
         $item = new SaleItem;
         foreach ([
-            'sale_id' => $sale->id, 'product_id' => $product->id,
+            'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id,
             'product_sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name,
             'unit_snapshot' => $product->unit->value, 'quantity' => $quantity,
             'unit_price' => '5000.00', 'line_total' => $total, 'created_at' => now(),
@@ -110,7 +110,7 @@ class SaleCorrectionTest extends TestCase
         $product->save();
         $movement = new InventoryMovement;
         foreach ([
-            'product_id' => $product->id, 'type' => InventoryMovementType::Sale,
+            'business_id' => $product->business_id, 'product_id' => $product->id, 'type' => InventoryMovementType::Sale,
             'quantity_change' => bcsub('0', $quantity, 3), 'quantity_before' => '100.000',
             'quantity_after' => $product->current_stock, 'reference_type' => $sale->getMorphClass(),
             'reference_id' => $sale->id, 'performed_by' => $seller->id,
@@ -122,7 +122,7 @@ class SaleCorrectionTest extends TestCase
         if (bccomp($paid, '0.00', 2) > 0) {
             $payment = new SalePayment;
             foreach ([
-                'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'sale_id' => $sale->id,
+                'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'business_id' => $sale->business_id, 'sale_id' => $sale->id,
                 'customer_id' => $customer->id, 'amount' => $paid,
                 'payment_method' => PaymentMethod::Cash,
                 'payment_type' => SalePaymentType::Initial,
@@ -730,8 +730,9 @@ class SaleCorrectionTest extends TestCase
 
         // The return form renders the corrected lines only.
         $form = $this->actingAs($admin)->get(route('sales.returns.create', $sale))->assertOk()->getContent();
-        $this->assertStringContainsString('Original 4.000', $form);
-        $this->assertStringNotContainsString('Original 10.000', $form);
+        // Quantities display trimmed on the return form too.
+        $this->assertStringContainsString('Original 4 ', $form);
+        $this->assertStringNotContainsString('Original 10 ', $form);
     }
 
     public function test_18_the_discount_workflow_still_works_on_a_corrected_sale(): void
@@ -766,8 +767,9 @@ class SaleCorrectionTest extends TestCase
 
         $after = $this->actingAs($admin)->get(route('sales.receipt', $sale))->assertOk()->getContent();
         $this->assertStringContainsString('10,000.00', $after, 'the receipt must show the corrected total');
-        $this->assertStringContainsString('2.000', $after, 'and the corrected quantity');
-        $this->assertStringNotContainsString('>10.000<', $after, 'the superseded line must not appear');
+        // Receipts display quantities trimmed: "2", not "2.000".
+        $this->assertStringContainsString('>2 ', $after, 'and the corrected quantity');
+        $this->assertStringNotContainsString('>10 ', $after, 'the superseded line must not appear');
         $this->assertStringContainsString('supersedes any receipt issued earlier', $after);
         $this->assertStringContainsString('data-print-trigger', $after, 'printing still works');
     }

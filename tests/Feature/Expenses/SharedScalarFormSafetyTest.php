@@ -52,6 +52,7 @@ class SharedScalarFormSafetyTest extends TestCase
     private function createCategory(User $actor): ExpenseCategory
     {
         $category = new ExpenseCategory;
+        $category->business_id = $actor->business_id;
         $category->category_code = 'EXPCAT-999999';
         $category->name = 'Existing';
         $category->is_active = true;

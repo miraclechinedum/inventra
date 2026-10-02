@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\ProductUnit;
+use App\Models\Business;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
@@ -14,7 +15,9 @@ class ProductFactory extends Factory
     public function definition(): array
     {
         return [
-            'category_id' => ProductCategory::factory(),
+            'business_id' => fn (): int => BusinessFactory::installationId(),
+            // The category comes from the product's own Business: the composite key refuses any other.
+            'category_id' => fn (array $attributes) => ProductCategory::factory()->state(['business_id' => $attributes['business_id']]),
             'name' => fake()->words(3, true),
             'sku' => strtoupper(fake()->unique()->bothify('SKU-####-??')),
             'description' => fake()->optional()->sentence(),
@@ -24,7 +27,12 @@ class ProductFactory extends Factory
             'reorder_level' => '5.000',
             'unit' => ProductUnit::Piece,
             'is_active' => true,
-            'created_by' => User::factory(),
+            'created_by' => fn (array $attributes) => User::factory()->state(['business_id' => $attributes['business_id']]),
         ];
+    }
+
+    public function forBusiness(Business $business): static
+    {
+        return $this->state(fn (): array => ['business_id' => $business->getKey()]);
     }
 }

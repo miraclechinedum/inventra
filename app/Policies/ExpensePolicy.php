@@ -4,9 +4,12 @@ namespace App\Policies;
 
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Policies\Concerns\DeniesOtherBusinesses;
 
 class ExpensePolicy
 {
+    use DeniesOtherBusinesses;
+
     private function allowed(User $user): bool
     {
         return in_array($user->role, [UserRole::Admin, UserRole::Manager], true);

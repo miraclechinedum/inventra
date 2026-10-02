@@ -116,11 +116,14 @@ class SaleVoidAndSnapshotTest extends TestCase
         $seller->name = 'Sales Rep B';
         $seller->save();
 
+        // The seller is carried by the row's detail payload rather than its own column since the
+        // list redesign. What matters is unchanged: the snapshot taken at sale time survives the
+        // rename, so history does not silently re-attribute itself.
         $this->actingAs($viewer)
             ->get(route('sales.index'))
             ->assertOk()
-            ->assertSee('px-5 py-4">Sales Rep A</td>', false)
-            ->assertDontSee('px-5 py-4">Sales Rep B</td>', false);
+            ->assertSee('Sales Rep A')
+            ->assertDontSee('Sales Rep B');
 
         foreach ([route('sales.show', $sale), route('sales.receipt', $sale)] as $route) {
             $this->get($route)->assertOk()->assertSee('Sales Rep A')->assertDontSee('Sales Rep B');

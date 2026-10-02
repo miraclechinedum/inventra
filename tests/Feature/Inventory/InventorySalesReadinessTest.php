@@ -141,6 +141,7 @@ class InventorySalesReadinessTest extends TestCase
     private function movement(Product $product): InventoryMovement
     {
         $movement = new InventoryMovement;
+        $movement->business_id = $product->business_id;
         $movement->product_id = $product->id;
         $movement->type = InventoryMovementType::Initial;
         $movement->quantity_change = '0';
@@ -154,6 +155,7 @@ class InventorySalesReadinessTest extends TestCase
     private function audit(Product $product): AuditLog
     {
         $audit = new AuditLog;
+        $audit->business_id = $product->business_id;
         $audit->action = 'test';
         $audit->auditable_type = $product->getMorphClass();
         $audit->auditable_id = $product->id;

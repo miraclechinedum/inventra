@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Actions\WhatsAppAutomation\WhatsAppAutomationTriggers;
 use App\Alerts\OperationalAlertEvaluator;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,10 @@ use Throwable;
  */
 class ProductAlertObserver
 {
-    public function __construct(private readonly OperationalAlertEvaluator $evaluator) {}
+    public function __construct(
+        private readonly OperationalAlertEvaluator $evaluator,
+        private readonly WhatsAppAutomationTriggers $whatsapp,
+    ) {}
 
     public function saved(Product $product): void
     {
@@ -40,7 +44,12 @@ class ProductAlertObserver
     {
         DB::afterCommit(function () use ($product): void {
             try {
-                $this->evaluator->evaluateProduct($product->fresh() ?? $product);
+                $fresh = $product->fresh() ?? $product;
+                $this->evaluator->evaluateProduct($fresh);
+                // The WhatsApp low-stock alert rides the same committed write. It opens or closes a
+                // crossing episode itself, so it sends on the crossing rather than on every save
+                // while stock stays low.
+                $this->whatsapp->stockChanged($fresh);
             } catch (Throwable $exception) {
                 // Never re-thrown: the business write already committed and is authoritative.
                 // Bounded, structural detail only. A QueryException message carries the failing

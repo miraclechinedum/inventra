@@ -76,3 +76,54 @@ body { color:var(--inventra-text); }
 
 @import './prototype.css';
 @import './home.css';
+
+/* Public signup: the same viewport-fitted auth shell as sign-in (prototype.css sizes it to the
+   viewport and lets it grow to its content, so only genuinely taller content scrolls). The form
+   column is wider than sign-in's so paired fields can show their icons and full placeholders. */
+.inventra-auth-page .inventra-auth-form-inner:has(.inventra-register-form){width:min(500px,100%);max-width:500px}
+.inventra-auth-page .inventra-register-form{gap:12px}
+.inventra-auth-page .inventra-register-form .inventra-auth-eyebrow{margin:6px 0 0}
+.inventra-auth-switch{margin-top:16px;color:#64748b;font-size:13px;text-align:center}
+.inventra-auth-switch a{color:#1d4ed8;font-weight:600}
+
+/* Dashboard first-run checklist. */
+.dash-setup{margin-bottom:20px}
+.dash-setup-steps{display:grid;gap:10px;margin-top:14px;list-style:none;padding:0}
+.dash-setup-step{display:flex;align-items:center;gap:10px;font-size:14px;color:#0f172a}
+.dash-setup-step a{color:#1d4ed8;font-weight:600}
+.dash-setup-step.is-done{color:#64748b;text-decoration:line-through}
+.dash-setup-mark{display:inline-grid;width:22px;height:22px;place-items:center;border:1.5px solid #cbd5e1;border-radius:50%;font-size:12px;font-weight:700}
+.dash-setup-step.is-done .dash-setup-mark{border-color:#10b981;background:#10b981;color:#fff}
+.dash-setup-optional{border-radius:999px;background:#f1f5f9;padding:2px 8px;color:#64748b;font-size:11px;font-weight:600}
+
+/* Commercial access banner: grace (amber) or read-only (red). */
+.inventra-subscription-banner{margin:0 0 16px;border-radius:12px;background:#fffbeb;padding:12px 16px;color:#92400e;font-size:14px}
+.inventra-subscription-banner.is-restricted{background:#fef2f2;color:#b91c1c}
+.inventra-subscription-banner a{margin-left:6px;font-weight:600;text-decoration:underline}
+
+/* Email verification notice. */
+.inventra-verify-address{margin:4px 0 16px;color:#0f172a;font-size:15px;font-weight:700;word-break:break-all}
+.inventra-verify-correct{margin-top:8px}
+.inventra-verify-correct .inventra-login-form{margin-top:12px}
+
+/* Public signup: paired fields share a row in two equal columns, stacking below 640px. */
+.inventra-auth-page .inventra-register-form .inventra-register-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.inventra-auth-page .inventra-register-form .inventra-register-row>.inventra-login-field{min-width:0}
+@media (max-width:639px){.inventra-auth-page .inventra-register-form .inventra-register-row{grid-template-columns:minmax(0,1fr)}}
+
+/* Public signup on shorter desktop/laptop screens (e.g. 1366x768): its form is longer than
+   sign-in's, so its rhythm tightens slightly — inputs keep their height — rather than scroll.
+   `body.` matches the specificity of prototype.css's own short-height sign-in rules. */
+@media (min-width:1101px) and (max-height:819px){
+body.inventra-auth-page .inventra-register-form{gap:10px}
+body.inventra-auth-page .inventra-auth-slot>.inventra-register-form{margin-top:12px}
+body.inventra-auth-page .inventra-register-form .inventra-login-field{gap:6px}
+body.inventra-auth-page .inventra-register-form .inventra-register-row{gap:10px 12px}
+body.inventra-auth-page .inventra-register-form .inventra-auth-eyebrow{margin-top:2px}
+body.inventra-auth-page .inventra-auth-form-inner:has(.inventra-register-form) .inventra-auth-slot{margin-top:12px}
+body.inventra-auth-page .inventra-auth-form-inner:has(.inventra-register-form) .inventra-auth-switch{margin-top:12px}
+}
+@media (min-width:1101px) and (max-height:739px){
+body.inventra-auth-page .inventra-register-form{gap:8px}
+body.inventra-auth-page .inventra-register-form .inventra-register-row{gap:8px 12px}
+}

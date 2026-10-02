@@ -33,6 +33,21 @@ class ReportCorrectnessTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Release any frozen clock this class set.
+     *
+     * Several tests here pin `Carbon::setTestNow()` to a fixed business date. That pin is process
+     * global and outlives the test that set it, so without this it leaked into whatever ran next —
+     * ReportsDashboardTest then computed "this week" against November while asserting against the
+     * real today, and failed for reasons that had nothing to do with it.
+     */
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
     public function test_deterministic_business_fixture_reconciles_independent_report_metrics_without_double_counting(): void
     {
         [$admin, $seller, $customer, $product, $saleA, $saleB] = $this->scenario();
@@ -43,7 +58,7 @@ class ReportCorrectnessTest extends TestCase
         $this->get(route('reports.receivables'))->assertOk()->assertSee('₦100,000.00')->assertSee($saleA->sale_number)->assertSee($saleB->sale_number)->assertDontSee('inconsistency detected');
         $this->get(route('reports.expenses'))->assertOk()->assertSee('₦10,000.00')->assertSee('Operating electricity')->assertDontSee('PRIVATE EXPENSE NOTE');
         $this->get(route('reports.purchases'))->assertOk()->assertSee('₦40,000.00')->assertSee('Inventory Purchases');
-        $this->get(route('reports.products'))->assertOk()->assertSee('₦150,000.00')->assertSee('3.000')->assertSee('2 transactions')->assertDontSee('Cost')->assertDontSee('Margin');
+        $this->get(route('reports.products'))->assertOk()->assertSee('₦150,000.00')->assertSee('3 sold')->assertSee('2 transactions')->assertDontSee('Cost')->assertDontSee('Margin');
         $this->get(route('reports.customers'))->assertOk()->assertSee('₦150,000.00')->assertSee('Collected ₦50,000.00')->assertSee('Outstanding ₦100,000.00');
         $this->get(route('reports.staff'))->assertOk()->assertSee($seller->name)->assertSee('₦150,000.00')->assertSee('Seller-attributed collections ₦50,000.00');
         $this->get(route('reports.summary'))->assertOk()->assertSee('₦150,000.00')->assertSee('₦50,000.00')->assertSee('₦100,000.00')->assertSee('₦10,000.00')->assertSee('₦40,000.00')->assertDontSee('Profit')->assertDontSee('Net Income');
@@ -74,6 +89,7 @@ class ReportCorrectnessTest extends TestCase
         [$admin, , , $product, $saleA] = $this->scenario();
         foreach ([['sale', '-2.000'], ['sale_void', '2.000'], ['damage', '-1.500'], ['adjustment', '3.250']] as [$type, $change]) {
             $movement = new InventoryMovement;
+            $movement->business_id = $product->business_id;
             $movement->product_id = $product->id;
             $movement->type = InventoryMovementType::from($type);
             $movement->quantity_change = $change;
@@ -228,7 +244,11 @@ class ReportCorrectnessTest extends TestCase
             $paymentIds[] = (int) DB::table('sale_payments')->where('sale_id', $sale->id)->value('id');
         }
 
-        DB::table('sales')->whereIn('id', $saleIds)->update(['created_at' => $stamp, 'updated_at' => $stamp]);
+        // `sale_date` moves with `created_at`: the reports filter on the trading day, so pinning only
+        // the row-write timestamp would place these rows outside the period under test.
+        DB::table('sales')->whereIn('id', $saleIds)->update([
+            'created_at' => $stamp, 'updated_at' => $stamp, 'sale_date' => substr($stamp, 0, 10),
+        ]);
         DB::table('sale_payments')->whereIn('id', $paymentIds)->update(['paid_at' => $stamp]);
 
         return [$saleIds, $paymentIds, $productIds, $customerIds];
@@ -274,6 +294,7 @@ class ReportCorrectnessTest extends TestCase
     private function item(Sale $sale, Product $product, string $quantity, string $total): void
     {
         $item = new SaleItem;
+        $item->business_id = $sale->business_id;
         $item->sale_id = $sale->id;
         $item->product_id = $product->id;
         $item->product_sku_snapshot = $product->sku;
@@ -290,6 +311,7 @@ class ReportCorrectnessTest extends TestCase
     {
         $payment = new SalePayment;
         $payment->payment_number = $number;
+        $payment->business_id = $sale->business_id;
         $payment->sale_id = $sale->id;
         $payment->customer_id = $sale->customer_id;
         $payment->amount = $amount;

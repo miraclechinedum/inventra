@@ -85,6 +85,8 @@ class CustomerManagementTest extends TestCase
         foreach (['phone' => $customer->phone, 'customer_code' => $customer->customer_code] as $column => $value) {
             try {
                 DB::table('customers')->insert([
+                    // The same business, so only the uniqueness under test can reject the row.
+                    'business_id' => $customer->business_id,
                     'customer_code' => $column === 'customer_code' ? $value : 'DIRECT-'.$column,
                     'first_name' => 'Direct',
                     'phone' => $column === 'phone' ? $value : '+2348099999999',
@@ -131,6 +133,60 @@ class CustomerManagementTest extends TestCase
         }
     }
 
+    public function test_changing_the_whatsapp_destination_resets_consent(): void
+    {
+        $customer = $this->consentingCustomer(['phone' => '+2348012345678', 'whatsapp_phone' => null]);
+
+        $this->put(route('customers.update', $customer), $this->payload(['whatsapp_phone' => '0805 555 5555']))->assertRedirect();
+        $customer->refresh();
+        $this->assertSame('+2348055555555', $customer->effectiveWhatsAppPhone());
+        $this->assertConsentReset($customer, 'whatsapp_phone_changed', 1);
+
+        // Returning to "same as phone" moves the destination back, which is a change of its own.
+        $customer->forceFill(['whatsapp_opt_in' => true, 'whatsapp_opt_in_at' => now()])->save();
+        $this->put(route('customers.update', $customer), $this->payload(['whatsapp_same_as_phone' => '1']))->assertRedirect();
+        $customer->refresh();
+        $this->assertNull($customer->whatsapp_phone);
+        $this->assertConsentReset($customer, 'whatsapp_phone_changed', 2);
+    }
+
+    public function test_a_phone_change_still_resets_consent_when_an_alternate_whatsapp_number_is_kept(): void
+    {
+        $customer = $this->consentingCustomer(['phone' => '+2348012345678', 'whatsapp_phone' => '+2348055555555']);
+
+        $this->put(route('customers.update', $customer), $this->payload([
+            'phone' => '08066666666', 'whatsapp_phone' => '08055555555',
+        ]))->assertRedirect();
+
+        $customer->refresh();
+        $this->assertSame('+2348055555555', $customer->effectiveWhatsAppPhone());
+        $this->assertConsentReset($customer, 'phone_changed', 1);
+    }
+
+    public function test_formatting_only_and_unrelated_edits_keep_consent(): void
+    {
+        $customer = $this->consentingCustomer(['phone' => '+2348012345678', 'whatsapp_phone' => '+2348055555555']);
+
+        // The same numbers written differently, plus unrelated profile edits.
+        $this->put(route('customers.update', $customer), $this->payload([
+            'phone' => '0801 234 5678', 'whatsapp_phone' => '+234 805 555 5555', 'first_name' => 'Amara', 'city' => 'Abuja',
+        ]))->assertRedirect();
+
+        $plain = $this->consentingCustomer(['phone' => '+2348077777777', 'whatsapp_phone' => null]);
+        // Typing the ordinary phone into the WhatsApp field is the same destination, not a new one.
+        $this->put(route('customers.update', $plain), $this->payload([
+            'phone' => '08077777777', 'whatsapp_phone' => '08077777777', 'notes' => 'Prefers mornings',
+        ]))->assertRedirect();
+
+        foreach ([$customer, $plain] as $unchanged) {
+            $unchanged->refresh();
+            $this->assertTrue($unchanged->whatsapp_opt_in);
+            $this->assertNotNull($unchanged->whatsapp_opt_in_at);
+            $this->assertSame(0, AuditLog::query()->where('action', 'customer_whatsapp_consent_reset')->where('auditable_id', $unchanged->id)->count());
+        }
+        $this->assertSame('Amara', $customer->fresh()->first_name);
+    }
+
     public function test_phone_change_rolls_back_when_consent_reset_audit_fails(): void
     {
         $customer = Customer::factory()->create([
@@ -166,6 +222,28 @@ class CustomerManagementTest extends TestCase
         $this->assertSame(['city' => 'Lagos'], json_decode($audit->new_values, true));
         $this->assertNull($audit->metadata);
         $this->assertStringNotContainsString('secret', json_encode($audit));
+    }
+
+    private function consentingCustomer(array $attributes): Customer
+    {
+        return Customer::factory()->create(array_merge([
+            'whatsapp_opt_in' => true, 'whatsapp_opt_in_at' => now()->subDay(), 'whatsapp_opt_out_at' => null,
+        ], $attributes));
+    }
+
+    private function assertConsentReset(Customer $customer, string $reason, int $expectedResets): void
+    {
+        $this->assertFalse($customer->whatsapp_opt_in);
+        $this->assertNull($customer->whatsapp_opt_in_at);
+        $this->assertNull($customer->whatsapp_opt_out_at);
+
+        $resets = AuditLog::query()
+            ->where('action', 'customer_whatsapp_consent_reset')
+            ->where('auditable_id', $customer->id)
+            ->orderBy('id')
+            ->get();
+        $this->assertCount($expectedResets, $resets);
+        $this->assertSame(['reason' => $reason], $resets->last()->metadata);
     }
 
     private function payload(array $overrides = []): array

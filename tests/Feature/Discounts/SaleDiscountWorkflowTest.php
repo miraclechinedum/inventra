@@ -80,7 +80,7 @@ class SaleDiscountWorkflowTest extends TestCase
 
         $item = new SaleItem;
         foreach ([
-            'sale_id' => $sale->id, 'product_id' => $product->id,
+            'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id,
             'product_sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name,
             'unit_snapshot' => $product->unit->value, 'quantity' => '2.000',
             'unit_price' => '50000.00', 'line_total' => '100000.00', 'created_at' => now(),
@@ -92,7 +92,7 @@ class SaleDiscountWorkflowTest extends TestCase
         if (bccomp($paid, '0.00', 2) > 0) {
             $payment = new SalePayment;
             foreach ([
-                'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'sale_id' => $sale->id,
+                'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'business_id' => $sale->business_id, 'sale_id' => $sale->id,
                 'customer_id' => $customer->id, 'amount' => $paid,
                 'payment_method' => PaymentMethod::Cash, 'payment_type' => SalePaymentType::Initial,
                 'recorded_by' => $seller->id, 'recorded_by_name_snapshot' => $seller->name,
@@ -199,7 +199,7 @@ class SaleDiscountWorkflowTest extends TestCase
 
         $this->expectException(QueryException::class);
         DB::table('sale_discount_requests')->insert([
-            'sale_id' => $sale->id, 'requested_amount' => '0.00', 'reason' => 'probe',
+            'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'requested_amount' => '0.00', 'reason' => 'probe',
             'status' => 'pending', 'requested_by' => $manager->id,
             'requested_by_name_snapshot' => $manager->name, 'requested_at' => now(),
             'pending_sale_guard' => $sale->id, 'created_at' => now(), 'updated_at' => now(),

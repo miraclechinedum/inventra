@@ -29,7 +29,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Events\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -314,9 +313,7 @@ class ReturnRefundFoundationTest extends TestCase
             $this->assertSame('5000.00', Sale::findOrFail($sale4->id)->refundable_credit);
             $this->assertLedgerState($sale4->id);
         } finally {
-            DB::purge();
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            DB::connection()->beginTransaction();
+            $this->rebuildTestSchema();
         }
     }
 
@@ -692,9 +689,12 @@ class ReturnRefundFoundationTest extends TestCase
         $this->assertSame($returnPage1, $returnPage2);
         $this->assertLessThanOrEqual($smallRefundQueries + 1, $refundPage1);
         $this->assertSame($refundPage1, $refundPage2);
-        $this->assertLessThanOrEqual(6, $this->queryCount(fn () => $this->get(route('returns.show', $returns[0]))->assertOk()));
-        $this->assertLessThanOrEqual(5, $this->queryCount(fn () => $this->get(route('refunds.show', $refunds[0]))->assertOk()));
-        $this->assertLessThanOrEqual(15, $this->queryCount(fn () => $this->get(route('sales.show', $sale))->assertOk()));
+        // Each detail ceiling includes the one constant per-request Business lookup made by tenant resolution.
+        // Each budget includes one constant per-request lookup: the Business's subscription, behind
+        // the layout's commercial banner.
+        $this->assertLessThanOrEqual(8, $this->queryCount(fn () => $this->get(route('returns.show', $returns[0]))->assertOk()));
+        $this->assertLessThanOrEqual(7, $this->queryCount(fn () => $this->get(route('refunds.show', $refunds[0]))->assertOk()));
+        $this->assertLessThanOrEqual(17, $this->queryCount(fn () => $this->get(route('sales.show', $sale))->assertOk()));
 
         foreach ([['returns.index', 'RET-VOL', 50], ['refunds.index', 'REF-VOL', 35]] as [$routeName, $search, $total]) {
             $seen = [];
@@ -867,13 +867,13 @@ class ReturnRefundFoundationTest extends TestCase
         $product = Product::factory()->create(['current_stock' => '10.000']);
         $sale = Sale::factory()->create(['subtotal' => '100000.00', 'total_amount' => '100000.00', 'amount_paid' => $paid, 'balance_due' => bcsub('100000.00', $paid, 2), 'payment_status' => $paid === '0.00' ? PaymentStatus::Unpaid : ($paid === '100000.00' ? PaymentStatus::Paid : PaymentStatus::Partial)]);
         $item = new SaleItem;
-        foreach (['sale_id' => $sale->id, 'product_id' => $product->id, 'product_sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name, 'unit_snapshot' => $product->unit->value, 'quantity' => '2.000', 'unit_price' => '50000.00', 'line_total' => '100000.00', 'created_at' => now()] as $key => $value) {
+        foreach (['business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id, 'product_sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name, 'unit_snapshot' => $product->unit->value, 'quantity' => '2.000', 'unit_price' => '50000.00', 'line_total' => '100000.00', 'created_at' => now()] as $key => $value) {
             $item->$key = $value;
         }
         $item->save();
         if (bccomp($paid, '0.00', 2) > 0) {
             $payment = new SalePayment;
-            foreach (['payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'amount' => $paid, 'payment_method' => PaymentMethod::Cash, 'payment_type' => SalePaymentType::Initial, 'recorded_by' => $actor->id, 'recorded_by_name_snapshot' => $actor->name, 'paid_at' => now(), 'cumulative_paid_after' => $paid, 'balance_after' => bcsub('100000.00', $paid, 2), 'payment_status_after' => $sale->payment_status, 'initial_sale_guard' => $sale->id] as $key => $value) {
+            foreach (['payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'amount' => $paid, 'payment_method' => PaymentMethod::Cash, 'payment_type' => SalePaymentType::Initial, 'recorded_by' => $actor->id, 'recorded_by_name_snapshot' => $actor->name, 'paid_at' => now(), 'cumulative_paid_after' => $paid, 'balance_after' => bcsub('100000.00', $paid, 2), 'payment_status_after' => $sale->payment_status, 'initial_sale_guard' => $sale->id] as $key => $value) {
                 $payment->$key = $value;
             }
             $payment->save();
@@ -988,13 +988,13 @@ class ReturnRefundFoundationTest extends TestCase
         $returns = [];
         for ($index = 1; $index <= 50; $index++) {
             $return = new SaleReturn;
-            foreach (['return_number' => sprintf('RET-VOL-%03d', $index), 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'returned_by' => $actor->id, 'returned_by_name_snapshot' => $actor->name, 'merchandise_value' => '2.00', 'receivable_reduction' => '2.00', 'refundable_credit_created' => '0.00', 'reason' => 'Volume evidence', 'returned_at' => now()->subSeconds(51 - $index)] as $key => $value) {
+            foreach (['return_number' => sprintf('RET-VOL-%03d', $index), 'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'returned_by' => $actor->id, 'returned_by_name_snapshot' => $actor->name, 'merchandise_value' => '2.00', 'receivable_reduction' => '2.00', 'refundable_credit_created' => '0.00', 'reason' => 'Volume evidence', 'returned_at' => now()->subSeconds(51 - $index)] as $key => $value) {
                 $return->$key = $value;
             }
             $return->save();
             foreach ($items as $item) {
                 $line = new SaleReturnItem;
-                foreach (['sale_return_id' => $return->id, 'sale_item_id' => $item->id, 'product_id' => $item->product_id, 'product_sku_snapshot' => $item->product_sku_snapshot, 'product_name_snapshot' => $item->product_name_snapshot, 'unit_snapshot' => $item->unit_snapshot, 'quantity_returned' => '0.001', 'original_unit_price' => '1000.00', 'return_line_value' => '1.00', 'disposition' => 'non_restock', 'created_at' => now()] as $key => $value) {
+                foreach (['business_id' => $return->business_id, 'sale_return_id' => $return->id, 'sale_item_id' => $item->id, 'product_id' => $item->product_id, 'product_sku_snapshot' => $item->product_sku_snapshot, 'product_name_snapshot' => $item->product_name_snapshot, 'unit_snapshot' => $item->unit_snapshot, 'quantity_returned' => '0.001', 'original_unit_price' => '1000.00', 'return_line_value' => '1.00', 'disposition' => 'non_restock', 'created_at' => now()] as $key => $value) {
                     $line->$key = $value;
                 }
                 $line->save();
@@ -1004,7 +1004,7 @@ class ReturnRefundFoundationTest extends TestCase
         $refunds = [];
         for ($index = 1; $index <= 35; $index++) {
             $refund = new SaleRefund;
-            foreach (['refund_number' => sprintf('REF-VOL-%03d', $index), 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'amount' => '1.00', 'payment_method' => 'cash', 'reason' => 'Volume evidence', 'refunded_by' => $actor->id, 'refunded_by_name_snapshot' => $actor->name, 'refunded_at' => now()->subSeconds(36 - $index)] as $key => $value) {
+            foreach (['refund_number' => sprintf('REF-VOL-%03d', $index), 'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'amount' => '1.00', 'payment_method' => 'cash', 'reason' => 'Volume evidence', 'refunded_by' => $actor->id, 'refunded_by_name_snapshot' => $actor->name, 'refunded_at' => now()->subSeconds(36 - $index)] as $key => $value) {
                 $refund->$key = $value;
             }
             $refund->save();

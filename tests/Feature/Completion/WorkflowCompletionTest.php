@@ -3,14 +3,13 @@
 namespace Tests\Feature\Completion;
 
 use App\Actions\Sale\CreateSale;
-use App\Contracts\WhatsAppClient;
 use App\Enums\UserRole;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Tests\Fakes\FakeWhatsAppClient;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class WorkflowCompletionTest extends TestCase
@@ -83,7 +82,7 @@ class WorkflowCompletionTest extends TestCase
         $result = $this->withCredentials()->getJson(route('sales.create', ['product_search' => 'Zulu']));
         $result->assertOk()->assertJsonCount(1, 'products')->assertJsonPath('products.0.id', $b->id);
         $this->assertSame(['id', 'label'], array_keys($result->json('products.0')));
-        $draft = ['customer_id' => $customer->id, 'products' => [['product_id' => $a->id, 'quantity' => '2'], ['product_id' => $b->id, 'quantity' => '1']], 'payment_method' => 'transfer', 'amount_paid' => '50.00', 'notes' => 'Keep this draft'];
+        $draft = ['is_walk_in' => '0', 'sale_date' => now(config('business.timezone'))->toDateString(), 'customer_id' => $customer->id, 'products' => [['product_id' => $a->id, 'quantity' => '2'], ['product_id' => $b->id, 'quantity' => '1']], 'payment_method' => 'transfer', 'amount_paid' => '50.00', 'notes' => 'Keep this draft'];
         $url = route('sales.create', ['product_search' => 'Zulu']);
         $this->from($url)->post(route('sales.store'), $draft)->assertRedirect($url)->assertSessionHasErrors('amount_paid');
         $this->get($url)->assertOk()->assertViewHas('errors', fn ($errors) => $errors->has('amount_paid'))->assertSee('Amount paid cannot exceed the sale total.')->assertSee('Keep this draft')->assertSee('Alpha')->assertSee('Zulu Beta');
@@ -108,7 +107,7 @@ class WorkflowCompletionTest extends TestCase
         Product::factory()->create(['name' => 'Search inactive', 'is_active' => false]);
         $this->actingAs($actor)->withCredentials()->getJson(route('sales.create', ['product_search' => 'Search']))
             ->assertOk()->assertJsonCount(1, 'products')->assertJsonPath('products.0.id', $product->id);
-        $payload = ['customer_id' => $customer->id, 'products' => [['product_id' => $product->id, 'quantity' => '1']], 'payment_method' => 'cash', 'amount_paid' => '0'];
+        $payload = ['is_walk_in' => '0', 'sale_date' => now(config('business.timezone'))->toDateString(), 'customer_id' => $customer->id, 'products' => [['product_id' => $product->id, 'quantity' => '1']], 'payment_method' => 'cash', 'amount_paid' => '0'];
         $forged = $payload;
         $forged['products'][0]['unit_price'] = '0.01';
         $this->post(route('sales.store'), $forged)->assertSessionHasErrors('products.0.unit_price');
@@ -134,7 +133,7 @@ class WorkflowCompletionTest extends TestCase
         $actor = User::factory()->create(['role' => UserRole::Admin]);
         $customer = Customer::factory()->create();
         $product = Product::factory()->create(['selling_price' => '100.00', 'current_stock' => '5.000']);
-        $sale = app(CreateSale::class)->execute($actor, ['customer_id' => $customer->id, 'products' => [['product_id' => $product->id, 'quantity' => '1']], 'payment_method' => 'cash', 'amount_paid' => '0', 'notes' => 'PRIVATE SALE NOTE']);
+        $sale = app(CreateSale::class)->execute($actor, ['is_walk_in' => false, 'sale_date' => now(config('business.timezone'))->toDateString(), 'customer_id' => $customer->id, 'products' => [['product_id' => $product->id, 'quantity' => '1']], 'payment_method' => 'cash', 'amount_paid' => '0', 'notes' => 'PRIVATE SALE NOTE']);
         $url = route('sales.show', $sale);
         $this->actingAs($actor);
         $token = $this->get($url)->viewData('paymentToken');
@@ -156,19 +155,23 @@ class WorkflowCompletionTest extends TestCase
         $this->assertSame(1, $sale->payments()->count());
     }
 
-    public function test_whatsapp_validation_is_visible_without_sending(): void
+    /**
+     * The old manual WhatsApp receipt flow is gone from the Sale screen.
+     *
+     * It was replaced by the WhatsApp Automation module, and leaving the old send control in place
+     * would mean two systems able to message the same customer about the same sale.
+     */
+    public function test_the_old_whatsapp_receipt_controls_are_no_longer_exposed(): void
     {
-        $client = new FakeWhatsAppClient;
-        $client->configured = false;
-        $this->app->instance(WhatsAppClient::class, $client);
         $actor = User::factory()->create(['role' => UserRole::Admin]);
         $sale = Sale::factory()->create(['sold_by' => $actor->id]);
-        $url = route('sales.show', $sale);
-        $this->actingAs($actor);
-        $token = $this->get($url)->viewData('whatsappSendToken');
-        $this->from($url)->post(route('sales.whatsapp.send', $sale), ['request_token' => $token])->assertSessionHasErrors('whatsapp');
-        $this->get($url)->assertSee('WhatsApp receipt delivery is not configured.')->assertSee('role="alert"', false);
-        $this->assertCount(0, $client->requests);
-        $this->assertSame(0, $sale->whatsappDeliveries()->count());
+
+        $html = $this->actingAs($actor)->get(route('sales.show', $sale))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('WhatsApp receipt delivery', $html);
+        $this->assertStringNotContainsString('Send receipt via WhatsApp', $html);
+        // And the routes that served it no longer exist.
+        $this->assertFalse(Route::has('sales.whatsapp.send'));
+        $this->assertFalse(Route::has('whatsapp.deliveries.index'));
     }
 }

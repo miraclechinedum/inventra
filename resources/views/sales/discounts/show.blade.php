@@ -1,18 +1,24 @@
 @php
+    // A pre-sale request has no Sale yet — it carries a draft cart instead. Everything about a Sale
+    // below is therefore conditional, not null-coalesced: there is no Sale position to show before
+    // the sale is recorded, and pretending otherwise with zeroes would misreport it.
     $sale = $discountRequest->sale;
+    $draft = $discountRequest->draft;
+    $buyer = $sale?->customer_name_snapshot
+        ?? ($draft?->is_walk_in ? \App\Models\Sale::WALK_IN_NAME : $draft?->customer?->full_name);
     $pending = $discountRequest->status === \App\Enums\DiscountRequestStatus::Pending;
 @endphp
 <x-app-layout :title="'Discount request '.$discountRequest->id">
     <x-validation-errors />
-    <a href="{{ auth()->user()->can('viewAny', \App\Models\SaleDiscountRequest::class) ? route('discounts.index') : route('sales.show', $sale) }}" class="text-sm font-semibold text-[#0b56c9]">← {{ auth()->user()->can('viewAny', \App\Models\SaleDiscountRequest::class) ? 'Discount approvals' : 'Sale' }}</a>
+    <a href="{{ auth()->user()->can('viewAny', \App\Models\SaleDiscountRequest::class) || $sale === null ? route('discounts.index') : route('sales.show', $sale) }}" class="text-sm font-semibold text-[#0b56c9]">← {{ auth()->user()->can('viewAny', \App\Models\SaleDiscountRequest::class) ? 'Discount approvals' : 'Sale' }}</a>
     <div class="mt-3 flex flex-wrap items-center gap-3"><h1 class="text-3xl font-bold">Discount request {{ $discountRequest->id }}</h1><span class="rounded-full px-3 py-1 text-xs font-semibold {{ $pending ? 'bg-amber-100 text-amber-900' : ($discountRequest->status === \App\Enums\DiscountRequestStatus::Approved ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700') }}">{{ $discountRequest->status->label() }}</span></div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-3">
         <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
             <h2 class="text-lg font-bold">Request</h2>
             <dl class="mt-5 grid gap-5 sm:grid-cols-2">
-                <div><dt class="text-xs uppercase text-slate-500">Sale</dt><dd class="mt-1 font-semibold"><a class="text-[#0b56c9]" href="{{ route('sales.show', $sale) }}">{{ $sale->sale_number }}</a></dd></div>
-                <div><dt class="text-xs uppercase text-slate-500">Customer</dt><dd class="mt-1 font-semibold">{{ $sale->customer_name_snapshot }}</dd></div>
+                <div><dt class="text-xs uppercase text-slate-500">Sale</dt><dd class="mt-1 font-semibold">@if($sale)<a class="text-[#0b56c9]" href="{{ route('sales.show', $sale) }}">{{ $sale->sale_number }}</a>@else<span class="text-slate-600">Requested before the sale was recorded</span>@endif</dd></div>
+                <div><dt class="text-xs uppercase text-slate-500">Customer</dt><dd class="mt-1 font-semibold">{{ $buyer }}</dd></div>
                 <div><dt class="text-xs uppercase text-slate-500">Discount requested</dt><dd class="mt-1 text-xl font-bold">&#8358;{{ \App\Support\Money::format($discountRequest->requested_amount) }}</dd></div>
                 <div><dt class="text-xs uppercase text-slate-500">Requested by</dt><dd class="mt-1">{{ $discountRequest->requested_by_name_snapshot }} · {{ $discountRequest->requested_at->format('M j, Y g:i A') }}</dd></div>
             </dl>
@@ -20,7 +26,12 @@
             @if($discountRequest->status->isDecided())
                 <div class="mt-6 border-t pt-5"><p class="text-xs uppercase text-slate-500">Decision</p><p class="mt-2 font-semibold">{{ $discountRequest->status->label() }} by {{ $discountRequest->decided_by_name_snapshot }} on {{ $discountRequest->decided_at->format('M j, Y g:i A') }}</p>@if($discountRequest->decision_note)<p class="mt-2 text-slate-700">{{ $discountRequest->decision_note }}</p>@endif</div>
             @endif
-            @if($discountRequest->status === \App\Enums\DiscountRequestStatus::Approved)
+            @if($discountRequest->status === \App\Enums\DiscountRequestStatus::Approved && $sale === null)
+                <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p class="font-bold text-emerald-900">Approved for a cart not yet recorded</p>
+                    <p class="mt-2 text-sm text-emerald-900">&#8358;{{ \App\Support\Money::format($discountRequest->requested_amount) }} off a subtotal of &#8358;{{ \App\Support\Money::format($draft?->subtotal_snapshot ?? '0') }}. It applies only when this exact cart, buyer and sale date are recorded, and only once.</p>
+                </div>
+            @elseif($discountRequest->status === \App\Enums\DiscountRequestStatus::Approved)
                 <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                     <p class="font-bold text-emerald-900">Effect on the Sale, as recorded at approval</p>
                     <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
@@ -35,6 +46,7 @@
         </section>
 
         <div class="space-y-6">
+            @if($sale)
             <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 class="font-bold">Sale position now</h2>
                 <dl class="mt-4 space-y-3 text-sm">
@@ -46,12 +58,13 @@
                     <div class="flex justify-between"><dt class="text-slate-500">Refundable credit</dt><dd class="font-semibold">&#8358;{{ \App\Support\Money::format($sale->refundable_credit) }}</dd></div>
                 </dl>
             </section>
+            @endif
 
             @if($pending)
                 @can('approve', $discountRequest)
                     <section class="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
                         <h2 class="font-bold">Approve</h2>
-                        <p class="mt-1 text-sm text-slate-600">This reduces the Sale total by &#8358;{{ \App\Support\Money::format($discountRequest->requested_amount) }} and recalculates the balance. Recorded payments are left exactly as they are.</p>
+                        <p class="mt-1 text-sm text-slate-600">@if($sale)This reduces the Sale total by &#8358;{{ \App\Support\Money::format($discountRequest->requested_amount) }} and recalculates the balance. Recorded payments are left exactly as they are.@else This authorises &#8358;{{ \App\Support\Money::format($discountRequest->requested_amount) }} off this cart when it is recorded. Nothing is sold, charged or moved in stock until then.@endif</p>
                         <form method="POST" action="{{ route('discounts.approve', $discountRequest) }}" data-submit-once data-confirm-message="Approve this discount and reconcile the Sale?" class="mt-4 space-y-3">
                             @csrf
                             <textarea aria-label="Approval note" name="decision_note" maxlength="500" placeholder="Note (optional)" class="w-full rounded-lg border border-slate-300 p-3">{{ \App\Support\OldInput::scalar('decision_note') }}</textarea>

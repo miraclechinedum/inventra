@@ -146,7 +146,8 @@ class OperationalAlertEvaluator
             ));
         }
 
-        $this->projector->resolveMissing(OperationalAlertType::DataIntegrityWarning, 'sale', $mismatched);
+        // Only this Business's sales were compared, so only their warnings may be resolved.
+        $this->projector->resolveMissing(OperationalAlertType::DataIntegrityWarning, 'sale', $mismatched, Sale::query());
     }
 
     private function quantity(string $value): string

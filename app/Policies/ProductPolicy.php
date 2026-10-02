@@ -5,10 +5,13 @@ namespace App\Policies;
 use App\Enums\UserRole;
 use App\Models\Product;
 use App\Models\User;
+use App\Policies\Concerns\DeniesOtherBusinesses;
 use App\Support\ProductDeletionGuard;
 
 class ProductPolicy
 {
+    use DeniesOtherBusinesses;
+
     public function viewAny(User $user): bool
     {
         return true;

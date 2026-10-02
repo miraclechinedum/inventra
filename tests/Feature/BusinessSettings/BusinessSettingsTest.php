@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use App\Settings\BusinessSettings;
 use App\Support\WhatsAppReceiptTemplate;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,30 +26,34 @@ class BusinessSettingsTest extends TestCase
 
     private const FINGERPRINTED = ['business_settings', 'audit_logs', 'security_events', 'users'];
 
-    /* ------------------------------------------------------------ singleton & bootstrap */
+    /* ------------------------------------------------------ ownership & bootstrap */
 
-    public function test_migration_bootstraps_exactly_one_settings_record(): void
+    public function test_migration_bootstraps_one_business_owning_the_one_settings_record(): void
     {
+        $this->assertSame(1, DB::table('businesses')->count());
         $this->assertSame(1, DB::table('business_settings')->count());
+        $business = DB::table('businesses')->firstOrFail();
         $row = DB::table('business_settings')->firstOrFail();
-        $this->assertSame(BusinessSetting::SINGLETON_KEY, $row->singleton_key);
+        $this->assertSame($business->id, $row->business_id);
+        $this->assertSame($row->business_name, $business->name, 'The first Business is named from its own settings');
+        $this->assertSame('active', $business->status);
         $this->assertNotSame('', trim($row->business_name));
         $this->assertNull($row->updated_by);
     }
 
-    public function test_the_database_refuses_a_second_settings_record_by_any_path(): void
+    public function test_the_database_refuses_a_second_settings_record_for_a_business_by_any_path(): void
     {
         $existing = DB::table('business_settings')->firstOrFail();
 
         $attempts = [
-            'duplicate singleton key' => fn () => DB::table('business_settings')->insert([
-                'singleton_key' => BusinessSetting::SINGLETON_KEY, 'business_name' => 'Second',
+            'duplicate business' => fn () => DB::table('business_settings')->insert([
+                'business_id' => $existing->business_id, 'business_name' => 'Second',
                 'created_at' => now(), 'updated_at' => now()]),
-            'different singleton key' => fn () => DB::table('business_settings')->insert([
-                'singleton_key' => 'other', 'business_name' => 'Second',
+            'no business' => fn () => DB::table('business_settings')->insert([
+                'business_id' => null, 'business_name' => 'Second',
                 'created_at' => now(), 'updated_at' => now()]),
-            'null singleton key' => fn () => DB::table('business_settings')->insert([
-                'singleton_key' => null, 'business_name' => 'Second',
+            'unknown business' => fn () => DB::table('business_settings')->insert([
+                'business_id' => 999999, 'business_name' => 'Second',
                 'created_at' => now(), 'updated_at' => now()]),
             'blank business name' => fn () => DB::table('business_settings')
                 ->where('id', $existing->id)->update(['business_name' => '   ']),
@@ -67,12 +72,14 @@ class BusinessSettingsTest extends TestCase
         $this->assertEquals($existing, DB::table('business_settings')->firstOrFail());
     }
 
-    public function test_concurrent_creation_attempts_cannot_produce_a_second_record(): void
+    public function test_concurrent_creation_attempts_cannot_produce_a_second_record_for_a_business(): void
     {
+        $businessId = DB::table('business_settings')->value('business_id');
+
         foreach (range(1, 5) as $attempt) {
             try {
                 BusinessSetting::query()->insert([
-                    'singleton_key' => BusinessSetting::SINGLETON_KEY,
+                    'business_id' => $businessId,
                     'business_name' => "Racer {$attempt}", 'created_at' => now(), 'updated_at' => now()]);
             } catch (Throwable) {
                 // expected
@@ -90,11 +97,11 @@ class BusinessSettingsTest extends TestCase
         DB::table('business_settings')->delete();
 
         try {
-            app(BusinessSettings::class)->current();
+            app(BusinessSettings::class)->for($admin->business_id);
             $this->fail('A missing settings record must fail explicitly.');
         } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('not installed', $exception->getMessage());
-            $this->assertStringContainsString('migrate', $exception->getMessage());
+            $this->assertStringContainsString('no business settings record', $exception->getMessage());
+            $this->assertStringContainsString('incomplete', $exception->getMessage());
         }
 
         $this->assertSame(0, DB::table('business_settings')->count(),
@@ -115,6 +122,7 @@ class BusinessSettingsTest extends TestCase
     public function test_repeated_reads_in_one_request_cost_a_single_query(): void
     {
         $admin = $this->admin();
+        app(CurrentBusiness::class)->set($admin->business);
         $settings = app(BusinessSettings::class);
 
         $count = 0;
@@ -128,7 +136,7 @@ class BusinessSettingsTest extends TestCase
         }
         DB::getEventDispatcher()->forget(QueryExecuted::class);
 
-        $this->assertSame(1, $count, 'The singleton read must be memoised for the request');
+        $this->assertSame(1, $count, 'The settings read must be memoised for the request');
     }
 
     /* ------------------------------------------------------------------ authorization */
@@ -147,7 +155,9 @@ class BusinessSettingsTest extends TestCase
         }
 
         $admin = $this->admin();
-        $this->actingAs($admin)->get(route('settings.business.edit'))->assertOk()->assertSee('Business settings');
+        // The screen was rebuilt to the Figma and is titled "Business profile"; the route, the
+        // policy and the update contract it guards are unchanged.
+        $this->actingAs($admin)->get(route('settings.business.edit'))->assertOk()->assertSee('Business profile');
         $this->actingAs($admin)->put(route('settings.business.update'), $payload)
             ->assertRedirect(route('settings.business.edit'));
 
@@ -181,11 +191,11 @@ class BusinessSettingsTest extends TestCase
         $this->assertSame(1, substr_count($html, 'name="business_name"'));
         $this->assertMatchesRegularExpression('/name="business_name"[^>]*required|required[^>]*name="business_name"/', $html);
 
-        // Nothing was left behind as an empty column or a placeholder control in the Identity card.
-        $identity = (string) preg_replace('/.*<h3[^>]*>Identity<\/h3>(.*?)<div class="rounded-2xl.*/s', '$1', $html);
-        $this->assertSame(1, substr_count($identity, '<input'), 'Identity holds exactly one control');
-        $this->assertStringNotContainsString('disabled', $identity);
-        $this->assertStringNotContainsString('hidden', $identity);
+        // Nothing was left behind as a disabled or hidden placeholder where the retired field sat.
+        // The old "Identity card" probe went with the Figma rebuild; what it protected is asserted
+        // above (one business-name input, still required) and here: no inert leftover control.
+        $this->assertStringNotContainsString('<input type="hidden" name="legal_name"', $html);
+        $this->assertStringNotContainsString('name="legal_name"', $html);
     }
 
     public function test_the_form_submits_without_a_legal_name_and_persists_every_retained_setting(): void
@@ -193,10 +203,16 @@ class BusinessSettingsTest extends TestCase
         $admin = $this->admin();
         $before = DB::table('business_settings')->firstOrFail();
 
+        // Email, city and state left the SCREEN, not the database. Seeded directly because the
+        // form can no longer submit them, then asserted untouched by the save below.
+        $this->seedHiddenColumns([
+            'business_email' => 'hello@adaeze.example', 'city' => 'Onitsha', 'state' => 'Anambra',
+        ]);
+
         $payload = [
             'business_name' => 'Adaeze Stores', 'business_phone' => '08031234567',
-            'business_email' => 'hello@adaeze.example', 'business_address' => '12 Market Road',
-            'city' => 'Onitsha', 'state' => 'Anambra', 'receipt_footer' => 'Thank you for your business.',
+            'business_address' => '12 Market Road',
+            'receipt_footer' => 'Thank you for your business.', 'currency' => 'NGN',
         ];
         $this->assertArrayNotHasKey('legal_name', $payload, 'The browser no longer submits this field');
 
@@ -221,18 +237,29 @@ class BusinessSettingsTest extends TestCase
         $this->assertSame('business_settings_updated', $log->action);
         $this->assertSame($admin->name, $log->actor_name_snapshot);
         $this->assertSame(UserRole::Admin->value, $log->actor_role_snapshot);
-        foreach (['business_name', 'business_phone', 'business_email', 'business_address', 'city', 'state', 'receipt_footer'] as $field) {
+        foreach (['business_name', 'business_phone', 'business_address', 'receipt_footer'] as $field) {
             $this->assertArrayHasKey($field, $log->new_values, "{$field} must still be audited");
+        }
+        // The hidden columns were not part of the submission, so they are not part of the diff —
+        // and, asserted above, not part of the write either.
+        foreach (BusinessSetting::PRESERVED_NOT_EDITABLE as $field) {
+            $this->assertArrayNotHasKey($field, $log->new_values, "{$field} is no longer submitted");
         }
         $this->assertSame($before->business_name, $log->old_values['business_name']);
         $this->assertSame('Adaeze Stores', $log->new_values['business_name']);
         $this->assertArrayNotHasKey('legal_name', $log->old_values);
         $this->assertArrayNotHasKey('legal_name', $log->new_values);
 
-        // Reloading shows the saved values.
+        // Reloading shows the saved values the screen owns.
         $reloaded = $this->actingAs($admin)->get(route('settings.business.edit'))->assertOk()->getContent();
-        foreach (['Adaeze Stores', '+2348031234567', 'hello@adaeze.example', '12 Market Road', 'Onitsha', 'Anambra'] as $value) {
+        foreach (['Adaeze Stores', '+2348031234567', '12 Market Road'] as $value) {
             $this->assertStringContainsString($value, $reloaded, "{$value} must survive a reload");
+        }
+
+        // The hidden columns are absent from the page but intact in the record: removed from the
+        // screen, not from the database.
+        foreach (['hello@adaeze.example', 'Onitsha', 'Anambra'] as $hidden) {
+            $this->assertStringNotContainsString($hidden, $reloaded, "{$hidden} is no longer rendered");
         }
     }
 
@@ -265,7 +292,7 @@ class BusinessSettingsTest extends TestCase
 
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
             'business_name' => 'Adaeze Stores', 'business_phone' => '08031234567',
-            'business_address' => '12 Market Road', 'city' => 'Onitsha', 'state' => 'Anambra',
+            'business_address' => '12 Market Road',
         ]))->assertSessionHasNoErrors();
 
         foreach ($this->receiptUrls($admin) as $label => $url) {
@@ -288,7 +315,6 @@ class BusinessSettingsTest extends TestCase
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
             'business_name' => 'Adaeze Stores',
             'business_phone' => '08031234567',
-            'business_email' => 'hello@adaeze.example',
             'receipt_footer' => "Thank you for your business.\nGoods sold in good condition.",
         ]))->assertRedirect()->assertSessionHas('status', 'Business settings updated.');
 
@@ -369,8 +395,8 @@ class BusinessSettingsTest extends TestCase
         $auditRows = DB::table('audit_logs')->count();
 
         $this->actingAs($admin)->put(route('settings.business.update'),
-            $this->payload(['business_name' => '', 'business_email' => 'not-an-email']))
-            ->assertSessionHasErrors(['business_name', 'business_email']);
+            $this->payload(['business_name' => '']))
+            ->assertSessionHasErrors(['business_name']);
 
         $this->assertEquals($before, DB::table('business_settings')->firstOrFail());
         $this->assertSame($auditRows, DB::table('audit_logs')->count());
@@ -404,9 +430,12 @@ class BusinessSettingsTest extends TestCase
         $admin = $this->admin();
         $before = DB::table('business_settings')->firstOrFail();
 
-        $prohibited = ['id' => 999, 'singleton_key' => 'hijacked', 'created_at' => '2000-01-01 00:00:00',
+        // `currency` is no longer here: it became a real, allowlisted profile field. It is still
+        // not free text — an unsupported code is refused — which
+        // test_an_unsupported_currency_code_is_refused asserts directly.
+        $prohibited = ['id' => 999, 'business_id' => 999, 'singleton_key' => 'hijacked', 'created_at' => '2000-01-01 00:00:00',
             'updated_at' => '2000-01-01 00:00:00', 'updated_by' => 999,
-            'currency' => 'USD', 'currency_code' => 'USD', 'currency_symbol' => '$', 'timezone' => 'America/New_York'];
+            'currency_code' => 'USD', 'currency_symbol' => '$', 'timezone' => 'America/New_York'];
 
         foreach ($prohibited as $field => $value) {
             $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([$field => $value]))
@@ -431,7 +460,7 @@ class BusinessSettingsTest extends TestCase
 
         $after = DB::table('business_settings')->firstOrFail();
         $this->assertSame($before->id, $after->id);
-        $this->assertSame(BusinessSetting::SINGLETON_KEY, $after->singleton_key);
+        $this->assertSame($before->business_id, $after->business_id);
         $this->assertSame($before->created_at, $after->created_at);
     }
 
@@ -469,7 +498,7 @@ class BusinessSettingsTest extends TestCase
         }
 
         $this->assertSame(1, DB::table('business_settings')->count());
-        $this->assertSame($before->singleton_key, DB::table('business_settings')->value('singleton_key'));
+        $this->assertSame($before->business_id, DB::table('business_settings')->value('business_id'));
     }
 
     public function test_boundary_lengths_and_unicode_are_accepted_and_stored_intact(): void
@@ -495,13 +524,15 @@ class BusinessSettingsTest extends TestCase
     {
         $admin = $this->admin();
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
-            'business_name' => '   Trimmed Stores   ', 'state' => '   ', 'city' => '  Lagos  ',
+            'business_name' => '   Trimmed Stores   ',
+            'tax_number' => '   ', 'business_address' => '  12 Market Road  ',
         ]))->assertSessionHasNoErrors();
 
         $row = DB::table('business_settings')->firstOrFail();
         $this->assertSame('Trimmed Stores', $row->business_name);
-        $this->assertNull($row->state);
-        $this->assertSame('Lagos', $row->city);
+        // A blank optional becomes an explicit null rather than an empty string.
+        $this->assertNull($row->tax_number);
+        $this->assertSame('12 Market Road', $row->business_address);
     }
 
     /* -------------------------------------------------------------------------- XSS */
@@ -511,7 +542,7 @@ class BusinessSettingsTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
             'business_name' => '<script>alert(1)</script>',
-            'city' => '<img src=x onerror=alert(2)>',
+            'tax_number' => '<img src=x onerror=alert(2)>',
             'business_address' => '"><svg onload=alert(3)>',
             'receipt_footer' => '<script>alert(4)</script>',
         ]))->assertSessionHasNoErrors();
@@ -537,8 +568,8 @@ class BusinessSettingsTest extends TestCase
         $admin = $this->admin();
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
             'business_name' => 'Adaeze Stores',
-            'business_phone' => '08031234567', 'business_email' => 'hello@adaeze.example',
-            'business_address' => '12 Market Road', 'city' => 'Onitsha', 'state' => 'Anambra',
+            'business_phone' => '08031234567',
+            'business_address' => '12 Market Road',
             'receipt_footer' => 'Thank you for your business.',
         ]))->assertSessionHasNoErrors();
 
@@ -618,19 +649,26 @@ class BusinessSettingsTest extends TestCase
         $this->assertNull($log->new_values['receipt_footer'], 'The cleared value must be exactly null');
     }
 
-    public function test_clearing_the_state_records_an_explicit_null(): void
+    /**
+     * Clearing an optional field records an explicit null.
+     *
+     * Asserted on `tax_number` since the Business profile stopped editing state. The property under
+     * test is unchanged and is the point: a cleared field must be audited as a deliberate null, not
+     * omitted as though nothing happened.
+     */
+    public function test_clearing_an_optional_field_records_an_explicit_null(): void
     {
         $admin = $this->admin();
-        $this->seedSettings($admin, ['state' => 'Anambra']);
+        $this->seedSettings($admin, ['tax_number' => '0123456-0001']);
 
-        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['state' => '']))
+        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload(['tax_number' => '']))
             ->assertRedirect();
 
-        $this->assertNull(DB::table('business_settings')->value('state'));
+        $this->assertNull(DB::table('business_settings')->value('tax_number'));
 
         $log = $this->latestSettingsAudit();
-        $this->assertSame(['state' => 'Anambra'], $log->old_values);
-        $this->assertSame(['state' => null], $log->new_values);
+        $this->assertSame(['tax_number' => '0123456-0001'], $log->old_values);
+        $this->assertSame(['tax_number' => null], $log->new_values);
     }
 
     public function test_clearing_the_business_phone_records_an_explicit_null(): void
@@ -652,28 +690,33 @@ class BusinessSettingsTest extends TestCase
     {
         $admin = $this->admin();
         $this->seedSettings($admin, [
-            'state' => 'Anambra', 'city' => 'Lagos', 'business_email' => 'old@example.com',
+            'tax_number' => '0123456-0001', 'business_type' => 'Electronics & phones',
+            // Seeded canonically: seedSettings calls the action directly, bypassing the request
+            // where normalisation lives. The HTTP path's normalisation is asserted separately.
+            'manager_alert_number' => '+2348011112222',
             'business_address' => '12 Broad Street', 'receipt_footer' => 'Thank you',
         ]);
 
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
-            'state' => '', 'city' => 'Ibadan', 'business_email' => '',
+            'tax_number' => '', 'business_type' => 'Building materials',
+            'manager_alert_number' => '',
             'business_address' => '12 Broad Street', 'receipt_footer' => 'Thank you',
         ]))->assertRedirect();
 
         $log = $this->latestSettingsAudit();
 
         // MySQL normalises JSON object key order, so compare membership and values, not order.
-        $this->assertEqualsCanonicalizing(['state', 'business_email', 'city'], array_keys($log->old_values));
-        $this->assertEqualsCanonicalizing(['state', 'business_email', 'city'], array_keys($log->new_values));
+        $expected = ['tax_number', 'manager_alert_number', 'business_type'];
+        $this->assertEqualsCanonicalizing($expected, array_keys($log->old_values));
+        $this->assertEqualsCanonicalizing($expected, array_keys($log->new_values));
 
-        $this->assertSame('Anambra', $log->old_values['state']);
-        $this->assertSame('old@example.com', $log->old_values['business_email']);
-        $this->assertSame('Lagos', $log->old_values['city']);
+        $this->assertSame('0123456-0001', $log->old_values['tax_number']);
+        $this->assertSame('+2348011112222', $log->old_values['manager_alert_number']);
+        $this->assertSame('Electronics & phones', $log->old_values['business_type']);
 
-        $this->assertNull($log->new_values['state'], 'A cleared field must be exactly null');
-        $this->assertNull($log->new_values['business_email'], 'A cleared field must be exactly null');
-        $this->assertSame('Ibadan', $log->new_values['city']);
+        $this->assertNull($log->new_values['tax_number'], 'A cleared field must be exactly null');
+        $this->assertNull($log->new_values['manager_alert_number'], 'A cleared field must be exactly null');
+        $this->assertSame('Building materials', $log->new_values['business_type']);
 
         // Fields the Administrator left alone stay out of the record entirely.
         foreach (['business_address', 'receipt_footer', 'business_name', 'business_phone'] as $untouched) {
@@ -754,6 +797,7 @@ class BusinessSettingsTest extends TestCase
     public function test_the_write_action_invalidates_the_memoised_reader_without_the_controller(): void
     {
         $admin = $this->admin();
+        app(CurrentBusiness::class)->set($admin->business);
         $reader = app(BusinessSettings::class);
         $this->seedSettings($admin, []);
         $reader->forget();
@@ -769,6 +813,7 @@ class BusinessSettingsTest extends TestCase
     public function test_a_rolled_back_write_leaves_the_memoised_reader_intact(): void
     {
         $admin = $this->admin();
+        app(CurrentBusiness::class)->set($admin->business);
         $reader = app(BusinessSettings::class);
         $original = $reader->current()->business_name;
 
@@ -830,10 +875,25 @@ class BusinessSettingsTest extends TestCase
         return User::factory()->create(['role' => UserRole::Admin, 'name' => $name]);
     }
 
-    /** Puts the singleton into a known state through the real write path. */
+    /** Puts the fixture business's settings into a known state through the real write path. */
     private function seedSettings(User $admin, array $values): void
     {
         app(UpdateBusinessSettings::class)->execute($admin, $this->payload($values));
+        app(BusinessSettings::class)->forget();
+    }
+
+    /**
+     * Seeds columns the Business profile no longer edits.
+     *
+     * `business_email`, `city` and `state` still hold data but are absent from EDITABLE and
+     * prohibited by the request, so they can only be placed here directly — which is exactly the
+     * situation these tests need to reproduce: real values that an ordinary save must not disturb.
+     *
+     * @param  array<string, string|null>  $values
+     */
+    private function seedHiddenColumns(array $values): void
+    {
+        DB::table('business_settings')->update($values);
         app(BusinessSettings::class)->forget();
     }
 
@@ -847,8 +907,11 @@ class BusinessSettingsTest extends TestCase
     {
         return array_merge([
             'business_name' => 'Inventra Smart Trade', 'business_phone' => null,
-            'business_email' => null, 'business_address' => null, 'city' => null, 'state' => null,
-            'receipt_footer' => null,
+            'business_address' => null, 'receipt_footer' => null,
+            // The profile form always submits a currency, and the rule is `required` on purpose: a
+            // request that merely omitted it must not be able to quietly reset the business's
+            // configured currency. The helper mirrors the real form.
+            'currency' => 'NGN',
         ], $overrides);
     }
 

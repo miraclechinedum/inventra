@@ -15,6 +15,9 @@
     >
         @csrf
 
+        {{-- The plan's product allowance is refused before anything is created. --}}
+        @error('product')<p class="ui-field-error" role="alert">{{ $message }}</p>@enderror
+
         <div class="ui-form-sheet-head">
             <nav class="ui-form-crumbs" aria-label="Breadcrumb">
                 <a href="{{ route('inventory.index') }}">Inventory</a>

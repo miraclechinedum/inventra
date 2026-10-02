@@ -12,7 +12,6 @@ use App\Models\ExpenseCategory;
 use App\Models\ExpenseRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -81,9 +80,7 @@ class ExpenseConcurrencyTest extends TestCase
             if (file_exists($barrier)) {
                 unlink($barrier);
             }
-            DB::purge();
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            DB::connection()->beginTransaction();
+            $this->rebuildTestSchema();
         }
     }
 }

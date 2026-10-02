@@ -9,6 +9,7 @@ use App\Models\ExpenseRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\ExpenseNumber;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -16,14 +17,19 @@ use Illuminate\Validation\ValidationException;
 
 class RecordExpense
 {
-    public function __construct(private AuditLogger $audit) {}
+    public function __construct(
+        private AuditLogger $audit,
+        private readonly CurrentBusiness $currentBusiness,
+    ) {}
 
     public function execute(User $actor, array $data, string $sessionId): Expense
     {
         Gate::forUser($actor)->authorize('create', Expense::class);
 
-        return DB::transaction(function () use ($actor, $data, $sessionId) {
-            $request = ExpenseRequest::query()->where('token_hash', hash('sha256', $data['request_token']))->lockForUpdate()->first();
+        $business = $this->currentBusiness->forActor($actor);
+
+        return DB::transaction(function () use ($actor, $data, $sessionId, $business) {
+            $request = ExpenseRequest::query()->where('token_hash', hash('sha256', $data['request_token']))->where('business_id', $actor->business_id)->lockForUpdate()->first();
             if (! $request || $request->actor_id !== $actor->id || ! hash_equals($request->session_id, $sessionId)) {
                 throw ValidationException::withMessages(['request_token' => 'This Expense confirmation is invalid.']);
             }
@@ -40,6 +46,7 @@ class RecordExpense
             }
 
             $expense = new Expense;
+            $expense->business_id = $business->getKey();
             $expense->expense_number = 'PENDING-'.Str::random(20);
             $expense->expense_request_id = $request->id;
             $expense->expense_category_id = $category->id;

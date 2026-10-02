@@ -3,8 +3,10 @@
 namespace App\Actions\Sale;
 
 use App\Enums\DiscountRequestStatus;
+use App\Enums\UserRole;
 use App\Models\Sale;
 use App\Models\SaleDiscountRequest;
+use App\Models\SaleDraft;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\Money;
@@ -36,8 +38,12 @@ class DecideSaleDiscount
 
     public function approve(User $actor, SaleDiscountRequest $request, ?string $note = null): SaleDiscountRequest
     {
+        if ($request->sale_draft_id !== null) {
+            return $this->approveDraft($actor, $request, $note);
+        }
+
         return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
-            [$locked, $sale] = $this->lockPending($request);
+            [$locked, $sale] = $this->lockPending($actor, $request);
 
             // Eligibility is re-tested against the Sale as it is now, not as it was when asked.
             if (($blocked = SaleDiscountEligibility::blockedReasonForApproval($sale)) !== null) {
@@ -106,8 +112,12 @@ class DecideSaleDiscount
 
     public function decline(User $actor, SaleDiscountRequest $request, string $note): SaleDiscountRequest
     {
+        if ($request->sale_draft_id !== null) {
+            return $this->declineDraft($actor, $request, $note);
+        }
+
         return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
-            [$locked, $sale] = $this->lockPending($request);
+            [$locked, $sale] = $this->lockPending($actor, $request);
 
             // Declining is purely a status change. Nothing financial is read or written, which is
             // why it stays available even on a Sale that has since become ineligible.
@@ -132,9 +142,101 @@ class DecideSaleDiscount
     }
 
     /**
-     * @return array{0: SaleDiscountRequest, 1: Sale}
+     * Approving a draft request moves no money, because there is no Sale yet. It records permission
+     * to apply an amount to one specific cart; CreateSale is what spends that permission, and only
+     * if the cart it is given still fingerprints the same. The financial-evidence columns stay null
+     * here — there are no before/after figures until a Sale exists — which the relaxed CHECK allows
+     * for draft-backed rows only.
      */
-    private function lockPending(SaleDiscountRequest $request): array
+    private function approveDraft(User $actor, SaleDiscountRequest $request, ?string $note): SaleDiscountRequest
+    {
+        return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
+            [$locked, $draft] = $this->lockPendingDraft($actor, $request);
+
+            $this->assertDraftUnspent($draft);
+
+            $locked->recordDecision([
+                'status' => DiscountRequestStatus::Approved->value,
+                'decided_by' => $actor->id,
+                'decided_by_name_snapshot' => $actor->name,
+                'decided_at' => now(),
+                'decision_note' => $note,
+                'pending_draft_guard' => null,
+            ]);
+
+            $this->audit->record('sale_discount_approved', $locked, $actor, newValues: [
+                'sale_draft_id' => $draft->id,
+                'requested_amount' => $locked->requested_amount,
+                'cart_subtotal' => $draft->subtotal_snapshot,
+                'decision_note' => $note,
+            ]);
+
+            return $locked;
+        });
+    }
+
+    private function declineDraft(User $actor, SaleDiscountRequest $request, string $note): SaleDiscountRequest
+    {
+        return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
+            [$locked, $draft] = $this->lockPendingDraft($actor, $request);
+
+            $locked->recordDecision([
+                'status' => DiscountRequestStatus::Declined->value,
+                'decided_by' => $actor->id,
+                'decided_by_name_snapshot' => $actor->name,
+                'decided_at' => now(),
+                'decision_note' => $note,
+                'pending_draft_guard' => null,
+            ]);
+
+            $this->audit->record('sale_discount_declined', $locked, $actor, newValues: [
+                'sale_draft_id' => $draft->id,
+                'requested_amount' => $locked->requested_amount,
+                'decision_note' => $note,
+            ]);
+
+            return $locked;
+        });
+    }
+
+    private function assertDraftUnspent(SaleDraft $draft): void
+    {
+        if ($draft->isConsumed()) {
+            throw ValidationException::withMessages([
+                'request' => 'This cart has already been recorded as a Sale.',
+            ]);
+        }
+    }
+
+    /**
+     * @return array{0: SaleDiscountRequest, 1: SaleDraft}
+     */
+    /**
+     * The one rule that must hold however the decision is reached: nobody decides their own request,
+     * and only an Administrator decides at all.
+     *
+     * SaleDiscountRequestPolicy says the same thing, and the controller enforces it on every HTTP
+     * route. It is restated here because it is a financial-integrity invariant rather than a screen
+     * concern: a queued job, a console command or a new controller that forgets the Gate would
+     * otherwise let an Administrator quietly grant themselves a discount. Checked under the row lock
+     * taken by the callers below, so a concurrent decision cannot slip past it.
+     */
+    private function assertMayDecide(User $actor, SaleDiscountRequest $locked): void
+    {
+        if ($actor->role !== UserRole::Admin) {
+            throw ValidationException::withMessages([
+                'request' => 'Only an administrator may decide a discount request.',
+            ]);
+        }
+
+        if ($locked->requested_by === $actor->id) {
+            throw ValidationException::withMessages([
+                'request' => 'You cannot decide your own discount request.',
+            ]);
+        }
+    }
+
+    private function lockPendingDraft(User $actor, SaleDiscountRequest $request): array
     {
         $locked = SaleDiscountRequest::query()->lockForUpdate()->findOrFail($request->id);
 
@@ -143,6 +245,26 @@ class DecideSaleDiscount
                 'request' => 'This discount request has already been '.$locked->status->label().'.',
             ]);
         }
+
+        $this->assertMayDecide($actor, $locked);
+
+        return [$locked, SaleDraft::query()->lockForUpdate()->findOrFail($locked->sale_draft_id)];
+    }
+
+    /**
+     * @return array{0: SaleDiscountRequest, 1: Sale}
+     */
+    private function lockPending(User $actor, SaleDiscountRequest $request): array
+    {
+        $locked = SaleDiscountRequest::query()->lockForUpdate()->findOrFail($request->id);
+
+        if ($locked->status !== DiscountRequestStatus::Pending) {
+            throw ValidationException::withMessages([
+                'request' => 'This discount request has already been '.$locked->status->label().'.',
+            ]);
+        }
+
+        $this->assertMayDecide($actor, $locked);
 
         return [$locked, Sale::query()->lockForUpdate()->findOrFail($locked->sale_id)];
     }

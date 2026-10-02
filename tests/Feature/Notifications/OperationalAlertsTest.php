@@ -155,7 +155,7 @@ class OperationalAlertsTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::table('operational_alerts')->insert([
-            'type' => $alert->type->value, 'severity' => 'warning', 'status' => 'active',
+            'business_id' => $alert->business_id, 'type' => $alert->type->value, 'severity' => 'warning', 'status' => 'active',
             'subject_type' => 'product', 'subject_id' => $alert->subject_id,
             'subject_label_snapshot' => 'dup', 'title' => 'dup', 'message' => 'dup',
             'active_key' => $alert->active_key, 'occurrence' => 2,
@@ -177,7 +177,7 @@ class OperationalAlertsTest extends TestCase
         ] as $row) {
             try {
                 DB::table('operational_alerts')->insert(array_merge([
-                    'type' => 'inventory_low_stock', 'severity' => 'warning',
+                    'business_id' => DB::table('businesses')->value('id'), 'type' => 'inventory_low_stock', 'severity' => 'warning',
                     'subject_type' => 'product', 'subject_id' => 1,
                     'subject_label_snapshot' => 'x', 'title' => 'x', 'message' => 'x', 'occurrence' => 1,
                     'first_detected_at' => now(), 'created_at' => now(), 'updated_at' => now(),
@@ -200,7 +200,7 @@ class OperationalAlertsTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::table('operational_alert_recipients')->insert([
-            'operational_alert_id' => $recipient->operational_alert_id,
+            'business_id' => $recipient->business_id, 'operational_alert_id' => $recipient->operational_alert_id,
             'user_id' => $recipient->user_id,
             'created_at' => now(), 'updated_at' => now(),
         ]);

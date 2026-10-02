@@ -23,6 +23,8 @@ class StoreSaleDiscountRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Ownership comes from the acting user and the parent document, never from the form.
+            'business_id' => ['prohibited'],
             'amount' => ['required', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'],
             'reason' => ['required', 'string', 'min:10', 'max:500'],
             // Nobody decides their own request through the create form.

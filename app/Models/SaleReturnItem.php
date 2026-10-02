@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Enums\ReturnDisposition;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 class SaleReturnItem extends Model
 {
+    use ScopedToCurrentBusiness;
+
     public $timestamps = false;
 
     protected $guarded = ['*'];

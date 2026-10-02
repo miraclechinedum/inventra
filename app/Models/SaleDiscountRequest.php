@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Enums\DiscountRequestStatus;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 class SaleDiscountRequest extends Model
 {
+    use ScopedToCurrentBusiness;
+
     protected $guarded = ['*'];
 
     /** Set only by DecideSaleDiscount while it records a decision. */
@@ -27,6 +30,12 @@ class SaleDiscountRequest extends Model
     public function sale(): BelongsTo
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    /** Set on a pre-sale request; null on a post-hoc one, where `sale` is set instead. */
+    public function draft(): BelongsTo
+    {
+        return $this->belongsTo(SaleDraft::class, 'sale_draft_id');
     }
 
     public function requester(): BelongsTo

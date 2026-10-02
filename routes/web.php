@@ -2,18 +2,22 @@
 
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordOnboardingController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\QuickPinOnboardingController;
+use App\Http\Controllers\Auth\RegisteredBusinessController;
 use App\Http\Controllers\BusinessSettingController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\OperationalDashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\ReportController;
@@ -23,8 +27,10 @@ use App\Http\Controllers\SaleDiscountRequestController;
 use App\Http\Controllers\SalePaymentController;
 use App\Http\Controllers\SaleReturnController;
 use App\Http\Controllers\StaffController;
+use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\WhatsAppDeliveryController;
+use App\Http\Controllers\WhatsAppAutomationController;
+use App\Http\Controllers\WhatsAppLogController;
 use App\Http\Controllers\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +42,12 @@ Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle'])
     ->name('webhooks.whatsapp.handle');
 
 Route::middleware('guest')->group(function () {
+    // Public signup: provisions a new Business and signs its owner in.
+    Route::get('/register', [RegisteredBusinessController::class, 'create'])->name('register');
+    Route::post('/register', [RegisteredBusinessController::class, 'store'])
+        ->middleware('throttle:signup')
+        ->name('register.store');
+
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 
@@ -54,7 +66,18 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
-    Route::middleware('active')->group(function () {
+    // Every signed-in screen, onboarding included, runs for the user's own active Business. Logout
+    // stays outside so a refused session can always be ended.
+    Route::middleware(['active', 'business', 'verified.owner', 'subscription'])->group(function () {
+        // Email verification for public signup owners. Reachable before verification, by design.
+        Route::get('/email/verify', [EmailVerificationController::class, 'notice'])->name('verification.notice');
+        Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+            ->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
+        Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])
+            ->middleware('throttle:verification-resend')->name('verification.send');
+        Route::put('/email/verify/address', [EmailVerificationController::class, 'correct'])
+            ->middleware('throttle:verification-email')->name('verification.email.update');
+
         Route::get('/onboarding/password', [PasswordOnboardingController::class, 'edit'])
             ->name('onboarding.password.edit');
         Route::post('/onboarding/password', [PasswordOnboardingController::class, 'update'])
@@ -69,16 +92,34 @@ Route::middleware('auth')->group(function () {
             Route::post('/onboarding/pin/skip', [QuickPinOnboardingController::class, 'skip'])
                 ->name('onboarding.pin.skip');
 
+            // The headline dashboard: KPIs, revenue trend, low stock and recent sales.
             Route::get('/dashboard', DashboardController::class)
                 ->middleware('pin.completed')
                 ->name('dashboard');
 
+            // The detailed operational breakdown that /dashboard used to render. Kept as its own
+            // page rather than deleted: it carries period filters, ledger-integrity detection and
+            // the full alert/recent breakdown, none of which the headline dashboard replaces.
+            Route::get('/operations', OperationalDashboardController::class)
+                ->middleware('pin.completed')
+                ->name('operations');
+
             // Self-service profile. Open to every signed-in staff member, which is how Managers
             // and Sales Reps manage their own photograph without Admin involvement.
             Route::middleware('pin.completed')->group(function () {
+                // Navbar type-ahead. Each half is gated by its own policy inside the controller,
+                // so it discloses nothing the corresponding list page would not.
+                Route::get('/search', GlobalSearchController::class)
+                    ->middleware('throttle:60,1')
+                    ->name('search');
+
                 Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+                // Self-service personal details. Deliberately takes no {user}: the subject is the
+                // authenticated account, so no request can aim this at another record.
+                Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
                 Route::post('/profile/photo', [ProfileController::class, 'storePhoto'])->name('profile.photo.store');
                 Route::delete('/profile/photo', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
+                Route::get('/business/logo', [BusinessSettingController::class, 'logo'])->name('settings.business.logo');
                 // Serving is authorized per subject by UserPolicy::viewPhoto, so it lives outside
                 // the Admin-only staff group: a staff member must be able to load their own avatar.
                 Route::get('/users/{user}/photo', [ProfileController::class, 'photo'])->name('users.photo');
@@ -125,6 +166,8 @@ Route::middleware('auth')->group(function () {
             Route::middleware('pin.completed')->prefix('customers')->name('customers.')->group(function () {
                 Route::get('/', [CustomerController::class, 'index'])->name('index');
                 Route::get('/create', [CustomerController::class, 'create'])->name('create');
+                // The current filtered list as a CSV, behind the same viewAny policy as the list.
+                Route::get('/export', [CustomerController::class, 'export'])->name('export');
                 Route::post('/', [CustomerController::class, 'store'])->name('store');
                 Route::get('/{customer}', [CustomerController::class, 'show'])->name('show');
                 Route::get('/{customer}/edit', [CustomerController::class, 'edit'])->name('edit');
@@ -133,29 +176,62 @@ Route::middleware('auth')->group(function () {
                 Route::post('/{customer}/deactivate', [CustomerController::class, 'deactivate'])->name('deactivate');
                 Route::post('/{customer}/whatsapp-consent', [CustomerController::class, 'consent'])->name('consent');
                 Route::get('/{customer}/activity', [CustomerController::class, 'activity'])->name('activity');
+                // Photographs stream from the private disk through a policy check, exactly as
+                // product images do. No storage:link, so the file is never web-reachable directly.
+                Route::get('/{customer}/photo', [CustomerController::class, 'photo'])->name('photo');
+                Route::post('/{customer}/photo', [CustomerController::class, 'storePhoto'])->name('photo.store');
+                Route::delete('/{customer}/photo', [CustomerController::class, 'destroyPhoto'])->name('photo.destroy');
             });
 
             Route::middleware('pin.completed')->prefix('sales')->name('sales.')->group(function () {
                 Route::get('/', [SaleController::class, 'index'])->name('index');
                 Route::get('/create', [SaleController::class, 'create'])->name('create');
+                // Type-ahead for the Record Sale customer field. Returns only what the combobox
+                // renders, for active customers only; whoever may record a sale may search it.
+                Route::get('/customer-search', [SaleController::class, 'customerSearch'])->name('customers.search');
+                // The current filtered list as a CSV, behind the same viewAny policy as the list.
+                Route::get('/export', [SaleController::class, 'export'])->name('export');
+                // The same filtered list as a printable PDF report. A list export, not a receipt:
+                // `/{sale}/receipt.pdf` below is one Sale for a customer, this is the register for
+                // the business, and both sit behind the policy that matches what they disclose.
+                Route::get('/export.pdf', [SaleController::class, 'exportPdf'])->name('export.pdf');
                 Route::post('/', [SaleController::class, 'store'])->name('store');
+                // Lets a sale left waiting for approval be picked up again: the draft and its
+                // request already persist, so this only lists the caller's own unspent ones.
+                //
+                // Every literal path must be declared before `/{sale}`, or the wildcard swallows
+                // it as a sale id and the route 404s on a lookup that was never meant to happen.
+                Route::get('/resumable-drafts', [SaleDiscountRequestController::class, 'resumableDrafts'])
+                    ->name('discounts.draft.resumable');
                 Route::get('/{sale}', [SaleController::class, 'show'])->name('show');
+                Route::get('/{sale}/lines', [SaleController::class, 'lines'])->name('lines');
                 Route::get('/{sale}/receipt', [SaleController::class, 'receipt'])->name('receipt');
+                // Same information as the printable receipt, so it sits behind the same policy.
+                Route::get('/{sale}/receipt.pdf', [SaleController::class, 'receiptPdf'])->name('receipt.pdf');
                 Route::post('/{sale}/payments', [SalePaymentController::class, 'store'])->name('payments.store');
                 Route::get('/{sale}/payments/{payment}', [SalePaymentController::class, 'show'])->name('payments.show');
                 Route::get('/{sale}/payments/{payment}/receipt', [SalePaymentController::class, 'receipt'])->name('payments.receipt');
                 Route::post('/{sale}/void', [SaleController::class, 'void'])->name('void');
                 Route::post('/{sale}/discount-requests', [SaleDiscountRequestController::class, 'store'])
                     ->name('discounts.store');
+                // Pre-sale discount: asked about a cart, before any Sale exists. Deliberately not
+                // nested under /{sale} — there is no Sale to nest it under yet. Authorization is
+                // SaleDiscountRequestPolicy@createForDraft, and deciding remains an Admin act on
+                // the existing approve/decline routes.
+                Route::post('/draft-discount-requests', [SaleDiscountRequestController::class, 'storeDraft'])
+                    ->name('discounts.draft.store');
+                Route::get('/draft-discount-requests/{discountRequest}', [SaleDiscountRequestController::class, 'draftStatus'])
+                    ->name('discounts.draft.status');
                 // Correcting a recording mistake. Who may do it is decided by SalePolicy@correct
                 // (Admin any; Manager own only; Sales Rep never), not by route middleware, so the
                 // rule lives with the Sale rather than with the URL.
                 Route::get('/{sale}/correct', [SaleCorrectionController::class, 'create'])->name('corrections.create');
+                // The same form as a fragment, for the Sales list side panel. Same policy, same
+                // eligibility check, same Blade partial.
+                Route::get('/{sale}/correct-panel', [SaleCorrectionController::class, 'panel'])->name('corrections.panel');
                 Route::post('/{sale}/correct', [SaleCorrectionController::class, 'store'])->name('corrections.store');
                 Route::get('/{sale}/corrections', [SaleCorrectionController::class, 'show'])->name('corrections.index');
                 Route::get('/{sale}/activity', [SaleController::class, 'activity'])->name('activity');
-                Route::post('/{sale}/whatsapp/send', [WhatsAppDeliveryController::class, 'send'])->name('whatsapp.send');
-                Route::post('/{sale}/whatsapp/retry/{delivery}', [WhatsAppDeliveryController::class, 'retry'])->name('whatsapp.retry');
             });
 
             Route::middleware('pin.completed')->get('/sale-payments', [SalePaymentController::class, 'index'])
@@ -181,6 +257,12 @@ Route::middleware('auth')->group(function () {
                 Route::get('/refunds/{refund}', [SaleReturnController::class, 'refundShow'])->name('refunds.show');
                 Route::get('/refunds/{refund}/receipt', [SaleReturnController::class, 'refundReceipt'])->name('refunds.receipt');
                 Route::get('/sales/{sale}/returns/create', [SaleReturnController::class, 'create'])->name('sales.returns.create');
+                // The same Return form as a fragment, for the Sales list side panel. Same
+                // authorization, same token issuer and same `store` endpoint as the page above.
+                Route::get('/sales/{sale}/returns/panel', [SaleReturnController::class, 'panel'])->name('sales.returns.panel');
+                // What the pending selection would settle to, for the panel's summary line. Reads
+                // only; the figures come from the same preview the recorded return agrees with.
+                Route::get('/sales/{sale}/returns/preview', [SaleReturnController::class, 'preview'])->name('sales.returns.preview');
                 Route::post('/sales/{sale}/returns', [SaleReturnController::class, 'store'])->name('sales.returns.store');
                 Route::get('/sales/{sale}/refunds/create', [SaleReturnController::class, 'refundCreate'])->name('sales.refunds.create');
                 Route::post('/sales/{sale}/refunds', [SaleReturnController::class, 'refundStore'])->name('sales.refunds.store');
@@ -235,16 +317,48 @@ Route::middleware('auth')->group(function () {
                 Route::post('/{notification}/acknowledge', [NotificationController::class, 'acknowledge'])->name('acknowledge');
             });
 
+            // The WhatsApp message log, read-only. Deliberately outside the Administrator-only group
+            // below: Managers read it, and WhatsAppAutomationPolicy::viewLogs is the gate. There is
+            // no write route here, so a Manager's inability to retry is structural.
             Route::middleware('pin.completed')->prefix('whatsapp')->name('whatsapp.')->group(function () {
-                Route::get('/deliveries', [WhatsAppDeliveryController::class, 'index'])->name('deliveries.index');
-                Route::get('/deliveries/{delivery}', [WhatsAppDeliveryController::class, 'show'])->name('deliveries.show');
-                Route::post('/deliveries/{delivery}/resolve-unknown', [WhatsAppDeliveryController::class, 'resolveUnknown'])
-                    ->name('deliveries.resolve-unknown');
+                Route::get('/logs', [WhatsAppLogController::class, 'index'])->name('logs.index');
+            });
+
+            // WhatsApp Automation. Administrator-only, enforced by WhatsAppAutomationPolicy on
+            // every action rather than by this middleware alone.
+            Route::middleware(['pin.completed', 'role:admin'])->prefix('whatsapp')->name('whatsapp.')->group(function () {
+                Route::get('/automation', [WhatsAppAutomationController::class, 'index'])->name('automation.index');
+                // Embedded Signup: the browser asks for its client-side configuration and a
+                // server-issued state, runs Meta's own flow, then hands the short-lived code back
+                // with that state for server-side exchange and verification.
+                Route::get('/automation/connection/config', [WhatsAppAutomationController::class, 'connectionConfig'])
+                    ->name('automation.connection.config');
+                Route::post('/automation/connection/start', [WhatsAppAutomationController::class, 'startConnection'])
+                    ->middleware('throttle:whatsapp-connect')->name('automation.connection.start');
+                Route::post('/automation/connection/complete', [WhatsAppAutomationController::class, 'completeConnection'])
+                    ->middleware('throttle:whatsapp-connect')->name('automation.connection.complete');
+                Route::post('/automation/connection/disconnect', [WhatsAppAutomationController::class, 'disconnect'])
+                    ->middleware('throttle:whatsapp-connect')->name('automation.connection.disconnect');
+                Route::post('/automation/templates/sync', [WhatsAppAutomationController::class, 'syncTemplates'])
+                    ->middleware('throttle:whatsapp-connect')->name('automation.templates.sync');
+                Route::post('/automation/{automation}/toggle', [WhatsAppAutomationController::class, 'toggle'])
+                    ->name('automation.toggle');
+                Route::put('/automation/{automation}', [WhatsAppAutomationController::class, 'update'])
+                    ->name('automation.update');
+                Route::post('/automation/{automation}/test', [WhatsAppAutomationController::class, 'sendTest'])
+                    ->middleware('throttle:whatsapp-test')->name('automation.test');
+                Route::post('/messages/{message}/retry', [WhatsAppAutomationController::class, 'retry'])
+                    ->middleware('throttle:whatsapp-retry')->name('messages.retry');
             });
 
             Route::middleware(['pin.completed', 'role:admin'])->group(function () {
+                Route::get('/settings/subscription', SubscriptionController::class)->name('subscription.show');
                 Route::get('/settings/business', [BusinessSettingController::class, 'edit'])->name('settings.business.edit');
                 Route::put('/settings/business', [BusinessSettingController::class, 'update'])->name('settings.business.update');
+                // The logo is written by its own action from a validated upload, never by a posted
+                // path — so it gets its own endpoints rather than a field on the settings form.
+                Route::post('/settings/business/logo', [BusinessSettingController::class, 'storeLogo'])->name('settings.business.logo.store');
+                Route::delete('/settings/business/logo', [BusinessSettingController::class, 'destroyLogo'])->name('settings.business.logo.destroy');
                 Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');
                 Route::get('/audit/{audit}', [AuditController::class, 'show'])->name('audit.show');
                 Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');

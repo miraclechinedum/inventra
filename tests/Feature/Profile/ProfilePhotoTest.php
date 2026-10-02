@@ -95,7 +95,11 @@ class ProfilePhotoTest extends TestCase
 
         $this->assertStringContainsString('Profile photo', $html);
         $this->assertStringContainsString('Upload photo', $html);
-        $this->assertStringContainsString('No image for '.$rep->name, $html);
+        // The fallback is now the Figma's initials avatar rather than the shared placeholder.
+        $initials = collect(explode(' ', $rep->name))->filter()->take(2)
+            ->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
+        $this->assertStringContainsString('pf-avatar', $html);
+        $this->assertStringContainsString($initials, $html);
     }
 
     public function test_the_sidebar_avatar_links_to_the_profile_and_shows_the_photo(): void

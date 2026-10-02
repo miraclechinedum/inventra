@@ -4,6 +4,7 @@ namespace Tests\Feature\Inventory;
 
 use App\Actions\Inventory\ForceDeleteProduct;
 use App\Enums\UserRole;
+use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -158,6 +159,8 @@ class ProductLifecycleTest extends TestCase
 
         // ...and refused even when its id is posted directly.
         $this->actingAs($this->admin)->post(route('sales.store'), [
+            'is_walk_in' => '0',
+            'sale_date' => now(config('business.timezone'))->toDateString(),
             'customer_id' => $customer->id,
             'products' => [['product_id' => $product->id, 'quantity' => '1']],
             'payment_method' => 'cash',
@@ -197,6 +200,8 @@ class ProductLifecycleTest extends TestCase
         $customer = Customer::factory()->create(['is_active' => true]);
 
         $this->actingAs($this->admin)->post(route('sales.store'), [
+            'is_walk_in' => '0',
+            'sale_date' => now(config('business.timezone'))->toDateString(),
             'customer_id' => $customer->id,
             'products' => [['product_id' => $product->id, 'quantity' => '2']],
             'payment_method' => 'cash',
@@ -320,6 +325,8 @@ class ProductLifecycleTest extends TestCase
         $customer = Customer::factory()->create(['is_active' => true]);
 
         $this->actingAs($this->admin)->post(route('sales.store'), [
+            'is_walk_in' => '0',
+            'sale_date' => now(config('business.timezone'))->toDateString(),
             'customer_id' => $customer->id,
             'products' => [['product_id' => $product->id, 'quantity' => '1']],
             'payment_method' => 'cash',
@@ -521,7 +528,7 @@ class ProductLifecycleTest extends TestCase
             ->assertRedirect(route('inventory.index'));
 
         $this->assertFalse($product->fresh()->is_active);
-        $this->assertSame(1, \App\Models\AuditLog::where('auditable_id', $product->id)
+        $this->assertSame(1, AuditLog::where('auditable_id', $product->id)
             ->where('action', 'product_archived')->count());
     }
 
@@ -547,7 +554,7 @@ class ProductLifecycleTest extends TestCase
         $this->actingAs($this->admin)->get(route('inventory.products.edit', $product))->assertOk();
 
         $this->assertTrue($product->fresh()->is_active);
-        $this->assertSame(0, \App\Models\AuditLog::where('auditable_id', $product->id)
+        $this->assertSame(0, AuditLog::where('auditable_id', $product->id)
             ->whereIn('action', ['product_archived', 'product_reactivated', 'product_permanently_deleted'])->count());
     }
 }

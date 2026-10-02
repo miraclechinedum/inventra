@@ -3,6 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Enums\UserRole;
+use App\Models\Business;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -60,10 +61,15 @@ class AccessControlTest extends TestCase
             ->expectsQuestion('Phone number (optional)', '+2348011111111')
             ->expectsQuestion('Password', 'AdminPass9')
             ->expectsQuestion('Confirm password', 'AdminPass9')
-            ->expectsOutput('Initial administrator created successfully.')
+            ->expectsOutput('Administrator created for business #'.Business::query()->sole()->id.'.')
             ->assertSuccessful();
 
         $this->assertDatabaseHas('users', ['email' => 'admin@example.com', 'role' => 'admin']);
+        // Attached to the installation's one Business, which the ownership migration created.
+        $this->assertSame(
+            Business::query()->sole()->id,
+            User::query()->where('email', 'admin@example.com')->value('business_id'),
+        );
 
         $this->artisan('inventra:create-admin')
             ->expectsOutput('An administrator already exists.')

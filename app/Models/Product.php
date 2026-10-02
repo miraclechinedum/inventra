@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ProductUnit;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,7 +19,7 @@ use LogicException;
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, ScopedToCurrentBusiness, SoftDeletes;
 
     protected static function booted(): void
     {

@@ -21,6 +21,12 @@ final readonly class AlertFilters
         public string $type,
     ) {}
 
+    /** No filter at all — every alert the viewer's role permits. */
+    public static function none(): self
+    {
+        return new self('', '', '', '');
+    }
+
     public static function fromRequest(Request $request): self
     {
         return new self(

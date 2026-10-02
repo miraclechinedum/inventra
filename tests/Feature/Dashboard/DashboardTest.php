@@ -32,6 +32,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
+/*
+ * These cover the DETAILED operational breakdown, which now lives at /operations. It was moved
+ * there when the Figma headline dashboard took the /dashboard route; the page, its queries and its
+ * role scoping are unchanged, so every assertion below is preserved verbatim and only the URL
+ * differs. The headline dashboard has its own coverage in DashboardOverviewTest.
+ */
 class DashboardTest extends TestCase
 {
     use RefreshDatabase;
@@ -42,11 +48,11 @@ class DashboardTest extends TestCase
 
     public function test_guest_is_redirected_and_every_role_can_load_its_own_dashboard(): void
     {
-        $this->get(route('dashboard'))->assertRedirect(route('login'));
+        $this->get(route('operations'))->assertRedirect(route('login'));
 
         foreach ([UserRole::Admin, UserRole::Manager, UserRole::SalesRep] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]))
-                ->get(route('dashboard'))->assertOk()->assertSee('Operational dashboard');
+                ->get(route('operations'))->assertOk()->assertSee('Operational dashboard');
             auth()->logout();
         }
     }
@@ -55,7 +61,7 @@ class DashboardTest extends TestCase
     {
         foreach ([UserRole::Admin, UserRole::Manager, UserRole::SalesRep] as $role) {
             $response = $this->actingAs(User::factory()->create(['role' => $role]))
-                ->get(route('dashboard'))->assertOk();
+                ->get(route('operations'))->assertOk();
             $response->assertSee('₦0.00')->assertSee('Nothing needs attention right now.');
             $response->assertSee('No Sales recorded yet.');
             $this->assertStringNotContainsString('NAN', $response->getContent());
@@ -70,17 +76,17 @@ class DashboardTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-09-30 23:30:00', 'UTC'));
         CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-09-30 23:30:00', 'UTC'));
         $admin = User::factory()->create(['role' => UserRole::Admin]);
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $this->assertStringContainsString('Period 2026-10-01 through 2026-10-31 inclusive', $html);
         Carbon::setTestNow();
         CarbonImmutable::setTestNow();
 
         [$sale] = $this->sale('100000.00', '0.00', '2026-05-10 09:00:00');
-        $this->get(route('dashboard', ['from' => '2026-05-01', 'to' => '2026-05-31']))->assertOk()
+        $this->get(route('operations', ['from' => '2026-05-01', 'to' => '2026-05-31']))->assertOk()
             ->assertSee('Period 2026-05-01 through 2026-05-31 inclusive')
             ->assertSee($sale->sale_number)
             ->assertSee('₦100,000.00');
-        $this->get(route('dashboard', ['from' => '2026-06-01', 'to' => '2026-06-30']))->assertOk()
+        $this->get(route('operations', ['from' => '2026-06-01', 'to' => '2026-06-30']))->assertOk()
             ->assertSee('Period 2026-06-01 through 2026-06-30 inclusive');
         $this->assertSame('0.00', $this->periodGrossSales($admin, '2026-06-01', '2026-06-30'));
     }
@@ -92,7 +98,7 @@ class DashboardTest extends TestCase
         $this->recordReturn($admin, $sale, $item, '0.600');   // 0.600 x 50,000 = 30,000
 
         $this->assertSame('50000.00', $sale->fresh()->balance_due);
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $this->assertSame('100000.00', $this->metric($html, 'Gross Sales'));
         $this->assertSame('20000.00', $this->metric($html, 'Customer Collections'));
         $this->assertSame('30000.00', $this->metric($html, 'Returns Value'));
@@ -107,7 +113,7 @@ class DashboardTest extends TestCase
         $this->recordReturn($admin, $sale, $item, '0.600');
         $this->recordRefund($admin, $sale, '20000.00');
 
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $this->assertSame('100000.00', $this->metric($html, 'Gross Sales'));
         $this->assertSame('100000.00', $this->metric($html, 'Customer Collections'));
         $this->assertSame('20000.00', $this->metric($html, 'Refunds Paid'));
@@ -124,7 +130,7 @@ class DashboardTest extends TestCase
         $admin = User::factory()->create(['role' => UserRole::Admin]);
         [$sale] = $this->sale('80000.00', '0.00');
 
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $this->assertSame('80000.00', $this->metric($html, 'Gross Sales'));
         $this->assertSame('0.00', $this->metric($html, 'Customer Collections'));
         $this->assertSame('80000.00', $this->metric($html, 'Current Outstanding Receivables'));
@@ -138,7 +144,7 @@ class DashboardTest extends TestCase
         app(VoidSale::class)->execute($admin, $sale->fresh(), 'Dashboard void fixture');
         $this->assertSame(SaleStatus::Voided, $sale->fresh()->status);
 
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $this->assertSame('0.00', $this->metric($html, 'Gross Sales'), 'Voided Sales must leave Gross Sales');
         $this->assertSame('0', $this->metric($html, 'Sales Recorded'));
         $this->assertSame('0.00', $this->metric($html, 'Current Outstanding Receivables'), 'Voided Sales must leave receivables');
@@ -153,7 +159,7 @@ class DashboardTest extends TestCase
             [$sale] = $this->sale('10000.00', '0.00', sprintf('2026-03-%02d 09:00:00', $index));
             $numbers[] = $sale->sale_number;
         }
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $section = $this->section($html, 'Oldest outstanding Sales');
         foreach (array_slice($numbers, 0, 5) as $shown) {
             $this->assertStringContainsString($shown, $section);
@@ -172,7 +178,7 @@ class DashboardTest extends TestCase
         $inactive = Product::factory()->create(['name' => 'Dormant Widget', 'current_stock' => '0.000', 'reorder_level' => '5.000', 'is_active' => false]);
         Product::factory()->create(['name' => 'Healthy Widget', 'current_stock' => '99.000', 'reorder_level' => '5.000', 'is_active' => true]);
 
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $this->assertSame('2', $this->metric($html, 'Low-stock Products'));
         $this->assertStringContainsString($low->name, $html);
         $this->assertStringContainsString($zero->name, $html);
@@ -185,14 +191,14 @@ class DashboardTest extends TestCase
         $admin = User::factory()->create(['role' => UserRole::Admin]);
         [$sale, $item] = $this->sale('100000.00', '100000.00');
         $this->recordReturn($admin, $sale, $item, '1.000');
-        $this->actingAs($admin)->get(route('dashboard'))->assertOk()->assertDontSee('inconsistency detected');
+        $this->actingAs($admin)->get(route('operations'))->assertOk()->assertDontSee('inconsistency detected');
 
         $before = DB::table('sale_returns')->orderBy('id')->get()->toArray();
         // Still satisfies sales_return_financials_reconcile; only a ledger comparison can catch it.
         DB::table('sales')->where('id', $sale->id)->update([
             'returned_amount' => '40000.00', 'balance_due' => '0.00', 'refundable_credit' => '40000.00',
         ]);
-        $this->get(route('dashboard'))->assertOk()
+        $this->get(route('operations'))->assertOk()
             ->assertSee('Sale aggregate and ledger inconsistency detected')
             ->assertSee('No records were changed');
         $this->assertEquals($before, DB::table('sale_returns')->orderBy('id')->get()->toArray());
@@ -207,7 +213,7 @@ class DashboardTest extends TestCase
             [$sale] = $this->sale('1000.00', '1000.00', sprintf('2026-04-%02d 09:00:00', $index));
             $numbers[] = $sale->sale_number;
         }
-        $html = $this->actingAs($admin)->get(route('dashboard', ['from' => '2026-04-01', 'to' => '2026-04-30']))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations', ['from' => '2026-04-01', 'to' => '2026-04-30']))->assertOk()->getContent();
         $section = $this->section($html, 'Recent Sales');
         $this->assertSame(5, substr_count($section, 'SALE-'), 'Recent Sales must stay bounded at five rows');
         $latest = Sale::query()->latest('created_at')->first();
@@ -227,7 +233,7 @@ class DashboardTest extends TestCase
         $this->recordRefund($admin, $adminSale, '10000.00');
         $this->seedExpenseAndPurchase($admin);
 
-        $html = $this->actingAs($rep)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($rep)->get(route('operations'))->assertOk()->getContent();
 
         // Own figures only.
         $this->assertSame('60000.00', $this->metric($html, 'My Gross Sales'));
@@ -248,8 +254,8 @@ class DashboardTest extends TestCase
         }
         // Cost price of a stocked Product must never reach the Sales Rep dashboard.
         $product = Product::factory()->create(['current_stock' => '1.000', 'reorder_level' => '9.000', 'cost_price' => '4321.99', 'is_active' => true]);
-        $this->assertStringNotContainsString('4321.99', $this->get(route('dashboard'))->assertOk()->getContent());
-        $this->assertStringContainsString($product->name, $this->get(route('dashboard'))->getContent());
+        $this->assertStringNotContainsString('4321.99', $this->get(route('operations'))->assertOk()->getContent());
+        $this->assertStringContainsString($product->name, $this->get(route('operations'))->getContent());
     }
 
     public function test_dashboard_escapes_hostile_snapshot_values(): void
@@ -258,13 +264,15 @@ class DashboardTest extends TestCase
         [$sale] = $this->sale('50000.00', '0.00');
         DB::table('sales')->where('id', $sale->id)->update(['customer_name_snapshot' => '<script>alert(1)</script>XSSCUST']);
         DB::table('products')->insert([
+            // Raw insert, so every NOT NULL column the model would normally fill must be given.
+            'public_id' => (string) Str::ulid(), 'business_id' => $admin->business_id,
             'category_id' => Product::factory()->create()->category_id, 'sku' => 'XSS-SKU',
             'name' => '<img src=x onerror=alert(1)>XSSPROD', 'unit' => 'piece', 'cost_price' => '1.00',
             'selling_price' => '2.00', 'current_stock' => '0.000', 'reorder_level' => '5.000',
             'is_active' => true, 'created_by' => $admin->id, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
         $this->assertStringNotContainsString('<script>alert(1)</script>', $html);
         $this->assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
         $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
@@ -283,11 +291,11 @@ class DashboardTest extends TestCase
             ['page' => ['x']], ['staff' => ['x']], ['customer' => ['x']],
         ];
         foreach ($probes as $query) {
-            $this->get(route('dashboard', $query))->assertOk();
+            $this->get(route('operations', $query))->assertOk();
         }
         // A reversed range is rejected by the shared Reporting filter rather than silently swapped.
-        $this->from(route('dashboard'))->get(route('dashboard', ['from' => '2026-09-30', 'to' => '2026-09-01']))
-            ->assertRedirect(route('dashboard'))->assertSessionHasErrors('from');
+        $this->from(route('operations'))->get(route('operations', ['from' => '2026-09-30', 'to' => '2026-09-01']))
+            ->assertRedirect(route('operations'))->assertSessionHasErrors('from');
     }
 
     public function test_loading_the_dashboard_writes_nothing_for_any_role(): void
@@ -308,9 +316,9 @@ class DashboardTest extends TestCase
         // Note: auth()->logout() cycles users.remember_token, so roles are switched with
         // actingAs() alone to keep the window measuring the dashboard and nothing else.
         foreach ([$admin, $manager, $rep] as $user) {
-            $this->actingAs($user)->get(route('dashboard'))->assertOk();
-            $this->get(route('dashboard', ['from' => '2026-01-01', 'to' => '2026-12-31']))->assertOk();
-            $this->get(route('dashboard', ['from' => ['x'], 'to' => ['y']]))->assertOk();
+            $this->actingAs($user)->get(route('operations'))->assertOk();
+            $this->get(route('operations', ['from' => '2026-01-01', 'to' => '2026-12-31']))->assertOk();
+            $this->get(route('operations', ['from' => ['x'], 'to' => ['y']]))->assertOk();
         }
 
         $this->assertSame($before, $this->fingerprint($tables), 'A dashboard GET mutated business data');
@@ -352,7 +360,7 @@ class DashboardTest extends TestCase
 
         $renders = [];
         foreach (range(1, 3) as $attempt) {
-            $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
+            $html = $this->actingAs($admin)->get(route('operations'))->assertOk()->getContent();
 
             foreach ($seeded as $heading => $numbers) {
                 $section = $this->section($html, $heading);
@@ -390,7 +398,7 @@ class DashboardTest extends TestCase
         [$foreign] = $this->sale('4000.00', '4000.00', $stamp, $admin);
 
         $section = $this->section(
-            $this->actingAs($rep)->get(route('dashboard'))->assertOk()->getContent(), 'My recent Sales'
+            $this->actingAs($rep)->get(route('operations'))->assertOk()->getContent(), 'My recent Sales'
         );
 
         $this->assertSame(self::TIE_LIMIT, substr_count($section, 'border-b pb-2 text-sm'));
@@ -552,7 +560,7 @@ class DashboardTest extends TestCase
 
     private function periodGrossSales(User $user, string $from, string $to): string
     {
-        return $this->metric($this->actingAs($user)->get(route('dashboard', compact('from', 'to')))->getContent(), 'Gross Sales');
+        return $this->metric($this->actingAs($user)->get(route('operations', compact('from', 'to')))->getContent(), 'Gross Sales');
     }
 
     /**
@@ -568,7 +576,7 @@ class DashboardTest extends TestCase
                 $count++;
             }
         });
-        $this->actingAs($user)->get(route('dashboard'))->assertOk();
+        $this->actingAs($user)->get(route('operations'))->assertOk();
         DB::getEventDispatcher()->forget(QueryExecuted::class);
 
         return $count;
@@ -590,9 +598,15 @@ class DashboardTest extends TestCase
         $product = Product::factory()->create(['current_stock' => '50.000']);
         $balance = bcsub($total, $paid, 2);
         $sale = new Sale;
+        $sale->business_id = $customer->business_id;
         $sale->sale_number = 'SALE-'.Str::upper(Str::random(8));
         foreach (['customer_id' => $customer->id, 'customer_code_snapshot' => $customer->customer_code,
             'customer_name_snapshot' => $customer->full_name, 'customer_phone_snapshot' => $customer->phone,
+            'is_walk_in' => false,
+            // The trading day this Sale belongs to. `$createdAt` backdates the row below to place it
+            // in a period, so `sale_date` must follow it — the dashboard's period figures read the
+            // trading day, and a helper that moved only `created_at` would test nothing.
+            'sale_date' => Carbon::parse($createdAt ?? now())->timezone(config('business.timezone'))->toDateString(),
             'status' => SaleStatus::Completed, 'payment_method' => PaymentMethod::Cash,
             'payment_status' => bccomp($balance, '0', 2) === 0 ? PaymentStatus::Paid : (bccomp($paid, '0', 2) > 0 ? PaymentStatus::Partial : PaymentStatus::Unpaid),
             'subtotal' => $total, 'discount_amount' => '0.00', 'total_amount' => $total,
@@ -605,7 +619,7 @@ class DashboardTest extends TestCase
             DB::table('sales')->where('id', $sale->id)->update(['created_at' => $createdAt, 'updated_at' => $createdAt]);
         }
         $item = new SaleItem;
-        foreach (['sale_id' => $sale->id, 'product_id' => $product->id, 'product_sku_snapshot' => $product->sku,
+        foreach (['business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id, 'product_sku_snapshot' => $product->sku,
             'product_name_snapshot' => $product->name, 'unit_snapshot' => $product->unit->value, 'quantity' => '2.000',
             'unit_price' => bcdiv($total, '2', 2), 'line_total' => $total, 'created_at' => now()] as $key => $value) {
             $item->$key = $value;
@@ -613,7 +627,7 @@ class DashboardTest extends TestCase
         $item->save();
         if (bccomp($paid, '0.00', 2) > 0) {
             $payment = new SalePayment;
-            foreach (['payment_number' => 'PMT-'.Str::upper(Str::random(9)), 'sale_id' => $sale->id,
+            foreach (['payment_number' => 'PMT-'.Str::upper(Str::random(9)), 'business_id' => $sale->business_id, 'sale_id' => $sale->id,
                 'customer_id' => $customer->id, 'amount' => $paid, 'payment_method' => PaymentMethod::Cash,
                 'payment_type' => SalePaymentType::Initial, 'recorded_by' => $seller->id,
                 'recorded_by_name_snapshot' => $seller->name, 'paid_at' => $createdAt ?? now(),

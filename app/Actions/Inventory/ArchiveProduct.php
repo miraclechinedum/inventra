@@ -5,6 +5,9 @@ namespace App\Actions\Inventory;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Subscriptions\Entitlement;
+use App\Subscriptions\Entitlements;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -18,7 +21,11 @@ use Illuminate\Support\Facades\DB;
  */
 class ArchiveProduct
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly Entitlements $entitlements,
+        private readonly CurrentBusiness $tenancy,
+    ) {}
 
     public function execute(User $actor, Product $product): void
     {
@@ -38,6 +45,11 @@ class ArchiveProduct
     public function reactivate(User $actor, Product $product): void
     {
         DB::transaction(function () use ($actor, $product): void {
+            // Back in service means back in the plan's product allowance.
+            if (! $product->is_active) {
+                $this->entitlements->claim($this->tenancy->forActor($actor), Entitlement::MaxProducts);
+            }
+
             $product->is_active = true;
             $product->updated_by = $actor->id;
             $product->save();

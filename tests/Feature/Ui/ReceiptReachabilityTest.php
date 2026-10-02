@@ -54,7 +54,7 @@ class ReceiptReachabilityTest extends TestCase
 
         $item = new SaleItem;
         foreach ([
-            'sale_id' => $sale->id, 'product_id' => $product->id,
+            'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id,
             'product_sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name,
             'unit_snapshot' => $product->unit->value, 'quantity' => '2.000',
             'unit_price' => '50000.00', 'line_total' => '100000.00', 'created_at' => now(),
@@ -65,7 +65,7 @@ class ReceiptReachabilityTest extends TestCase
 
         $payment = new SalePayment;
         foreach ([
-            'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'sale_id' => $sale->id,
+            'payment_number' => 'PMT-'.Str::upper(Str::random(10)), 'business_id' => $sale->business_id, 'sale_id' => $sale->id,
             'customer_id' => $sale->customer_id, 'amount' => '100000.00',
             'payment_method' => PaymentMethod::Cash, 'payment_type' => SalePaymentType::Initial,
             'recorded_by' => $admin->id, 'recorded_by_name_snapshot' => $admin->name,
@@ -108,6 +108,24 @@ class ReceiptReachabilityTest extends TestCase
         return $token;
     }
 
+    /**
+     * Whether a listing offers this receipt, however the page carries it.
+     *
+     * Most listings put the URL in an `href`. The Sales list carries each row's URLs in a
+     * `data-sale` JSON attribute that the detail panel binds to, where Blade escapes the quotes and
+     * `json_encode` escapes the slashes — the same link, spelled differently. Both forms count as
+     * offering the receipt; what must not happen is a receipt appearing for a Sale the viewer may
+     * not open, and that is asserted against both spellings too.
+     */
+    private function offersReceipt(string $html, string $url): bool
+    {
+        $escaped = str_replace('/', '\\/', $url);
+
+        return str_contains($html, $url.'"')
+            || str_contains($html, $url.'&quot;')
+            || str_contains($html, $escaped.'&quot;');
+    }
+
     public function test_every_receipt_is_reachable_from_the_list_that_owns_its_record(): void
     {
         [$admin, $sale, $payment, $return, $refund] = $this->fullyExercisedSale();
@@ -122,7 +140,7 @@ class ReceiptReachabilityTest extends TestCase
         foreach ($expected as $listing => $receiptUrl) {
             $html = $this->actingAs($admin)->get(route($listing))->assertOk()->getContent();
 
-            $this->assertStringContainsString($receiptUrl.'"', $html,
+            $this->assertTrue($this->offersReceipt($html, $receiptUrl),
                 "{$listing} must link to {$receiptUrl}");
         }
     }
@@ -154,8 +172,8 @@ class ReceiptReachabilityTest extends TestCase
 
         $html = $this->actingAs($rep)->get(route('sales.index'))->assertOk()->getContent();
 
-        $this->assertStringContainsString(route('sales.receipt', $ownSale, false).'"', $html);
-        $this->assertStringNotContainsString(route('sales.receipt', $otherSale, false).'"', $html);
+        $this->assertTrue($this->offersReceipt($html, route('sales.receipt', $ownSale, false)));
+        $this->assertFalse($this->offersReceipt($html, route('sales.receipt', $otherSale, false)));
         $this->actingAs($rep)->get(route('sales.receipt', $otherSale))->assertForbidden();
     }
 

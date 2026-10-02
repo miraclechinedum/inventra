@@ -4,9 +4,11 @@ namespace App\Actions\Inventory;
 
 use App\Enums\ProductUnit;
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UpdateProduct
 {
@@ -16,6 +18,11 @@ class UpdateProduct
     {
         DB::transaction(function () use ($actor, $data, $product): void {
             $old = $product->only(['category_id', 'name', 'sku', 'description', 'cost_price', 'selling_price', 'reorder_level', 'unit']);
+            // Scoped to the Business, so another tenant's category reads as absent.
+            if (! ProductCategory::query()->whereKey($data['category_id'])->exists()) {
+                throw ValidationException::withMessages(['category_id' => 'The selected category is invalid.']);
+            }
+
             $product->category_id = $data['category_id'];
             $product->name = $data['name'];
             $product->sku = $data['sku'];

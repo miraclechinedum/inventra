@@ -10,7 +10,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
-use App\Support\SaleNumber;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -42,7 +42,9 @@ class SaleCreationTest extends TestCase
         $sale = Sale::query()->sole();
         $item = $sale->items()->sole();
         $movement = $product->movements()->where('type', InventoryMovementType::Sale)->sole();
-        $this->assertSame(SaleNumber::fromId($sale->id), $sale->sale_number);
+        // Random, not derived from the id: the reference must not be guessable from another sale.
+        $this->assertMatchesRegularExpression('/^S-[ABCDEFGHJKMNPQRSTUVWXYZ23456789@!%#]{8}$/', $sale->sale_number);
+        $this->assertStringNotContainsString((string) $sale->id, mb_substr($sale->sale_number, 2));
         $this->assertSame($this->customer->customer_code, $sale->customer_code_snapshot);
         $this->assertSame($this->customer->full_name, $sale->customer_name_snapshot);
         $this->assertSame($this->customer->phone, $sale->customer_phone_snapshot);
@@ -177,7 +179,12 @@ class SaleCreationTest extends TestCase
     private function payload(array $overrides = []): array
     {
         return array_merge([
+            // Both now required by StoreSaleRequest: a Sale states its buyer identity outright and
+            // the trading day it belongs to. Individual tests override these to exercise walk-ins
+            // and backdating.
+            'is_walk_in' => '0',
             'customer_id' => $this->customer->id,
+            'sale_date' => CarbonImmutable::now(config('business.timezone'))->toDateString(),
             'products' => [],
             'payment_method' => 'cash',
             'amount_paid' => '0.00',

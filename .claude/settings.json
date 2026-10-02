@@ -1,0 +1,126 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(comm:*)",
+      "Bash(diff:*)",
+      "Bash(cmp:*)",
+      "Bash(stat:*)",
+      "Bash(du:*)",
+      "Bash(df:*)",
+      "Bash(shasum:*)",
+      "Bash(md5sum:*)",
+      "Bash(sha256sum:*)",
+      "Bash(gzip -t:*)",
+      "Bash(tar -tzf:*)",
+
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git stash list)",
+      "Bash(git rev-parse:*)",
+
+      "Bash(php -l:*)",
+      "Bash(php -v)",
+      "Bash(php -m)",
+      "Bash(php -r:*)",
+      "Bash(php artisan migrate:status)",
+      "Bash(php artisan route:list:*)",
+      "Bash(php artisan about:*)",
+      "Bash(php artisan schedule:list)",
+      "Bash(php artisan config:show:*)",
+      "Bash(php artisan --version)",
+      "Bash(php vendor/bin/phpunit --testsuite Feature --filter:*)",
+      "Bash(./vendor/bin/pint --test:*)",
+      "Bash(composer validate:*)",
+      "Bash(composer show:*)",
+
+      "Bash(npx vite build)",
+
+      "Bash(curl -s -o /dev/null -w:*)",
+      "Bash(curl -sS -o /dev/null -w:*)",
+
+      "Bash(ssh -p 21098:*)",
+      "Bash(scp -P 21098:*)"
+    ],
+
+    "ask": [
+      "Bash(rm:*)",
+      "Bash(rmdir:*)",
+      "Bash(mv:*)",
+      "Bash(chmod:*)",
+      "Bash(chown:*)",
+
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)",
+      "Bash(git clean:*)",
+      "Bash(git add:*)",
+
+      "Bash(php artisan migrate)",
+      "Bash(php artisan migrate --force)",
+      "Bash(php artisan migrate:install:*)",
+      "Bash(php artisan down:*)",
+      "Bash(php artisan up)",
+      "Bash(php artisan storage:link:*)",
+      "Bash(php artisan optimize:*)",
+      "Bash(php artisan config:cache)",
+      "Bash(php artisan route:cache)",
+      "Bash(php artisan view:cache)",
+
+      "Bash(rsync:*)",
+      "Bash(sftp:*)",
+
+      "Bash(mysql:*)",
+      "Bash(mariadb:*)",
+      "Bash(mysqldump:*)",
+      "Bash(mariadb-dump:*)",
+
+      "Bash(crontab:*)",
+
+      "Bash(composer install:*)",
+      "Bash(composer update:*)",
+      "Bash(composer require:*)",
+      "Bash(composer remove:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm ci:*)"
+    ],
+
+    "deny": [
+      "Bash(php artisan migrate:fresh:*)",
+      "Bash(php artisan migrate:reset:*)",
+      "Bash(php artisan migrate:refresh:*)",
+      "Bash(php artisan migrate:rollback:*)",
+      "Bash(php artisan db:wipe:*)",
+      "Bash(php artisan db:seed:*)",
+
+      "Bash(mysql -e DROP:*)",
+      "Bash(mysql -e TRUNCATE:*)",
+      "Bash(mariadb -e DROP:*)",
+      "Bash(mariadb -e TRUNCATE:*)",
+
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf /*)",
+
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ],
+
+    "additionalDirectories": [
+      "/Users/apple/Sites/inventra/app/Http/Controllers"
+    ]
+  }
+}

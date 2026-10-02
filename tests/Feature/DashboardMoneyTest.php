@@ -36,7 +36,7 @@ class DashboardMoneyTest extends TestCase
     public function test_admin_dashboard_loads_with_canonical_zero_aggregates(): void
     {
         $this->actingAs($this->admin())
-            ->get(route('dashboard'))
+            ->get(route('operations'))
             ->assertOk()
             ->assertSee('Gross Sales')
             ->assertSee('Customer Collections')
@@ -56,25 +56,32 @@ class DashboardMoneyTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->get(route('dashboard'))
+            ->get(route('operations'))
             ->assertOk()
             ->assertSee('₦123.45')
             ->assertSee('Recent Sales');
     }
 
-    public function test_dashboard_does_not_calculate_inventory_valuation_or_other_accounting_figures(): void
+    /**
+     * The operational breakdown calculates no accounting figures.
+     *
+     * This previously also forbade "Total Inventory Value" anywhere, on the grounds that inventory
+     * valuation was outside the dashboard's scope. That rule was deliberately retired when the
+     * headline dashboard was rebuilt: stock-on-hand at cost is now an approved KPI there, defined
+     * and covered by DashboardOverviewTest.
+     *
+     * The part that still holds — and is what this test is really for — is that NO derived
+     * accounting figure is invented: no profit, no COGS, no margin, no tax, on either page. That is
+     * asserted below, and /operations keeps its explicit disclaimer.
+     */
+    public function test_the_operational_breakdown_calculates_no_accounting_figures(): void
     {
         Product::factory()->create(['cost_price' => '100.25', 'current_stock' => '1.125']);
         Product::factory()->create(['cost_price' => '0.01', 'current_stock' => '0.500']);
 
-        $html = $this->actingAs($this->admin())->get(route('dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($this->admin())->get(route('operations'))->assertOk()->getContent();
 
-        // The former "Total Inventory Value" card computed SUM(current_stock * cost_price).
-        // Inventory valuation is outside the operational dashboard's non-accounting scope.
-        $this->assertStringNotContainsString('Total Inventory Value', $html);
-        $this->assertStringNotContainsString('112.79', $html);
-        // The only permitted mention of these concepts is the page's own disclaimer that it
-        // does not calculate them; none may appear as a metric card label.
+        // None of these may appear as a metric card label.
         preg_match_all('/<small class="text-slate-500">([^<]+)<\/small>/', $html, $labels);
         foreach ($labels[1] as $label) {
             foreach (['Profit', 'Net Income', 'COGS', 'Margin', 'Valuation', 'Tax'] as $accounting) {
@@ -82,6 +89,19 @@ class DashboardMoneyTest extends TestCase
             }
         }
         $this->assertStringContainsString('No profit, COGS, margin, inventory valuation, or tax is calculated', $html);
+    }
+
+    /** The headline dashboard likewise derives no profit, COGS, margin or tax figure. */
+    public function test_the_headline_dashboard_invents_no_accounting_figure(): void
+    {
+        Product::factory()->create(['cost_price' => '100.25', 'current_stock' => '1.125']);
+
+        $html = $this->actingAs($this->admin())->get(route('dashboard'))->assertOk()->getContent();
+
+        foreach (['Profit', 'Net Income', 'COGS', 'Margin', 'Gross Margin', 'Tax'] as $accounting) {
+            $this->assertStringNotContainsStringIgnoringCase($accounting, $html,
+                "{$accounting} is not a figure Inventra calculates");
+        }
     }
 
     private function admin(): User

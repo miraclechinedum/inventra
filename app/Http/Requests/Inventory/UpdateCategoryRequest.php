@@ -4,8 +4,8 @@ namespace App\Http\Requests\Inventory;
 
 use App\Http\Requests\Concerns\NormalizesScalarInput;
 use App\Models\ProductCategory;
+use App\Tenancy\TenantRules;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateCategoryRequest extends FormRequest
 {
@@ -24,7 +24,9 @@ class UpdateCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255', Rule::unique(ProductCategory::class, 'name')->ignore($this->route('category'))],
+            // Ownership is the acting user's Business, never a submitted value.
+            'business_id' => ['prohibited'],
+            'name' => ['required', 'string', 'max:255', TenantRules::unique(ProductCategory::class, 'name')->ignore($this->route('category'))],
             'description' => ['nullable', 'string', 'max:1000'],
         ];
     }

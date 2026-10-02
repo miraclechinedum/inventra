@@ -5,9 +5,12 @@ namespace App\Policies;
 use App\Enums\UserRole;
 use App\Models\ProductCategory;
 use App\Models\User;
+use App\Policies\Concerns\DeniesOtherBusinesses;
 
 class ProductCategoryPolicy
 {
+    use DeniesOtherBusinesses;
+
     /**
      * Reading the category management screen, as opposed to merely choosing a category while
      * working on a product. Only the roles that may change categories may open the screen that

@@ -12,6 +12,7 @@ use App\Models\PurchaseRequest;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -179,7 +180,7 @@ class PurchaseFoundationTest extends TestCase
 
         try {
             DB::table('purchase_items')->insert([
-                'purchase_id' => $purchase->id, 'product_id' => Product::factory()->create()->id,
+                'business_id' => $purchase->business_id, 'purchase_id' => $purchase->id, 'product_id' => Product::factory()->create()->id,
                 'product_sku_snapshot' => 'BAD', 'product_name_snapshot' => 'Bad', 'product_unit_snapshot' => 'piece',
                 'quantity' => '0', 'unit_cost' => '1', 'line_total' => '1', 'created_at' => now(),
             ]);
@@ -199,7 +200,7 @@ class PurchaseFoundationTest extends TestCase
         $audit->shouldReceive('record')->once()->andThrow(new RuntimeException('audit failed'));
 
         try {
-            (new ReceivePurchase($audit))->execute($manager, $data, 'session-a');
+            (new ReceivePurchase($audit, app(CurrentBusiness::class)))->execute($manager, $data, 'session-a');
             $this->fail('Expected audit failure.');
         } catch (RuntimeException) {
             $this->assertSame('5.000', $product->fresh()->current_stock);

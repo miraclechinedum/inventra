@@ -226,6 +226,7 @@ class CorrectSale
             }
 
             $movement = new InventoryMovement;
+            $movement->business_id = $product->business_id;
             $movement->product_id = $product->id;
             $movement->type = InventoryMovementType::Correction;
             $movement->quantity_change = $movementChange;
@@ -247,6 +248,7 @@ class CorrectSale
     {
         $product = $line['product'];
         $item = new SaleItem;
+        $item->business_id = $sale->business_id;
         $item->sale_id = $sale->id;
         $item->sale_correction_id = $correction->id;
         $item->product_id = $product->id;
@@ -269,6 +271,16 @@ class CorrectSale
         if (! array_key_exists('customer_id', $data) || $data['customer_id'] === null
             || (int) $data['customer_id'] === (int) $sale->customer_id) {
             return [];
+        }
+
+        // A walk-in has no customer to correct, and giving it one would break the `is_walk_in` /
+        // `customer_id` CHECK that keeps the two in step. The database would refuse it anyway; this
+        // refuses it in language an operator can act on. Turning a walk-in into a registered sale is
+        // a re-recording decision, not a typo fix.
+        if ($sale->isWalkIn()) {
+            throw ValidationException::withMessages([
+                'customer_id' => 'A walk-in Sale has no customer to change. Void it and record it again against the customer if it was rung up as a walk-in by mistake.',
+            ]);
         }
 
         if (! SaleCorrectionEligibility::permitsCustomerChange($sale)) {
@@ -304,6 +316,7 @@ class CorrectSale
     ): SaleCorrection {
         $correction = new SaleCorrection;
         foreach ([
+            'business_id' => $sale->business_id,
             'sale_id' => $sale->id,
             'reason' => $data['reason'],
             'corrected_by' => $actor->id,

@@ -5,7 +5,7 @@ namespace Tests\Feature\SalePayments;
 use App\Actions\Sale\CreateSale;
 use App\Actions\Sale\IssueSalePaymentRequest;
 use App\Actions\Sale\RecordSalePayment;
-use App\Actions\WhatsApp\QueueAutomaticWhatsAppReceipt;
+use App\Actions\WhatsAppAutomation\WhatsAppAutomationTriggers;
 use App\Enums\PaymentStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
@@ -15,6 +15,7 @@ use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -256,7 +257,7 @@ class SalePaymentTest extends TestCase
         $product = Product::factory()->create(['current_stock' => '10', 'selling_price' => '100']);
 
         try {
-            (new CreateSale($audit, app(QueueAutomaticWhatsAppReceipt::class)))->execute($actor, $this->payload($customer, $product, '50', 'cash'));
+            (new CreateSale($audit, app(WhatsAppAutomationTriggers::class), app(CurrentBusiness::class)))->execute($actor, $this->payload($customer, $product, '50', 'cash'));
             $this->fail('The Sale transaction should roll back.');
         } catch (RuntimeException) {
             $this->assertDatabaseCount('sales', 0);
@@ -291,7 +292,7 @@ class SalePaymentTest extends TestCase
         $payload = ['amount' => '25', 'payment_method' => 'cash', 'note' => null, 'request_token' => $token];
 
         try {
-            (new RecordSalePayment($audit))->execute($actor, $sale, $payload, $sessionId);
+            (new RecordSalePayment($audit, app(WhatsAppAutomationTriggers::class)))->execute($actor, $sale, $payload, $sessionId);
             $this->fail('The settlement should roll back.');
         } catch (RuntimeException) {
             $this->assertDatabaseCount('sale_payments', 0);
@@ -409,7 +410,7 @@ class SalePaymentTest extends TestCase
     private function rawPayment(Sale $sale, string $number, string $type, ?int $guard): array
     {
         return [
-            'payment_number' => $number, 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id,
+            'business_id' => $sale->business_id, 'payment_number' => $number, 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id,
             'amount' => '1.00', 'payment_method' => 'cash', 'payment_type' => $type,
             'recorded_by' => $sale->sold_by, 'recorded_by_name_snapshot' => $sale->sold_by_name_snapshot,
             'paid_at' => now(), 'note' => null, 'cumulative_paid_after' => '1.00', 'balance_after' => '99.00',

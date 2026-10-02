@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Models\Business;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -27,6 +28,9 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
+            // The fixture Business, so a plain factory user behaves exactly as users did before
+            // tenancy. A test that needs another tenant uses forBusiness().
+            'business_id' => fn (): int => BusinessFactory::installationId(),
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
@@ -38,6 +42,11 @@ class UserFactory extends Factory
             'quick_pin_setup_completed' => true,
             'remember_token' => Str::random(10),
         ];
+    }
+
+    public function forBusiness(Business $business): static
+    {
+        return $this->state(fn (): array => ['business_id' => $business->getKey()]);
     }
 
     /**

@@ -12,15 +12,28 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
+use Tests\Concerns\UnwindsTenancyMigrations;
 use Tests\TestCase;
 
 class ReturnRefundMigrationTest extends TestCase
 {
-    use DatabaseMigrations;
+    use DatabaseMigrations, UnwindsTenancyMigrations;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These tests run migration down() and up() directly, so the live connection is re-proven first.
+        static::assertSafeTestDatabase(DB::connection());
+    }
 
     public function test_empty_return_chain_rolls_back_and_reapplies(): void
     {
         [$base, $financials, $protection] = $this->migrations();
+        // Tenancy was layered onto the return tables later, so it is unwound around the base.
+        // Request-token ownership references these tables' business keys, so it is unwound first.
+        $this->unwindTenancyFrom('2026_09_29_223000_add_business_ownership_to_request_tokens');
+        $this->unwindTenancyFrom('2026_09_29_110000_add_business_ownership_to_sale_children', '2026_09_29_160000_enforce_expense_tenancy');
         try {
             $protection->down();
             $financials->down();
@@ -31,6 +44,8 @@ class ReturnRefundMigrationTest extends TestCase
             $base->up();
             $financials->up();
             $protection->up();
+            $this->restoreTenancyFrom('2026_09_29_110000_add_business_ownership_to_sale_children', '2026_09_29_160000_enforce_expense_tenancy');
+            $this->restoreTenancyFrom('2026_09_29_223000_add_business_ownership_to_request_tokens');
         }
         $this->assertTrue(Schema::hasColumn('sale_returns', 'sale_return_request_id'));
         $this->assertTrue(Schema::hasColumn('sales', 'refundable_credit'));
@@ -86,7 +101,7 @@ class ReturnRefundMigrationTest extends TestCase
         $actor = User::factory()->create(['role' => UserRole::Admin]);
         $sale = Sale::factory()->create(['payment_status' => PaymentStatus::Unpaid]);
         $return = new SaleReturn;
-        foreach (['return_number' => 'RET-MIGRATION', 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'returned_by' => $actor->id, 'returned_by_name_snapshot' => $actor->name, 'merchandise_value' => '1.00', 'receivable_reduction' => '1.00', 'refundable_credit_created' => '0.00', 'reason' => 'Migration evidence', 'returned_at' => now()] as $key => $value) {
+        foreach (['return_number' => 'RET-MIGRATION', 'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'returned_by' => $actor->id, 'returned_by_name_snapshot' => $actor->name, 'merchandise_value' => '1.00', 'receivable_reduction' => '1.00', 'refundable_credit_created' => '0.00', 'reason' => 'Migration evidence', 'returned_at' => now()] as $key => $value) {
             $return->$key = $value;
         }
         $return->save();
@@ -99,7 +114,7 @@ class ReturnRefundMigrationTest extends TestCase
         $actor = User::factory()->create(['role' => UserRole::Admin]);
         $sale = Sale::factory()->create(['subtotal' => '1.00', 'total_amount' => '1.00', 'amount_paid' => '1.00', 'refunded_amount' => '0.00', 'refundable_credit' => '0.00', 'balance_due' => '0.00', 'payment_status' => PaymentStatus::Paid]);
         $refund = new SaleRefund;
-        foreach (['refund_number' => 'REF-MIGRATION', 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'amount' => '1.00', 'payment_method' => 'cash', 'reason' => 'Migration evidence', 'refunded_by' => $actor->id, 'refunded_by_name_snapshot' => $actor->name, 'refunded_at' => now()] as $key => $value) {
+        foreach (['refund_number' => 'REF-MIGRATION', 'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'customer_id' => $sale->customer_id, 'sale_number_snapshot' => $sale->sale_number, 'customer_code_snapshot' => $sale->customer_code_snapshot, 'customer_name_snapshot' => $sale->customer_name_snapshot, 'amount' => '1.00', 'payment_method' => 'cash', 'reason' => 'Migration evidence', 'refunded_by' => $actor->id, 'refunded_by_name_snapshot' => $actor->name, 'refunded_at' => now()] as $key => $value) {
             $refund->$key = $value;
         }
         $refund->save();

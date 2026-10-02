@@ -28,7 +28,7 @@ class RecordSaleRefund
         }
 
         return DB::transaction(function () use ($actor, $sale, $data, $sessionId) {
-            $request = SaleRefundRequest::where('token_hash', hash('sha256', $data['request_token']))->lockForUpdate()->first();
+            $request = SaleRefundRequest::where('token_hash', hash('sha256', $data['request_token']))->where('business_id', $actor->business_id)->lockForUpdate()->first();
             $payloadHash = hash('sha256', json_encode(['amount' => $data['amount'], 'payment_method' => $data['payment_method'], 'reason' => $data['reason'], 'note' => $data['note'] ?? null], JSON_THROW_ON_ERROR));
             if (! $request || (int) $request->sale_id !== (int) $sale->id || (int) $request->actor_id !== (int) $actor->id || ! hash_equals((string) $request->session_id, $sessionId)) {
                 throw ValidationException::withMessages(['request_token' => 'This refund confirmation has expired. Refresh and try again.']);
@@ -59,7 +59,7 @@ class RecordSaleRefund
             }
             $refund = new SaleRefund;
             $refund->sale_refund_request_id = $request->id;
-            foreach (['refund_number' => 'PENDING-'.Str::random(20), 'sale_id' => $locked->id, 'sale_return_id' => $data['sale_return_id'] ?? null, 'customer_id' => $locked->customer_id, 'sale_number_snapshot' => $locked->sale_number, 'customer_code_snapshot' => $locked->customer_code_snapshot, 'customer_name_snapshot' => $locked->customer_name_snapshot, 'amount' => $amount, 'payment_method' => PaymentMethod::from($data['payment_method']), 'reason' => $data['reason'], 'note' => $data['note'] ?? null, 'refunded_by' => $actor->id, 'refunded_by_name_snapshot' => $actor->name, 'refunded_at' => now()] as $k => $v) {
+            foreach (['business_id' => $locked->business_id, 'refund_number' => 'PENDING-'.Str::random(20), 'sale_id' => $locked->id, 'sale_return_id' => $data['sale_return_id'] ?? null, 'customer_id' => $locked->customer_id, 'sale_number_snapshot' => $locked->sale_number, 'customer_code_snapshot' => $locked->customer_code_snapshot, 'customer_name_snapshot' => $locked->customer_name_snapshot, 'amount' => $amount, 'payment_method' => PaymentMethod::from($data['payment_method']), 'reason' => $data['reason'], 'note' => $data['note'] ?? null, 'refunded_by' => $actor->id, 'refunded_by_name_snapshot' => $actor->name, 'refunded_at' => now()] as $k => $v) {
                 $refund->$k = $v;
             }$refund->save();
             $number = 'REF-'.str_pad((string) $refund->id, 6, '0', STR_PAD_LEFT);

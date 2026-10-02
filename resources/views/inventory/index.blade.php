@@ -1,4 +1,6 @@
 <x-app-layout title="Inventory">
+    {{-- Refusals from row actions — a product allowance on reactivation, for example. --}}
+    <x-validation-errors class="mb-4" />
     <div class="ui-page-header">
         <div>
             <h2>Inventory</h2>

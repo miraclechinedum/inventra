@@ -4,12 +4,20 @@ namespace App\Models;
 
 use App\Enums\WhatsAppDeliveryOrigin;
 use App\Enums\WhatsAppDeliveryStatus;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
+/**
+ * Historical receipt deliveries from before the automation messages replaced them. Read-only, and
+ * owned by their sale's Business: tenant-scoped like any other record, so the customer page that
+ * still lists them shows only its own Business's history.
+ */
 class WhatsAppDelivery extends Model
 {
+    use ScopedToCurrentBusiness;
+
     protected $table = 'whatsapp_deliveries';
 
     protected $guarded = ['*'];

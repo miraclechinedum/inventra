@@ -24,6 +24,8 @@ class DecideSaleDiscountRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Ownership comes from the acting user and the parent document, never from the form.
+            'business_id' => ['prohibited'],
             'decision_note' => ['nullable', 'string', 'max:500'],
         ];
     }

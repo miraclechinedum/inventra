@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\SecurityEvent;
 use App\Models\User;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Http\Request;
+use LogicException;
 
 class SecurityEventRecorder
 {
@@ -18,7 +20,9 @@ class SecurityEventRecorder
     ): void {
         $request = app()->bound('request') ? request() : null;
 
-        SecurityEvent::query()->create([
+        // forceFill: business_id is written by the server alone and is never mass-assignable.
+        (new SecurityEvent)->forceFill([
+            'business_id' => $this->owningBusiness($subject, $actor),
             'user_id' => $subject?->getKey(),
             'actor_id' => $actor?->getKey(),
             'subject_user_id' => $subject?->getKey(),
@@ -28,7 +32,29 @@ class SecurityEventRecorder
                 ? mb_substr((string) $request->userAgent(), 0, 512)
                 : null,
             'metadata' => $this->sanitizeMetadata($metadata),
-        ]);
+        ])->save();
+    }
+
+    /**
+     * The Business of the account the event concerns — its subject, else its actor — or null when no
+     * account is known. A failed login for an identifier matching no one has no honest owner, so it
+     * is never attributed by inference from what was typed. Every source present must agree.
+     */
+    private function owningBusiness(?User $subject, ?User $actor): ?int
+    {
+        $current = app(CurrentBusiness::class);
+
+        $sources = array_filter([
+            $subject?->business_id,
+            $actor?->business_id,
+            $current->has() && ($subject !== null || $actor !== null) ? $current->id() : null,
+        ], static fn (mixed $id): bool => $id !== null);
+
+        if (count(array_unique(array_map('intval', $sources))) > 1) {
+            throw new LogicException('A security event cannot concern more than one business.');
+        }
+
+        return $sources === [] ? null : (int) reset($sources);
     }
 
     private function sanitizeMetadata(array $metadata): ?array

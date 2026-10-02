@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedByIssuingOperator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Model;
 
 class SaleReturnRequest extends Model
 {
-    use MassPrunable;
+    use MassPrunable, OwnedByIssuingOperator;
 
     protected $guarded = ['*'];
 

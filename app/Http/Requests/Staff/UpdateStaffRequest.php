@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Staff;
 
 use App\Models\User;
+use App\Support\UnavailableIdentifier;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -50,12 +51,19 @@ class UpdateStaffRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')->ignore($subject)],
             'phone' => ['nullable', 'string', 'max:17', Rule::unique(User::class, 'phone')->ignore($subject)],
+            // Membership is decided by the server from the acting Administrator, never by the form.
+            'business_id' => ['prohibited'],
         ];
     }
 
     public function messages(): array
     {
-        return ['phone.string' => 'The phone number must be a valid Nigerian mobile number.'];
+        return [
+            'phone.string' => 'The phone number must be a valid Nigerian mobile number.',
+            // Identical whoever holds the identifier — a colleague or another Business.
+            'email.unique' => UnavailableIdentifier::EMAIL,
+            'phone.unique' => UnavailableIdentifier::PHONE,
+        ];
     }
 
     public function withValidator(Validator $validator): void

@@ -16,7 +16,7 @@
     </div>
     <table class="mt-6 w-full border-collapse text-left">
         <thead><tr class="border-b"><th class="p-3">Product</th><th class="p-3">Quantity</th><th class="p-3">Unit cost</th><th class="p-3 text-right">Total</th></tr></thead>
-        <tbody>@foreach($purchase->items as $item)<tr class="border-b"><td class="p-3">{{ $item->product_name_snapshot }} ({{ $item->product_sku_snapshot }})</td><td class="p-3">{{ $item->quantity }} {{ $item->product_unit_snapshot }}</td><td class="p-3">₦{{ \App\Support\Money::format($item->unit_cost) }}</td><td class="p-3 text-right">₦{{ \App\Support\Money::format($item->line_total) }}</td></tr>@endforeach</tbody>
+        <tbody>@foreach($purchase->items as $item)<tr class="border-b"><td class="p-3">{{ $item->product_name_snapshot }} ({{ $item->product_sku_snapshot }})</td><td class="p-3">{{ \App\Support\Quantity::trim($item->quantity) }} {{ $item->product_unit_snapshot }}</td><td class="p-3">₦{{ \App\Support\Money::format($item->unit_cost) }}</td><td class="p-3 text-right">₦{{ \App\Support\Money::format($item->line_total) }}</td></tr>@endforeach</tbody>
     </table>
     <h3 class="mt-6 text-right text-xl font-bold">Total: ₦{{ \App\Support\Money::format($purchase->total_amount) }}</h3>
 @livewireScriptConfig</body>

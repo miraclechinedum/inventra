@@ -38,6 +38,7 @@ class AdjustStock
 
             $change = bcsub($after, $before, 3);
             $movement = new InventoryMovement;
+            $movement->business_id = $locked->business_id;
             $movement->product_id = $locked->id;
             $movement->type = $type;
             $movement->quantity_change = $change;

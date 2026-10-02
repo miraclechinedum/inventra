@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\Money;
 use App\Support\SaleFinancials;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,7 +33,7 @@ class RecordSaleReturn
         }
 
         return DB::transaction(function () use ($actor, $sale, $data, $sessionId): SaleReturn {
-            $request = SaleReturnRequest::where('token_hash', hash('sha256', $data['request_token']))->lockForUpdate()->first();
+            $request = SaleReturnRequest::where('token_hash', hash('sha256', $data['request_token']))->where('business_id', $actor->business_id)->lockForUpdate()->first();
             $payloadHash = hash('sha256', json_encode(['items' => $data['items'], 'reason' => $data['reason'], 'note' => $data['note'] ?? null], JSON_THROW_ON_ERROR));
             if (! $request || (int) $request->sale_id !== (int) $sale->id || (int) $request->actor_id !== (int) $actor->id || ! hash_equals((string) $request->session_id, $sessionId)) {
                 throw ValidationException::withMessages(['request_token' => 'This return confirmation has expired. Refresh and try again.']);
@@ -68,7 +69,7 @@ class RecordSaleReturn
             $total = '0.00';
             foreach ($data['items'] as $line) {
                 $item = $items[(int) $line['sale_item_id']];
-                $prior = (string) DB::table('sale_return_items')->where('sale_item_id', $item->id)->lockForUpdate()->sum('quantity_returned');
+                $prior = (string) DB::table('sale_return_items')->where('sale_return_items.business_id', app(CurrentBusiness::class)->id())->where('sale_item_id', $item->id)->lockForUpdate()->sum('quantity_returned');
                 $remaining = bcsub($item->quantity, $prior, 3);
                 if (bccomp($line['quantity'], $remaining, 3) > 0) {
                     throw ValidationException::withMessages(['items' => 'Returned quantity exceeds the remaining returnable quantity.']);
@@ -83,7 +84,7 @@ class RecordSaleReturn
             $credit = bcsub($total, $reduction, 2);
             $return = new SaleReturn;
             $return->sale_return_request_id = $request->id;
-            foreach (['return_number' => 'PENDING-'.Str::random(20), 'sale_id' => $locked->id, 'customer_id' => $locked->customer_id, 'sale_number_snapshot' => $locked->sale_number, 'customer_code_snapshot' => $locked->customer_code_snapshot, 'customer_name_snapshot' => $locked->customer_name_snapshot, 'returned_by' => $actor->id, 'returned_by_name_snapshot' => $actor->name, 'merchandise_value' => $total, 'receivable_reduction' => $reduction, 'refundable_credit_created' => $credit, 'reason' => $data['reason'], 'note' => $data['note'] ?? null, 'returned_at' => now()] as $k => $v) {
+            foreach (['business_id' => $locked->business_id, 'return_number' => 'PENDING-'.Str::random(20), 'sale_id' => $locked->id, 'customer_id' => $locked->customer_id, 'sale_number_snapshot' => $locked->sale_number, 'customer_code_snapshot' => $locked->customer_code_snapshot, 'customer_name_snapshot' => $locked->customer_name_snapshot, 'returned_by' => $actor->id, 'returned_by_name_snapshot' => $actor->name, 'merchandise_value' => $total, 'receivable_reduction' => $reduction, 'refundable_credit_created' => $credit, 'reason' => $data['reason'], 'note' => $data['note'] ?? null, 'returned_at' => now()] as $k => $v) {
                 $return->$k = $v;
             } $return->save();
             $number = 'RET-'.str_pad((string) $return->id, 6, '0', STR_PAD_LEFT);
@@ -91,14 +92,14 @@ class RecordSaleReturn
             $return->setAttribute('return_number', $number);
             foreach ($prepared as [$item,$line,$value]) {
                 $ri = new SaleReturnItem;
-                foreach (['sale_return_id' => $return->id, 'sale_item_id' => $item->id, 'product_id' => $item->product_id, 'product_sku_snapshot' => $item->product_sku_snapshot, 'product_name_snapshot' => $item->product_name_snapshot, 'unit_snapshot' => $item->unit_snapshot, 'quantity_returned' => $line['quantity'], 'original_unit_price' => $item->unit_price, 'return_line_value' => $value, 'disposition' => $line['disposition'], 'created_at' => now()] as $k => $v) {
+                foreach (['business_id' => $return->business_id, 'sale_return_id' => $return->id, 'sale_item_id' => $item->id, 'product_id' => $item->product_id, 'product_sku_snapshot' => $item->product_sku_snapshot, 'product_name_snapshot' => $item->product_name_snapshot, 'unit_snapshot' => $item->unit_snapshot, 'quantity_returned' => $line['quantity'], 'original_unit_price' => $item->unit_price, 'return_line_value' => $value, 'disposition' => $line['disposition'], 'created_at' => now()] as $k => $v) {
                     $ri->$k = $v;
                 } $ri->save();
                 if (ReturnDisposition::from($line['disposition']) === ReturnDisposition::Restock) {
                     $product = $products[$item->product_id];
                     $after = bcadd($product->current_stock, $line['quantity'], 3);
                     $m = new InventoryMovement;
-                    foreach (['product_id' => $product->id, 'type' => InventoryMovementType::SaleReturn, 'quantity_change' => $line['quantity'], 'quantity_before' => $product->current_stock, 'quantity_after' => $after, 'reference_type' => $return->getMorphClass(), 'reference_id' => $return->id, 'reason' => 'Customer return', 'performed_by' => $actor->id] as $k => $v) {
+                    foreach (['business_id' => $product->business_id, 'product_id' => $product->id, 'type' => InventoryMovementType::SaleReturn, 'quantity_change' => $line['quantity'], 'quantity_before' => $product->current_stock, 'quantity_after' => $after, 'reference_type' => $return->getMorphClass(), 'reference_id' => $return->id, 'reason' => 'Customer return', 'performed_by' => $actor->id] as $k => $v) {
                         $m->$k = $v;
                     }$m->save();
                     $product->current_stock = $after;

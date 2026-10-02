@@ -6,6 +6,7 @@ use App\Models\BusinessSetting;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Settings\BusinessSettings;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\DB;
 
 class UpdateBusinessSettings
@@ -13,6 +14,7 @@ class UpdateBusinessSettings
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly BusinessSettings $settings,
+        private readonly CurrentBusiness $currentBusiness,
     ) {}
 
     /**
@@ -25,9 +27,12 @@ class UpdateBusinessSettings
      */
     public function execute(User $actor, array $data): array
     {
-        $changed = DB::transaction(function () use ($actor, $data): array {
+        // The actor's own Business, never one named by the request.
+        $business = $this->currentBusiness->forActor($actor);
+
+        $changed = DB::transaction(function () use ($actor, $data, $business): array {
             $locked = BusinessSetting::query()
-                ->where('singleton_key', BusinessSetting::SINGLETON_KEY)
+                ->forBusiness($business)
                 ->lockForUpdate()
                 ->firstOrFail();
 

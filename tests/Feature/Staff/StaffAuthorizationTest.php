@@ -16,7 +16,9 @@ class StaffAuthorizationTest extends TestCase
         $this->get('/staff')->assertRedirect(route('login'));
 
         $admin = User::factory()->create(['role' => UserRole::Admin]);
-        $this->actingAs($admin)->get('/staff')->assertOk()->assertSee('Staff accounts');
+        // The screen was rebuilt to the Figma and is titled "Staff & roles"; the route and the
+        // policy guarding it are unchanged.
+        $this->actingAs($admin)->get('/staff')->assertOk()->assertSee('Staff &amp; roles', false);
     }
 
     public function test_manager_and_sales_rep_are_forbidden_from_every_staff_capability(): void

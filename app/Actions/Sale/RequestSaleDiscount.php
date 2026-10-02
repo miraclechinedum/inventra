@@ -49,6 +49,7 @@ class RequestSaleDiscount
 
             $request = new SaleDiscountRequest;
             foreach ([
+                'business_id' => $locked->business_id,
                 'sale_id' => $locked->id,
                 'requested_amount' => $amount,
                 'reason' => $data['reason'],

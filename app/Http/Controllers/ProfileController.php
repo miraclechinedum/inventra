@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Profile\UpdateOwnProfile;
 use App\Actions\Staff\SetUserPhoto;
+use App\Http\Requests\Profile\UpdateOwnProfileRequest;
 use App\Http\Requests\ProfilePhotoRequest;
 use App\Models\User;
 use App\Support\ImageStore;
@@ -24,6 +26,25 @@ class ProfileController extends Controller
     public function edit(Request $request): View
     {
         return view('profile.edit', ['user' => $request->user()]);
+    }
+
+    /**
+     * Updates the signed-in account's own name, email and phone.
+     *
+     * The subject comes from `$request->user()` and from nowhere else: the route takes no user
+     * parameter and the request validates no identifier, so there is no id for a crafted payload to
+     * point at another record. Changing an email here rewrites the login identifier, which is
+     * intended — Inventra authenticates on the canonical email or phone, both normalised by the
+     * same helper the request uses — and touches neither the password, the role nor the status, so
+     * the session stays valid and the account's authority is unchanged.
+     */
+    public function update(UpdateOwnProfileRequest $request, UpdateOwnProfile $action): RedirectResponse
+    {
+        $changed = $action->execute($request->user(), $request->safe()->only(['name', 'email', 'phone']));
+
+        return redirect()->route('profile.edit')->with('status', $changed === []
+            ? 'No changes were made to your profile.'
+            : 'Profile updated.');
     }
 
     public function storePhoto(ProfilePhotoRequest $request, SetUserPhoto $action): RedirectResponse

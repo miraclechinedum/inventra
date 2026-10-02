@@ -6,17 +6,24 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\SupplierCode;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CreateSupplier
 {
-    public function __construct(private AuditLogger $audit) {}
+    public function __construct(
+        private AuditLogger $audit,
+        private readonly CurrentBusiness $currentBusiness,
+    ) {}
 
     public function execute(User $actor, array $data): Supplier
     {
-        return DB::transaction(function () use ($actor, $data) {
+        $business = $this->currentBusiness->forActor($actor);
+
+        return DB::transaction(function () use ($actor, $data, $business) {
             $supplier = new Supplier;
+            $supplier->business_id = $business->getKey();
             $supplier->supplier_code = 'PENDING-'.Str::random(20);
             $this->fillProfile($supplier, $data);
             $supplier->is_active = true;

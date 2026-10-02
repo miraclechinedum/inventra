@@ -5,6 +5,7 @@ namespace App\Reports;
 use App\Enums\SaleStatus;
 use App\Models\User;
 use App\Support\Money;
+use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +39,11 @@ class EmployeeActivity
         $start = $start->startOfDay();
         $end = $end->endOfDay();
 
+        // `created_at`, not `sale_date`, and deliberately so: this is an activity log, answering
+        // "what did this employee do at their keyboard in this window". A sale backdated to last
+        // month but keyed in today is today's work for the person who keyed it. The Sales Report
+        // and the dashboard period metrics use `sale_date`, because those ask a different
+        // question — what the shop traded — and the two are meant to differ.
         $sales = $this->sum('sales', 'sold_by', $user->id, 'created_at', $start, $end, 'total_amount',
             fn ($query) => $query->where('status', SaleStatus::Completed->value));
         $voided = $this->count('sales', 'sold_by', $user->id, 'created_at', $start, $end,
@@ -86,6 +92,7 @@ class EmployeeActivity
     private function recentActions(User $user, Carbon $start, Carbon $end)
     {
         return DB::table('audit_logs')
+            ->where('business_id', app(CurrentBusiness::class)->id())
             ->select('action', 'subject_label_snapshot', 'created_at')
             ->where('actor_id', $user->id)
             ->whereBetween('created_at', [$start, $end])
@@ -109,6 +116,7 @@ class EmployeeActivity
         ?callable $filter = null,
     ): array {
         $query = DB::table($table)
+            ->where($table.'.business_id', app(CurrentBusiness::class)->id())
             ->where($actorColumn, $userId)
             ->whereBetween($dateColumn, [$start, $end]);
 
@@ -135,6 +143,7 @@ class EmployeeActivity
         ?callable $filter = null,
     ): int {
         $query = DB::table($table)
+            ->where($table.'.business_id', app(CurrentBusiness::class)->id())
             ->where($actorColumn, $userId)
             ->whereBetween($dateColumn, [$start, $end]);
 

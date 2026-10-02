@@ -5,6 +5,7 @@ use App\Models\PurchaseRequest;
 use App\Models\SaleRefundRequest;
 use App\Models\SaleReturnRequest;
 use App\Models\SecurityEvent;
+use App\Models\WhatsAppOnboardingAttempt;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -33,6 +34,10 @@ Schedule::command('model:prune', ['--model' => SaleRefundRequest::class])
     ->dailyAt('02:50')
     ->withoutOverlapping();
 
+Schedule::command('model:prune', ['--model' => WhatsAppOnboardingAttempt::class])
+    ->dailyAt('02:55')
+    ->withoutOverlapping();
+
 // Operational alerts are projected immediately after the domain writes that cause them, so this
 // sweep is a repair pass rather than the primary generator. Hourly is chosen because ledger
 // integrity is the one condition with no mutation to hang off — nothing saves a Sale when a Sale
@@ -43,13 +48,19 @@ Schedule::command('inventra:reconcile-operational-alerts')
     ->hourly()
     ->withoutOverlapping();
 
-// Automatic WhatsApp receipts. Sale completion only persists the delivery; the provider is called
-// here, on the scheduler, so a Meta outage or slow response can never sit inside a sale
-// transaction. Every minute is chosen because a receipt is worth little once the customer has left,
-// and the shared-hosting cron already runs once a minute for the scheduler as a whole. This adds no
-// queue worker and no supervisor: it is one short command that exits immediately when the queue is
-// empty or WhatsApp is unconfigured. Duplicate sending is prevented in the database by the
+// WhatsApp automation messages. The automations only persist a queued message; the provider is
+// called here, on the scheduler, so a provider outage can never sit inside a business transaction.
+// Every minute, because a greeting or a purchase thank-you is worth little once the moment has
+// passed, and the shared-hosting cron already runs the scheduler once a minute. This adds no queue
+// worker and no supervisor: one short command that exits immediately when nothing is due or
+// WhatsApp is not connected. Duplicate sending is prevented in the database by the
 // dispatch_claimed_at claim, so withoutOverlapping here is a courtesy, not the safety mechanism.
-Schedule::command('inventra:dispatch-whatsapp-receipts')
+Schedule::command('inventra:dispatch-whatsapp-messages')
     ->everyMinute()
+    ->withoutOverlapping();
+
+// Records trial, grace and suspension transitions and their audit rows. Access itself is decided
+// from the stored dates at read time, so this is a bookkeeping pass, not the gate.
+Schedule::command('inventra:advance-subscriptions')
+    ->hourly()
     ->withoutOverlapping();

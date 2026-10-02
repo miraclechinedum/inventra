@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Alerts\AlertSubject;
 use App\Enums\OperationalAlertSeverity;
 use App\Enums\OperationalAlertStatus;
 use App\Enums\OperationalAlertType;
+use App\Models\Concerns\ScopedToCurrentBusiness;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * One lifecycle occurrence of one operational condition. Written only by
@@ -15,7 +19,23 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class OperationalAlert extends Model
 {
+    use ScopedToCurrentBusiness;
+
     protected $guarded = ['*'];
+
+    protected static function booted(): void
+    {
+        // The subject is polymorphic, which no foreign key can express. Only the known subject types
+        // are resolved — never an arbitrary class — and the alert must share its subject's Business.
+        static::creating(function (self $alert): void {
+            $class = AlertSubject::TYPES[$alert->subject_type] ?? null;
+            $owner = $class === null ? null : DB::table((new $class)->getTable())->where('id', $alert->subject_id)->value('business_id');
+
+            if ($owner === null || (int) $owner !== (int) $alert->business_id) {
+                throw new LogicException('An alert must belong to the same business as its subject.');
+            }
+        });
+    }
 
     public function recipients(): HasMany
     {

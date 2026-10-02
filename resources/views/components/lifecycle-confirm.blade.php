@@ -8,6 +8,10 @@
     'confirmLabel' => null,
     'cancelLabel' => 'Cancel',
     'triggerLabel' => null,
+    // Renders the trigger as an entry inside a `role="menu"` rather than a standalone control, so
+    // the focusable button and the announced menu entry are the same element. Off by default:
+    // every existing caller sits outside a menu.
+    'menuitem' => false,
 ])
 {{--
     One confirmation dialog for every consequential lifecycle action, wherever the trigger lives.
@@ -38,7 +42,16 @@
     };
 @endphp
 <span x-data="lifecycleConfirm">
-    @if(isset($icon))
+    @if($menuitem)
+        {{-- Inside a menu the entry shows its icon AND its label, and carries the caller's own
+             classes: it is a row in a list, not a compact icon control in a table cell. --}}
+        <button type="button" role="menuitem" {{ $attributes->class(['ui-menu-action']) }}
+            x-on:click="openDialog"
+            x-bind:aria-expanded="open ? 'true' : 'false'" aria-haspopup="dialog">
+            @isset($icon){{ $icon }}@endisset
+            {{ $triggerLabel ?? $label }}
+        </button>
+    @elseif(isset($icon))
         <button type="button" @class(['ui-icon-action', 'is-danger' => $tone === 'danger'])
             x-on:click="openDialog"
             x-bind:aria-expanded="open ? 'true' : 'false'" aria-haspopup="dialog"

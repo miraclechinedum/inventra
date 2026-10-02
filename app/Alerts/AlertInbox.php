@@ -28,6 +28,23 @@ class AlertInbox
             ->withQueryString();
     }
 
+    /**
+     * The newest few alerts, for the navbar dropdown.
+     *
+     * Deliberately the same scoped query the full inbox uses, so the preview can never show an
+     * operator something the page itself would refuse them — the role filter and the per-user
+     * scope are applied in SQL by `query()`, not re-implemented here.
+     *
+     * @return \Illuminate\Support\Collection<int, OperationalAlertRecipient>
+     */
+    public function preview(User $user, int $limit = 3)
+    {
+        return $this->query($user, AlertFilters::none())
+            ->orderByDesc('operational_alert_recipients.operational_alert_id')
+            ->limit($limit)
+            ->get();
+    }
+
     private function query(User $user, AlertFilters $filters): Builder
     {
         return OperationalAlertRecipient::query()
