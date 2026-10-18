@@ -487,6 +487,63 @@ class DashboardOverviewTest extends TestCase
         $this->assertCount(1, $overview['recentSales']);
     }
 
+    /**
+     * A Sales Representative with a sale of their own can load the page and open that sale.
+     *
+     * The row action is decided by SalePolicy, which reads `sold_by`. The other access tests render
+     * the page with no sales at all, so this is the one that proves the row and its link survive
+     * the policy for a Sales Representative.
+     */
+    public function test_a_sales_representative_with_their_own_sale_renders_the_dashboard_with_its_link(): void
+    {
+        $rep = User::factory()->create(['role' => UserRole::SalesRep]);
+        $sale = $this->sale('7000.00', null, ['sold_by' => $rep->id]);
+
+        $html = $this->page($rep);
+
+        $this->assertStringContainsString(route('sales.show', $sale), $html);
+    }
+
+    /** Inventory value is priced at cost, which a Sales Representative is not entitled to see. */
+    public function test_a_sales_representative_never_receives_the_cost_priced_inventory_value(): void
+    {
+        Product::factory()->create(['cost_price' => '400.00', 'current_stock' => '10.000', 'is_active' => true]);
+        $rep = User::factory()->create(['role' => UserRole::SalesRep]);
+
+        $this->assertNull($this->overview($rep)['kpis']['inventoryValue']);
+        $this->assertStringNotContainsString('Total Inventory Value', $this->page($rep));
+
+        foreach ([UserRole::Admin, UserRole::Manager] as $role) {
+            $manager = User::factory()->create(['role' => $role]);
+            $this->assertSame('4000.00', $this->overview($manager)['kpis']['inventoryValue']);
+            $this->assertStringContainsString('Total Inventory Value', $this->page($manager));
+        }
+    }
+
+    /** Without the inventory card a Sales Representative's KPI row lays out as three, not four with a gap. */
+    public function test_the_kpi_row_fits_the_cards_each_role_actually_receives(): void
+    {
+        $rep = User::factory()->create(['role' => UserRole::SalesRep]);
+        $repHtml = $this->page($rep);
+        $this->assertStringContainsString('class="dash-kpis is-three"', $repHtml);
+        $this->assertSame(3, substr_count($repHtml, '<article class="dash-kpi">'));
+
+        $adminHtml = $this->page();
+        $this->assertStringContainsString('class="dash-kpis"', $adminHtml);
+        $this->assertStringNotContainsString('is-three', $adminHtml);
+        $this->assertSame(4, substr_count($adminHtml, '<article class="dash-kpi">'));
+    }
+
+    /** "View Report" leads to a management-only page, so it is offered only to those who may open it. */
+    public function test_the_view_report_link_is_offered_only_to_roles_that_may_open_reports(): void
+    {
+        $rep = User::factory()->create(['role' => UserRole::SalesRep]);
+        $this->sale('7000.00', null, ['sold_by' => $rep->id]);
+
+        $this->assertStringNotContainsString(route('reports.sales'), $this->page($rep));
+        $this->assertStringContainsString(route('reports.sales'), $this->page());
+    }
+
     /** The notification bell and its preview are not offered to a Sales Representative. */
     public function test_a_sales_representative_gets_no_notification_dropdown(): void
     {

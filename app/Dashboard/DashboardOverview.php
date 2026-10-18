@@ -65,11 +65,13 @@ class DashboardOverview
         // One row, three aggregates: value, low count and whether any product exists at all. The
         // last is what tells an empty inventory apart from one that simply has nothing low.
         // Raw builder query: the tenant scope does not reach it, so it names the Business.
+        // The value is priced at cost, and cost price belongs to Administrators and Managers only,
+        // so a Sales Representative's query never reads it: nothing derived from it can reach them.
         $stock = DB::table('products')
             ->where('business_id', app(CurrentBusiness::class)->id())
             ->whereNull('deleted_at')
             ->where('is_active', true)
-            ->selectRaw('COALESCE(SUM(cost_price * current_stock), 0) value')
+            ->when($management, fn ($query) => $query->selectRaw('COALESCE(SUM(cost_price * current_stock), 0) value'))
             ->selectRaw('COALESCE(SUM(current_stock <= reorder_level), 0) low')
             ->selectRaw('COUNT(*) total')
             ->first();
@@ -81,7 +83,7 @@ class DashboardOverview
         $outstanding = $this->outstandingSales($user, $management);
 
         return [
-            'inventoryValue' => Money::zero((string) $stock?->value),
+            'inventoryValue' => $management ? Money::zero((string) $stock?->value) : null,
             'inventoryIsEmpty' => (int) ($stock?->total ?? 0) === 0,
             'salesToday' => $salesToday,
             'salesTodayTrend' => $this->trend($salesYesterday, $salesToday),

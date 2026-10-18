@@ -3,6 +3,7 @@
 use App\Models\ExpenseRequest;
 use App\Models\PurchaseRequest;
 use App\Models\SaleRefundRequest;
+use App\Models\SaleRequest;
 use App\Models\SaleReturnRequest;
 use App\Models\SecurityEvent;
 use App\Models\WhatsAppOnboardingAttempt;
@@ -34,6 +35,11 @@ Schedule::command('model:prune', ['--model' => SaleRefundRequest::class])
     ->dailyAt('02:50')
     ->withoutOverlapping();
 
+// Only expired, unused Record Sale submissions; a used one is the evidence behind its Sale.
+Schedule::command('model:prune', ['--model' => SaleRequest::class])
+    ->dailyAt('02:52')
+    ->withoutOverlapping();
+
 Schedule::command('model:prune', ['--model' => WhatsAppOnboardingAttempt::class])
     ->dailyAt('02:55')
     ->withoutOverlapping();
@@ -57,6 +63,13 @@ Schedule::command('inventra:reconcile-operational-alerts')
 // dispatch_claimed_at claim, so withoutOverlapping here is a courtesy, not the safety mechanism.
 Schedule::command('inventra:dispatch-whatsapp-messages')
     ->everyMinute()
+    ->withoutOverlapping();
+
+// Records the expiry of discount requests no one decided within 24 hours and of pre-sale approvals
+// no Sale spent before their business day ended. Expiry is enforced from the requests' own
+// timestamps wherever they are used; this only writes it down and clears the approval queue.
+Schedule::command('inventra:expire-discount-requests')
+    ->hourly()
     ->withoutOverlapping();
 
 // Records trial, grace and suspension transitions and their audit rows. Access itself is decided

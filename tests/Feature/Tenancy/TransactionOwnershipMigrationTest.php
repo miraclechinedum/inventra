@@ -61,6 +61,7 @@ class TransactionOwnershipMigrationTest extends TestCase
             // Later contracts whose composite keys reference these documents' business keys.
             'whatsappTenancy' => '2026_09_29_222000_enforce_whatsapp_tenancy',
             'tokensTenancy' => '2026_09_29_224000_enforce_request_token_tenancy',
+            'saleRequests' => '2026_10_17_010000_create_sale_requests_table',
         ] as $key => $name) {
             $this->migrations[$key] = require database_path("migrations/{$name}.php");
         }
@@ -193,7 +194,7 @@ class TransactionOwnershipMigrationTest extends TestCase
     /** Rolls every contract back and clears ownership, so the expand migrations must re-derive it. */
     private function eraseOwnership(): void
     {
-        $this->down('tokensTenancy', 'whatsappTenancy', 'expensesTenancy', 'purchasingTenancy', 'childrenTenancy', 'salesTenancy');
+        $this->down('saleRequests', 'tokensTenancy', 'whatsappTenancy', 'expensesTenancy', 'purchasingTenancy', 'childrenTenancy', 'salesTenancy');
 
         foreach (self::DOCUMENTS as $table) {
             DB::table($table)->update(['business_id' => null]);

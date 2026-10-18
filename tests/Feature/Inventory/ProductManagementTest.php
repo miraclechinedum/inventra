@@ -32,6 +32,7 @@ class ProductManagementTest extends TestCase
         $this->post(route('inventory.products.store'), $this->payload([
             'sku' => ' inv-001 ',
             'initial_stock' => '12.500',
+            'unit' => 'litre',
             'cost_price' => '1250.5',
         ]))->assertRedirect();
 

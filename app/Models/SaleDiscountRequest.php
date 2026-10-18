@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\DiscountRequestStatus;
 use App\Models\Concerns\ScopedToCurrentBusiness;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
@@ -14,7 +16,10 @@ class SaleDiscountRequest extends Model
 
     protected $guarded = ['*'];
 
-    /** Set only by DecideSaleDiscount while it records a decision. */
+    /** How long a request may wait for a decision before it expires. */
+    public const PENDING_LIFETIME_HOURS = 24;
+
+    /** Set only while a decision, cancellation or expiry is being recorded. */
     private bool $decisionTransition = false;
 
     protected static function booted(): void
@@ -49,8 +54,57 @@ class SaleDiscountRequest extends Model
     }
 
     /**
-     * Writes the one permitted state change: pending to approved or declined. Wrapped in a flag so
-     * the `updating` guard above blocks every other route to mutating a request.
+     * Pending requests still open to a decision: not yet decided and not past their lifetime.
+     *
+     * An expired request may still read `pending` until the scheduler records its expiry, so every
+     * "is something awaiting a decision" question asks this rather than reading the status alone.
+     */
+    public function scopeAwaitingDecision(Builder $query): void
+    {
+        $query->where($this->qualifyColumn('status'), DiscountRequestStatus::Pending->value)
+            ->where($this->qualifyColumn('requested_at'), '>', now()->subHours(self::PENDING_LIFETIME_HOURS));
+    }
+
+    /** When a pending request stops being decidable. */
+    public function pendingExpiresAt(): CarbonImmutable
+    {
+        return CarbonImmutable::parse($this->requested_at)->addHours(self::PENDING_LIFETIME_HOURS);
+    }
+
+    /** A pending request no one decided in time. Derived, so it holds before the scheduler runs. */
+    public function isPendingExpired(): bool
+    {
+        return $this->status === DiscountRequestStatus::Pending && ! $this->pendingExpiresAt()->isFuture();
+    }
+
+    /**
+     * When a pre-sale approval stops being spendable: the end of the business day it was granted,
+     * in the business timezone. Nothing about the Sale being recorded moves it, so backdating a
+     * Sale cannot revive an approval.
+     */
+    public function approvalExpiresAt(): ?CarbonImmutable
+    {
+        if ($this->sale_draft_id === null || $this->decided_at === null) {
+            return null;
+        }
+
+        $timezone = config('business.timezone');
+
+        return CarbonImmutable::parse($this->decided_at)->timezone($timezone)->endOfDay();
+    }
+
+    /** A pre-sale approval no Sale spent before its business day ended. */
+    public function isApprovalExpired(): bool
+    {
+        $expiresAt = $this->approvalExpiresAt();
+
+        return $this->status === DiscountRequestStatus::Approved && $expiresAt !== null && ! $expiresAt->isFuture();
+    }
+
+    /**
+     * Writes one permitted state change out of pending (decided, cancelled or expired), or the
+     * expiry of an unspent approval. Wrapped in a flag so the `updating` guard above blocks every
+     * other route to mutating a request.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -82,6 +136,8 @@ class SaleDiscountRequest extends Model
             'refundable_credit_after' => 'decimal:2',
             'requested_at' => 'datetime',
             'decided_at' => 'datetime',
+            'expired_at' => 'datetime',
+            'self_approved' => 'boolean',
         ];
     }
 }

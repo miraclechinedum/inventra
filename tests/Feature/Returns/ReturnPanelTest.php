@@ -3,19 +3,24 @@
 namespace Tests\Feature\Returns;
 
 use App\Actions\Sale\CreateSale;
+use App\Actions\Sale\DecideSaleDiscount;
 use App\Actions\Sale\IssueReturnRequest;
 use App\Actions\Sale\RecordSaleReturn;
+use App\Actions\Sale\RequestSaleDiscount;
 use App\Enums\UserRole;
+use App\Models\Business;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleReturn;
+use App\Models\SaleReturnRequest;
 use App\Models\User;
 use App\Support\ReturnSettlementPreview;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\SubmitsSales;
 use Tests\TestCase;
 
 /**
@@ -29,7 +34,7 @@ use Tests\TestCase;
  */
 class ReturnPanelTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, SubmitsSales;
 
     private User $admin;
 
@@ -236,7 +241,7 @@ class ReturnPanelTest extends TestCase
         $item = $sale->items()->sole();
 
         $preview = ReturnSettlementPreview::for($sale, [
-            ['quantity' => '4', 'unit_price' => (string) $item->unit_price],
+            ['sale_item_id' => $item->id, 'quantity' => '4'],
         ]);
 
         $this->assertSame('168000.00', $preview['merchandise']);
@@ -260,7 +265,7 @@ class ReturnPanelTest extends TestCase
         $item = $sale->items()->sole();
 
         $preview = ReturnSettlementPreview::for($sale, [
-            ['quantity' => '2', 'unit_price' => (string) $item->unit_price],
+            ['sale_item_id' => $item->id, 'quantity' => '2'],
         ]);
 
         $this->assertSame('84000.00', $preview['reduction']);
@@ -274,7 +279,7 @@ class ReturnPanelTest extends TestCase
         $item = $sale->items()->sole();
 
         $preview = ReturnSettlementPreview::for($sale, [
-            ['quantity' => '2', 'unit_price' => (string) $item->unit_price],
+            ['sale_item_id' => $item->id, 'quantity' => '2'],
         ]);
 
         $this->assertSame('0.00', $preview['reduction']);
@@ -336,6 +341,182 @@ class ReturnPanelTest extends TestCase
 
         $this->expectExceptionMessage('Returned quantity exceeds the remaining returnable quantity.');
         $this->recordReturn($sale, [['sale_item_id' => $item->id, 'quantity' => '4', 'disposition' => 'restock']]);
+    }
+
+    /**
+     * A Return rejected from the side panel lands on the Sales list with its reason shown.
+     *
+     * The panel and its live preview are fetched as plain GETs, so "back" would be that fragment or
+     * the JSON preview, not the list. Both kinds of refusal are covered: one decided by validation,
+     * and one decided by RecordSaleReturn under the Sale lock.
+     */
+    public function test_a_rejected_panel_return_lands_on_the_sales_list_with_its_errors(): void
+    {
+        $sale = $this->sale([[$this->filter, '3']]);
+        $item = $sale->items()->sole();
+
+        $this->actingAs($this->admin)->startSession();
+        $this->get(route('sales.index'))->assertOk();
+        $panel = $this->get(route('sales.returns.panel', $sale))->assertOk()->getContent();
+        $this->get(route('sales.returns.preview', $sale));
+        preg_match('/name="request_token" value="([A-Za-z0-9]{64})"/', $panel, $match);
+        $token = $match[1];
+        // The token is bound to the session that was issued it, so later requests carry that session.
+        $this->withCookie(config('session.cookie'), SaleReturnRequest::query()->where('token_hash', hash('sha256', $token))->value('session_id'));
+
+        $refusals = [
+            'decided under the lock' => [
+                ['items' => [['sale_item_id' => $item->id, 'quantity' => '4', 'disposition' => 'restock']], 'reason' => 'Faulty'],
+                'Returned quantity exceeds the remaining returnable quantity.',
+            ],
+            'refused by validation' => [
+                ['items' => [['sale_item_id' => $item->id, 'quantity' => '1', 'disposition' => 'restock']]],
+                'The reason field is required.',
+            ],
+        ];
+
+        foreach ($refusals as $case => [$payload, $message]) {
+            $this->post(route('sales.returns.store', $sale), $payload + ['request_token' => $token, 'return_to' => 'index'])
+                ->assertRedirect(route('sales.index'));
+
+            $list = $this->get(route('sales.index'))->assertOk()->getContent();
+            $this->assertStringContainsString('The return could not be recorded:', $list, $case);
+            $this->assertStringContainsString($message, $list, $case);
+            $this->assertStringNotContainsString($token, $list, 'a request token is never rendered');
+        }
+
+        $this->assertSame(0, $sale->returns()->count());
+
+        // Shown once, for the redirect that carried it; the next visit is a clean list.
+        $this->assertStringNotContainsString('The return could not be recorded:', $this->get(route('sales.index'))->getContent());
+    }
+
+    /** The full Record Return page keeps its own form and its own error block. */
+    public function test_a_rejected_full_page_return_stays_on_its_form(): void
+    {
+        $sale = $this->sale([[$this->filter, '3']]);
+
+        $page = $this->actingAs($this->admin)->get(route('sales.returns.create', $sale))->assertOk()->getContent();
+        preg_match('/name="request_token" value="([A-Za-z0-9]{64})"/', $page, $match);
+
+        $this->post(route('sales.returns.store', $sale), [
+            'request_token' => $match[1],
+            'items' => [['sale_item_id' => $sale->items()->sole()->id, 'quantity' => '1', 'disposition' => 'restock']],
+        ])->assertRedirect(route('sales.returns.create', $sale))->assertSessionHasErrors('reason');
+    }
+
+    /*
+     * Discounted Sales are returned at their net value: the Sale's discount is allocated across its
+     * lines, and each return is worth its share of what the customer was actually charged. The panel,
+     * the full page and the preview all serve them, and every figure comes from ReturnValuation.
+     */
+
+    public function test_a_discounted_sale_is_returned_at_its_net_value_and_reconciles_exactly(): void
+    {
+        // Two filters at ₦42,000 less a ₦4,000 discount: ₦80,000, so each filter is worth ₦40,000.
+        $sale = $this->sale([[$this->filter, '2']], '50000.00');
+        $this->approveDiscount($sale, '4000.00');
+        $item = $sale->items()->sole();
+
+        $preview = ReturnSettlementPreview::for($sale->fresh(), [['sale_item_id' => $item->id, 'quantity' => '1']]);
+        $first = $this->recordReturn($sale->fresh(), [['sale_item_id' => $item->id, 'quantity' => '1', 'disposition' => 'restock']]);
+        $this->assertSame('40000.00', $preview['merchandise']);
+        $this->assertSame('40000.00', $first->merchandise_value, 'the preview and the ledger agree');
+
+        $second = $this->recordReturn($sale->fresh(), [['sale_item_id' => $item->id, 'quantity' => '1', 'disposition' => 'restock']]);
+        $this->assertSame('40000.00', $second->merchandise_value);
+
+        $sale->refresh();
+        $this->assertSame('80000.00', $sale->returned_amount, 'returns add up to the discounted total, never more');
+        $this->assertSame('0.00', $sale->balance_due);
+        $this->assertSame('50000.00', $sale->refundable_credit, 'only money actually taken can come back');
+        $this->assertSame('50.000', $this->filter->fresh()->current_stock);
+    }
+
+    public function test_every_return_screen_serves_a_discounted_sale(): void
+    {
+        $sale = $this->sale([[$this->filter, '2']]);
+        $this->approveDiscount($sale, '4000.00');
+        $item = $sale->items()->sole();
+
+        foreach ([$this->admin, $this->manager] as $operator) {
+            $this->actingAs($operator)->get(route('sales.returns.panel', $sale))->assertOk()
+                ->assertSee('name="request_token"', false)
+                ->assertSee('40,000 each after discount', false);
+
+            $this->actingAs($operator)->get(route('sales.returns.create', $sale))->assertOk()
+                ->assertSee('name="request_token"', false);
+
+            $this->actingAs($operator)->getJson(route('sales.returns.preview', ['sale' => $sale, 'items' => [['sale_item_id' => $item->id, 'quantity' => '2']]]))
+                ->assertOk()->assertJsonPath('return_value', '80000.00')->assertJsonPath('balance_reduction', '80000.00');
+        }
+    }
+
+    /**
+     * A panel opened before a discount was approved still holds a valid token. Submitting it is
+     * valued under the Sale lock at the discount that now applies, not the price the panel showed.
+     */
+    public function test_a_stale_panel_submission_is_valued_at_the_discount_that_now_applies(): void
+    {
+        $sale = $this->sale([[$this->filter, '2']]);
+        $item = $sale->items()->sole();
+
+        $this->actingAs($this->admin)->startSession();
+        $panel = $this->get(route('sales.returns.panel', $sale))->assertOk()->getContent();
+        preg_match('/name="request_token" value="([A-Za-z0-9]{64})"/', $panel, $match);
+        $this->withCookie(config('session.cookie'), SaleReturnRequest::query()->where('token_hash', hash('sha256', $match[1]))->value('session_id'));
+
+        $this->approveDiscount($sale, '4000.00');
+
+        $this->post(route('sales.returns.store', $sale), [
+            'request_token' => $match[1], 'return_to' => 'index', 'reason' => 'Faulty',
+            'items' => [['sale_item_id' => $item->id, 'quantity' => '1', 'disposition' => 'restock']],
+        ])->assertRedirect(route('sales.index'))->assertSessionHasNoErrors();
+
+        $this->assertSame('40000.00', $sale->returns()->sole()->merchandise_value);
+    }
+
+    /** Sales without a discount are unaffected, including one whose discount request was declined. */
+    public function test_returns_on_sales_without_a_discount_are_unaffected(): void
+    {
+        $plain = $this->sale([[$this->filter, '2']], '84000.00');
+        $declined = $this->sale([[$this->plug, '5']], '12000.00');
+        $request = app(RequestSaleDiscount::class)->execute($this->manager, $declined, ['amount' => '1000.00', 'reason' => 'Asked for goodwill on the order.']);
+        app(DecideSaleDiscount::class)->decline($this->admin, $request, 'Not this time.');
+        $this->assertSame('0.00', $declined->fresh()->discount_amount);
+
+        foreach ([[$plain, $this->filter, '42000.00'], [$declined, $this->plug, '2400.00']] as [$sale, $product, $value]) {
+            $panel = $this->actingAs($this->admin)->get(route('sales.returns.panel', $sale))->assertOk()->getContent();
+            $this->assertStringContainsString('name="request_token"', $panel);
+            $this->assertStringNotContainsString('Return unavailable', $panel);
+
+            $stock = $product->fresh()->current_stock;
+            $return = $this->recordReturn($sale->fresh(), [['sale_item_id' => $sale->items()->sole()->id, 'quantity' => '1', 'disposition' => 'restock']]);
+
+            $this->assertSame($value, $return->merchandise_value);
+            $this->assertSame(bcadd($stock, '1', 3), $product->fresh()->current_stock);
+        }
+    }
+
+    /** Returns on a discounted Sale keep the existing role rules and tenant scoping. */
+    public function test_discounted_returns_respect_permissions_and_tenant_isolation(): void
+    {
+        $sale = $this->sale([[$this->filter, '2']]);
+        $this->approveDiscount($sale, '4000.00');
+        $itemId = $sale->items()->sole()->id;
+
+        foreach (['sales.returns.panel', 'sales.returns.create', 'sales.returns.preview'] as $route) {
+            $this->actingAs($this->rep)->get(route($route, $sale))->assertForbidden();
+        }
+
+        $outsider = User::factory()->forBusiness(Business::factory()->create())->create(['role' => UserRole::Admin]);
+        foreach (['sales.returns.panel', 'sales.returns.create', 'sales.returns.preview'] as $route) {
+            $this->actingAs($outsider)->get(route($route, $sale))->assertNotFound();
+        }
+        $this->actingAs($outsider)->post(route('sales.returns.store', $sale), [
+            'request_token' => str_repeat('a', 64), 'reason' => 'Cross-business attempt',
+            'items' => [['sale_item_id' => $itemId, 'quantity' => '1', 'disposition' => 'restock']],
+        ])->assertNotFound();
     }
 
     /** A replayed token returns the original Return rather than recording a second one. */
@@ -628,6 +809,33 @@ class ReturnPanelTest extends TestCase
     }
 
     /** @param  list<array<string, string>>  $items */
+    /** Applies an approved post-sale discount through the real request-and-decision workflow. */
+    private function approveDiscount(Sale $sale, string $amount): void
+    {
+        $request = app(RequestSaleDiscount::class)->execute($this->manager, $sale->fresh(), [
+            'amount' => $amount, 'reason' => 'Goodwill on a damaged carton.',
+        ]);
+        app(DecideSaleDiscount::class)->approve($this->admin, $request);
+        $this->assertSame(0, bccomp($amount, (string) $sale->fresh()->discount_amount, 2));
+    }
+
+    /** Every row a Return could touch: the Sale, its lines, stock, movements, returns, refunds and discount decisions. */
+    private function ledgerFingerprint(Sale $sale): array
+    {
+        $productIds = $sale->items()->pluck('product_id');
+
+        return [
+            'sale' => (array) DB::table('sales')->where('id', $sale->id)->first(),
+            'items' => DB::table('sale_items')->where('sale_id', $sale->id)->orderBy('id')->get()->map(fn ($row): array => (array) $row)->all(),
+            'stock' => DB::table('products')->whereIn('id', $productIds)->orderBy('id')->pluck('current_stock', 'id')->all(),
+            'movements' => DB::table('inventory_movements')->whereIn('product_id', $productIds)->count(),
+            'returns' => DB::table('sale_returns')->where('sale_id', $sale->id)->count(),
+            'refunds' => DB::table('sale_refunds')->where('sale_id', $sale->id)->count(),
+            'payments' => DB::table('sale_payments')->where('sale_id', $sale->id)->count(),
+            'discounts' => DB::table('sale_discount_requests')->orderBy('id')->get()->map(fn ($row): array => (array) $row)->all(),
+        ];
+    }
+
     private function recordReturn(Sale $sale, array $items, string $reason = 'Faulty'): SaleReturn
     {
         $token = app(IssueReturnRequest::class)->execute($this->admin, $sale, session()->driver());

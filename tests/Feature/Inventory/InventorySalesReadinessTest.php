@@ -112,6 +112,7 @@ class InventorySalesReadinessTest extends TestCase
             'selling_price' => '9999999999999.99',
             'initial_stock' => '999999999999.999',
             'reorder_level' => '999999999999.999',
+            'unit' => 'litre',
         ]))->assertRedirect();
 
         $product = Product::query()->where('sku', 'BOUNDARY-1')->firstOrFail();

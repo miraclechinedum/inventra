@@ -140,15 +140,33 @@ class BusinessReports
         return $this->payload('Inventory Movement Report', $filters, [$this->count('Movements', (clone $base)->count()), $this->quantity('Quantity In', $in), $this->quantity('Quantity Out', $out)], $base->with('product:id,name,sku')->latest('created_at')->latest('id')->paginate($filters->perPage)->withQueryString(), 'inventory');
     }
 
+    /**
+     * Product Performance: gross sales as sold, each product's allocated share of Sale-level
+     * discounts, and the net that leaves. Current lines only, so a corrected Sale counts once.
+     * These are values of goods sold, not money collected.
+     */
     public function products(ReportFilters $filters): array
     {
+        $productId = ctype_digit($filters->product) ? (int) $filters->product : null;
         $base = SaleItem::query()->join('sales', 'sales.id', '=', 'sale_items.sale_id')->join('products', 'products.id', '=', 'sale_items.product_id')->where('products.business_id', app(CurrentBusiness::class)->id())->where('sales.status', 'completed')->whereBetween('sales.sale_date', [$filters->from, $filters->to])
-            ->when(ctype_digit($filters->product), fn ($q) => $q->where('sale_items.product_id', (int) $filters->product));
-        $gross = (string) (clone $base)->sum('sale_items.line_total');
+            ->whereNull('sale_items.superseded_by_correction_id')
+            ->when($productId !== null, fn ($q) => $q->where('sale_items.product_id', $productId));
+        $totals = ProductSales::totals(ProductSales::forPeriod($this->businessId(), $filters->from, $filters->to, $productId));
+        $discounts = ProductSales::discountsBySnapshot($this->businessId(), $filters->from, $filters->to, $productId);
         $rows = $base->select(['sale_items.product_id', 'product_sku_snapshot', 'product_name_snapshot', 'products.current_stock', DB::raw('SUM(quantity) quantity_sold'), DB::raw('SUM(line_total) sales_value'), DB::raw('COUNT(DISTINCT sale_id) transaction_count')])
-            ->groupBy('sale_items.product_id', 'product_sku_snapshot', 'product_name_snapshot', 'products.current_stock')->orderByDesc('sales_value')->orderBy('sale_items.product_id')->paginate($filters->perPage)->withQueryString();
+            ->groupBy('sale_items.product_id', 'product_sku_snapshot', 'product_name_snapshot', 'products.current_stock')->orderByDesc('sales_value')->orderBy('sale_items.product_id')->paginate($filters->perPage)->withQueryString()
+            ->through(function ($row) use ($discounts) {
+                $row->allocated_discount = $discounts[ProductSales::snapshotKey((int) $row->product_id, (string) $row->product_sku_snapshot, (string) $row->product_name_snapshot)] ?? '0.00';
+                $row->net_sales_value = bcsub(bcadd((string) $row->sales_value, '0', 2), $row->allocated_discount, 2);
 
-        return $this->payload('Product Performance', $filters, [$this->money('Gross Product Sales', $gross)], $rows, 'products');
+                return $row;
+            });
+
+        return $this->payload('Product Performance', $filters, [
+            $this->money('Gross Product Sales', $totals['gross']),
+            $this->money('Allocated Discounts', $totals['discount']),
+            $this->money('Net Product Sales', $totals['net']),
+        ], $rows, 'products');
     }
 
     /**
@@ -247,7 +265,14 @@ class BusinessReports
         return Money::round($value);
     }
 
-    private function currentReceivables(): Builder
+    /**
+     * What "outstanding" means everywhere: completed Sales with a balance still due, read from the
+     * synchronized `balance_due`. Read-only reuse point for surfaces outside Reporting, such as the
+     * customer profile, which narrow it rather than restating it.
+     *
+     * @return Builder<Sale>
+     */
+    public function currentReceivables(): Builder
     {
         return Sale::query()->where('status', 'completed')->where('balance_due', '>', 0);
     }

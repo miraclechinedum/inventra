@@ -1,4 +1,4 @@
-<x-app-layout :title="$sale->sale_number.' receipt'">
+<x-app-layout :receipt="true" :title="$sale->sale_number.' receipt'">
     <div class="receipt-controls mx-auto mb-4 flex max-w-3xl flex-wrap gap-3">
         <button type="button" data-print-trigger class="inventra-primary-action">Print receipt</button>
         <a href="{{ route('sales.receipt.pdf', $sale) }}" class="ui-button">Download PDF</a>

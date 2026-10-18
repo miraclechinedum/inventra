@@ -10,11 +10,12 @@ use App\Models\Sale;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Route;
+use Tests\Concerns\SubmitsSales;
 use Tests\TestCase;
 
 class WorkflowCompletionTest extends TestCase
 {
-    use DatabaseTransactions;
+    use DatabaseTransactions, SubmitsSales;
 
     protected function setUp(): void
     {
@@ -33,10 +34,11 @@ class WorkflowCompletionTest extends TestCase
             ])->assertSessionHasNoErrors();
             $before = $product->movements()->get()->toArray();
             $this->assertNotEmpty($before);
-            $this->actingAs($actor)->post(route('inventory.products.deactivate', $product))->assertRedirect();
+            // The product page's own lifecycle: archive, then the page offers reactivation.
+            $this->actingAs($actor)->delete(route('inventory.products.destroy', $product))->assertRedirect();
             $this->assertFalse($product->fresh()->is_active);
-            $this->get(route('inventory.products.show', $product))->assertOk()->assertSee(route('inventory.products.activate', $product), false);
-            $this->post(route('inventory.products.activate', $product))->assertRedirect();
+            $this->get(route('inventory.products.show', $product))->assertOk()->assertSee(route('inventory.products.reactivate', $product), false);
+            $this->post(route('inventory.products.reactivate', $product))->assertRedirect();
             $this->assertTrue($product->fresh()->is_active);
             $this->assertSame($before, $product->movements()->get()->toArray());
         }
@@ -81,18 +83,26 @@ class WorkflowCompletionTest extends TestCase
         $this->actingAs($actor);
         $result = $this->withCredentials()->getJson(route('sales.create', ['product_search' => 'Zulu']));
         $result->assertOk()->assertJsonCount(1, 'products')->assertJsonPath('products.0.id', $b->id);
-        $this->assertSame(['id', 'label'], array_keys($result->json('products.0')));
+        // Exactly what the Record Sale cart needs to price, warn on and step a line, and never cost price.
+        $this->assertSame(['id', 'sku', 'name', 'unit', 'price', 'stock', 'fractional'], array_keys($result->json('products.0')));
+        $this->assertStringNotContainsString('cost', $result->getContent());
         $draft = ['is_walk_in' => '0', 'sale_date' => now(config('business.timezone'))->toDateString(), 'customer_id' => $customer->id, 'products' => [['product_id' => $a->id, 'quantity' => '2'], ['product_id' => $b->id, 'quantity' => '1']], 'payment_method' => 'transfer', 'amount_paid' => '50.00', 'notes' => 'Keep this draft'];
         $url = route('sales.create', ['product_search' => 'Zulu']);
-        $this->from($url)->post(route('sales.store'), $draft)->assertRedirect($url)->assertSessionHasErrors('amount_paid');
-        $this->get($url)->assertOk()->assertViewHas('errors', fn ($errors) => $errors->has('amount_paid'))->assertSee('Amount paid cannot exceed the sale total.')->assertSee('Keep this draft')->assertSee('Alpha')->assertSee('Zulu Beta');
+        $this->from($url)->post(route('sales.store'), $this->withSaleToken($draft))->assertRedirect($url)->assertSessionHasErrors('amount_paid');
+        // The Record Sale screen no longer has a notes field, so the restored state is the cart, the
+        // buyer and the amount — rebuilt from authoritative records.
+        $restored = $this->get($url)->assertOk()->assertViewHas('errors', fn ($errors) => $errors->has('amount_paid'))->assertSee('Amount paid cannot exceed the sale total.')->assertSee('Alpha')->assertSee('Zulu Beta')->viewData('restored');
+        $this->assertSame([$a->id, $b->id], array_map(fn (array $line): int => $line['product']['id'], $restored['lines']));
+        $this->assertSame($customer->id, $restored['customer']['id']);
+        $this->assertSame('50.00', $restored['amountPaid']);
         $this->assertSame(0, Sale::count());
         $this->assertSame('10.000', $a->fresh()->current_stock);
         $draft['amount_paid'] = '40.00';
-        $this->post(route('sales.store'), $draft)->assertSessionHasNoErrors()->assertRedirect();
+        $this->post(route('sales.store'), $this->withSaleToken($draft))->assertSessionHasNoErrors()->assertRedirect();
         $sale = Sale::sole();
         $this->assertSame($customer->id, $sale->customer_id);
         $this->assertSame('transfer', $sale->payment_method->value);
+        $this->assertSame('Keep this draft', $sale->notes);
         $this->assertSame('40.00', $sale->total_amount);
         $this->assertCount(2, $sale->items);
         $this->assertSame('8.000', $a->fresh()->current_stock);
@@ -110,20 +120,20 @@ class WorkflowCompletionTest extends TestCase
         $payload = ['is_walk_in' => '0', 'sale_date' => now(config('business.timezone'))->toDateString(), 'customer_id' => $customer->id, 'products' => [['product_id' => $product->id, 'quantity' => '1']], 'payment_method' => 'cash', 'amount_paid' => '0'];
         $forged = $payload;
         $forged['products'][0]['unit_price'] = '0.01';
-        $this->post(route('sales.store'), $forged)->assertSessionHasErrors('products.0.unit_price');
+        $this->post(route('sales.store'), $this->withSaleToken($forged))->assertSessionHasErrors('products.0.unit_price');
         $product->selling_price = '15.00';
         $product->save();
-        $this->post(route('sales.store'), $payload)->assertSessionHasNoErrors();
+        $this->post(route('sales.store'), $this->withSaleToken($payload))->assertSessionHasNoErrors();
         $sale = Sale::sole();
         $this->assertSame('15.00', $sale->total_amount);
         $this->assertSame('15.00', $sale->items()->sole()->unit_price);
         $payload['products'][0]['quantity'] = '2';
-        $this->post(route('sales.store'), $payload)->assertSessionHasErrors('products');
+        $this->post(route('sales.store'), $this->withSaleToken($payload))->assertSessionHasErrors('products');
         $this->assertSame('1.000', $product->fresh()->current_stock);
         $product->is_active = false;
         $product->save();
         $payload['products'][0]['quantity'] = '1';
-        $this->post(route('sales.store'), $payload)->assertSessionHasErrors('products');
+        $this->post(route('sales.store'), $this->withSaleToken($payload))->assertSessionHasErrors('products');
         $this->assertSame(1, Sale::count());
         $this->assertSame('1.000', $product->fresh()->current_stock);
     }

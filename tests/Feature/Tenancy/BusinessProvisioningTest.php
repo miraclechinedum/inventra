@@ -92,6 +92,47 @@ class BusinessProvisioningTest extends TestCase
         $this->get(route('dashboard'))->assertOk()->assertSee('Set up Obi Auto Parts')->assertSee('Add your first product');
     }
 
+    public function test_submitting_the_same_signup_twice_creates_one_business(): void
+    {
+        $counts = $this->counts();
+        Notification::fake();
+
+        $this->post(route('register.store'), $this->signup())->assertRedirect(route('verification.notice'));
+        $this->post(route('register.store'), $this->signup())->assertRedirect();
+
+        $this->post(route('logout'));
+        $this->post(route('register.store'), $this->signup())->assertSessionHasErrors(['email' => UnavailableIdentifier::EMAIL]);
+
+        $after = $this->counts();
+        $this->assertSame(1, User::query()->where('email', 'ada@obi-auto.test')->count());
+        foreach (['businesses', 'business_settings', 'users', 'business_subscriptions'] as $table) {
+            $this->assertSame($counts[$table] + 1, $after[$table], "{$table} gains exactly one row");
+        }
+        $this->assertProvisioned(Business::query()->findOrFail(User::query()->where('email', 'ada@obi-auto.test')->value('business_id')));
+    }
+
+    public function test_signup_without_the_default_plan_fails_cleanly_until_plans_are_synchronised(): void
+    {
+        $installation = Business::query()->orderBy('id')->firstOrFail();
+        $installationSubscription = (array) DB::table('business_subscriptions')->where('business_id', $installation->id)->sole();
+        DB::table('plans')->where('key', config('plans.default'))->delete();
+        $counts = $this->counts();
+
+        Notification::fake();
+        $this->post(route('register.store'), $this->signup())->assertServerError();
+
+        $this->assertGuest();
+        $this->assertSame($counts, $this->counts(), 'a missing plan is detected before anything is written');
+
+        $this->artisan('inventra:sync-plans')->assertSuccessful();
+        $this->artisan('inventra:sync-plans')->assertSuccessful();
+        $this->assertSame(1, DB::table('plans')->where('key', config('plans.default'))->count());
+        $this->assertSame($installationSubscription, (array) DB::table('business_subscriptions')->where('business_id', $installation->id)->sole(), 'synchronising plans never touches subscriptions');
+
+        $this->post(route('register.store'), $this->signup())->assertRedirect(route('verification.notice'));
+        $this->assertProvisioned(Business::query()->findOrFail(User::query()->where('email', 'ada@obi-auto.test')->value('business_id')));
+    }
+
     public function test_signup_cannot_choose_a_role_status_or_business(): void
     {
         $this->post(route('register.store'), $this->signup([
@@ -245,15 +286,15 @@ class BusinessProvisioningTest extends TestCase
 
         // The installation's products, customers and staff count for nothing here.
         $this->actingAs($owner)->get(route('dashboard'))->assertOk()
-            ->assertViewHas('setup', fn (array $steps): bool => collect($steps)->where('done', true)->isEmpty());
+            ->assertViewHas('setup', fn (array $setup): bool => collect($setup['steps'])->where('done', true)->isEmpty());
 
         app(CurrentBusiness::class)->run(Business::query()->findOrFail($owner->business_id), function () use ($owner): void {
             Product::factory()->forBusiness($owner->business)->create();
         });
 
         $this->actingAs($owner)->get(route('dashboard'))
-            ->assertViewHas('setup', fn (array $steps): bool => collect($steps)->firstWhere('key', 'product')['done'] === true
-                && collect($steps)->firstWhere('key', 'customer')['done'] === false);
+            ->assertViewHas('setup', fn (array $setup): bool => collect($setup['steps'])->firstWhere('key', 'product')['done'] === true
+                && collect($setup['steps'])->firstWhere('key', 'customer')['done'] === false);
 
         $manager = User::factory()->forBusiness($owner->business)->create(['role' => UserRole::Manager, 'quick_pin_setup_completed' => true]);
         $this->actingAs($manager)->get(route('dashboard'))->assertOk()->assertViewHas('setup', null);

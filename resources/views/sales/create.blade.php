@@ -20,6 +20,7 @@
         data-customers-url="{{ route('sales.customers.search') }}"
         data-draft-store-url="{{ route('sales.discounts.draft.store') }}"
         data-draft-status-url="{{ $discountStatusTemplate }}"
+        data-draft-cancel-url="{{ route('discounts.cancel', ['discountRequest' => '__ID__']) }}"
         data-resumable-url="{{ route('sales.discounts.draft.resumable') }}"
         {{-- What the operator had entered when a submission was rejected. Built server-side from
              authoritative records — prices, stock and names are re-read, never echoed back from the
@@ -52,6 +53,9 @@
             x-on:submit="submit"
         >
             @csrf
+            {{-- This page's single-use submission token. A second delivery of the same submission
+                 resolves to the Sale the first one recorded instead of recording another. --}}
+            <input type="hidden" name="request_token" value="{{ $requestToken }}">
             <x-validation-errors />
 
             {{-- What actually posts. Rendered from the component's own state so the wire format is
@@ -172,7 +176,8 @@
                             <div class="ui-sale-cell" role="cell" data-label="Qty">
                                 <div class="ui-stepper ui-sale-stepper">
                                     <button type="button" x-on:click="step(index, -1)" x-bind:aria-label="'Decrease quantity on line ' + (index + 1)">&minus;</button>
-                                    <input type="number" min="1" step="1" inputmode="numeric" x-model="line.quantity"
+                                    {{-- Counted units take whole numbers; litres take up to three decimal places. --}}
+                                    <input type="number" x-bind:min="quantityStep(line)" x-bind:step="quantityStep(line)" inputmode="decimal" x-model="line.quantity"
                                            x-on:input="quantityChanged" x-bind:aria-label="'Quantity on line ' + (index + 1)">
                                     <button type="button" x-on:click="step(index, 1)" x-bind:aria-label="'Increase quantity on line ' + (index + 1)">+</button>
                                 </div>

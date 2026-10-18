@@ -39,7 +39,15 @@ class StoreProductRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:2000'],
             'cost_price' => ['required', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
             'selling_price' => ['required', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
-            'initial_stock' => ['required', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
+            'initial_stock' => ['required', 'decimal:0,3', 'min:0', 'max:999999999999.999', function (string $attribute, mixed $value, \Closure $fail): void {
+                // Opening stock is the first entry in the movement ledger, so it follows the unit
+                // like every later one: counted units open with a whole number.
+                $unit = is_string($this->input('unit')) ? ProductUnit::tryFrom($this->input('unit')) : null;
+
+                if ($unit !== null && is_string($value) && is_numeric($value) && ! $unit->accepts(bcadd($value, '0', 3))) {
+                    $fail("Opening stock is counted in whole units ({$unit->value}). Enter a whole number.");
+                }
+            }],
             'reorder_level' => ['required', 'decimal:0,3', 'min:0', 'max:999999999999.999'],
             'unit' => ['required', Rule::enum(ProductUnit::class)],
             // Optional at creation; when present it is held to exactly the rules every other

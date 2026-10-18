@@ -1,7 +1,8 @@
 <x-auth-layout title="Verify your email" subtitle="Open the link we sent to start using Inventra.">
     @if (session('status'))<div class="inventra-login-status" role="status">{{ session('status') }}</div>@endif
+    @error('verification')<div class="inventra-login-status inventra-login-status-error" role="alert">{{ $message }}</div>@enderror
 
-    <p class="inventra-auth-subtitle">We sent a verification link to:</p>
+    <p class="inventra-auth-subtitle">{{ $errors->has('verification') ? 'Your verification link will be sent to:' : 'We sent a verification link to:' }}</p>
     <p class="inventra-verify-address">{{ $email }}</p>
 
     <form method="POST" action="{{ route('verification.send') }}" class="inventra-login-form" x-data="{ submitting: false }" x-on:submit="submitting = true">

@@ -105,17 +105,19 @@ class CustomerConsentAndSearchTest extends TestCase
         Customer::factory()->create(['first_name' => 'Ordinary', 'customer_code' => 'CUST-100004', 'phone' => '+2348044444444', 'email' => 'ordinary@example.com']);
         $fullName = Customer::factory()->create(['first_name' => 'Ada', 'last_name' => 'Okafor', 'customer_code' => 'CUST-100005', 'phone' => '+2348055555555']);
 
+        // The redesigned list shows each customer's name and phone, not their code; search still
+        // matches the code, which the 'CUST-100002' case below proves.
         foreach (['Percent' => $percent, 'CUST-100002' => $under, '08033333333' => $back, '3333' => $back, '23480333' => $back, 'back@example.com' => $back] as $search => $expected) {
-            $this->get('/customers?search='.urlencode($search))->assertSee($expected->customer_code);
+            $this->get('/customers?search='.urlencode($search))->assertSee($expected->full_name);
         }
-        $this->get('/customers?search='.urlencode('Ada Okafor'))->assertSee($fullName->customer_code);
-        $this->get('/customers?search=%25')->assertSee($percent->customer_code)->assertDontSee('CUST-100004');
-        $this->get('/customers?search=_')->assertSee($under->customer_code)->assertDontSee('CUST-100004');
-        $this->get('/customers?search=%5C')->assertSee($back->customer_code)->assertDontSee('CUST-100004');
-        $this->get('/customers?status=inactive')->assertSee($under->customer_code)->assertDontSee($percent->customer_code);
-        $this->get('/customers?whatsapp=opted_in')->assertSee($percent->customer_code)->assertDontSee($back->customer_code);
+        $this->get('/customers?search='.urlencode('Ada Okafor'))->assertSee($fullName->full_name);
+        $this->get('/customers?search=%25')->assertSee($percent->full_name)->assertDontSee('Ordinary');
+        $this->get('/customers?search=_')->assertSee($under->full_name)->assertDontSee('Ordinary');
+        $this->get('/customers?search=%5C')->assertSee($back->full_name)->assertDontSee('Ordinary');
+        $this->get('/customers?status=inactive')->assertSee($under->full_name)->assertDontSee($percent->full_name);
+        $this->get('/customers?whatsapp=opted_in')->assertSee($percent->full_name)->assertDontSee($back->full_name);
         $this->get('/customers?search[]=x&status[]=active&whatsapp[]=opted_in')->assertOk();
-        $this->get('/customers?search=12')->assertOk()->assertDontSee($back->customer_code);
+        $this->get('/customers?search=12')->assertOk()->assertDontSee($back->full_name);
         Customer::factory()->count(16)->create();
         $this->get('/customers')->assertSee('Next');
     }
@@ -125,7 +127,7 @@ class CustomerConsentAndSearchTest extends TestCase
         $sales = User::factory()->create(['role' => UserRole::SalesRep]);
         $active = Customer::factory()->create(['address' => 'Restricted Address', 'notes' => '<script>alert("x")</script>']);
         $inactive = Customer::factory()->create(['is_active' => false]);
-        $this->actingAs($sales)->get(route('customers.index'))->assertSee($active->customer_code)->assertDontSee($inactive->customer_code);
+        $this->actingAs($sales)->get(route('customers.index'))->assertSee($active->full_name)->assertDontSee($inactive->full_name);
         $response = $this->get(route('customers.show', $active))->assertOk();
         $response->assertDontSee('Restricted Address')
             ->assertDontSee('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;', false)

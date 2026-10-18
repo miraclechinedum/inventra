@@ -41,6 +41,12 @@
                 @endcan
             </div>
 
+            {{-- A Return rejected from the side panel lands here, and the panel itself is gone by then,
+                 so its errors are shown above the list. Only the server's own messages are listed. --}}
+            @if (session('returnFailed'))
+                <x-validation-errors title="The return could not be recorded:" class="mb-4" />
+            @endif
+
             <form method="GET" class="sales-filter-bar">
                 {{-- One perceived date filter. Two native inputs still submit the `from`/`to` params
                      every filter and the CSV export already understand, so no picker library is

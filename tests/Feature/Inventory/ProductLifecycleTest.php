@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Support\ProductDeletionGuard;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\SubmitsSales;
 use Tests\TestCase;
 
 /**
@@ -27,7 +28,7 @@ use Tests\TestCase;
  */
 class ProductLifecycleTest extends TestCase
 {
-    use DatabaseTransactions;
+    use DatabaseTransactions, SubmitsSales;
 
     private User $admin;
 
@@ -158,14 +159,14 @@ class ProductLifecycleTest extends TestCase
         $this->actingAs($this->admin)->get(route('sales.create'))->assertOk()->assertDontSee($product->sku);
 
         // ...and refused even when its id is posted directly.
-        $this->actingAs($this->admin)->post(route('sales.store'), [
+        $this->actingAs($this->admin)->post(route('sales.store'), $this->withSaleToken([
             'is_walk_in' => '0',
             'sale_date' => now(config('business.timezone'))->toDateString(),
             'customer_id' => $customer->id,
             'products' => [['product_id' => $product->id, 'quantity' => '1']],
             'payment_method' => 'cash',
             'amount_paid' => '3500.00',
-        ])->assertSessionHasErrors();
+        ]))->assertSessionHasErrors();
 
         $this->assertDatabaseMissing('sale_items', ['product_id' => $product->id]);
     }
@@ -199,14 +200,14 @@ class ProductLifecycleTest extends TestCase
         $product = $this->createdProduct();
         $customer = Customer::factory()->create(['is_active' => true]);
 
-        $this->actingAs($this->admin)->post(route('sales.store'), [
+        $this->actingAs($this->admin)->post(route('sales.store'), $this->withSaleToken([
             'is_walk_in' => '0',
             'sale_date' => now(config('business.timezone'))->toDateString(),
             'customer_id' => $customer->id,
             'products' => [['product_id' => $product->id, 'quantity' => '2']],
             'payment_method' => 'cash',
             'amount_paid' => '7000.00',
-        ])->assertRedirect();
+        ]))->assertRedirect();
 
         $sale = Sale::query()->latest('id')->firstOrFail();
         $movementCount = $product->movements()->count();
@@ -324,14 +325,14 @@ class ProductLifecycleTest extends TestCase
         $product = $this->createdProduct();
         $customer = Customer::factory()->create(['is_active' => true]);
 
-        $this->actingAs($this->admin)->post(route('sales.store'), [
+        $this->actingAs($this->admin)->post(route('sales.store'), $this->withSaleToken([
             'is_walk_in' => '0',
             'sale_date' => now(config('business.timezone'))->toDateString(),
             'customer_id' => $customer->id,
             'products' => [['product_id' => $product->id, 'quantity' => '1']],
             'payment_method' => 'cash',
             'amount_paid' => '3500.00',
-        ])->assertRedirect();
+        ]))->assertRedirect();
 
         $this->assertTrue(DB::table('sale_items')->where('product_id', $product->id)->exists());
         $this->assertContains('sales', app(ProductDeletionGuard::class)->historyFor($product));
@@ -364,17 +365,38 @@ class ProductLifecycleTest extends TestCase
 
     public function test_the_guard_names_every_table_that_can_hold_product_history(): void
     {
-        // Every table the schema lets reference a product must be one the guard inspects; a new one
-        // added later should fail here rather than quietly become a way to destroy history.
-        $referencing = collect(DB::select(
-            'select distinct table_name as t from information_schema.key_column_usage
-             where table_schema = database() and referenced_table_name = ? and column_name = ?',
+        // Every product reference the schema declares, with what deleting the product does to it.
+        $references = collect(DB::select(
+            'select distinct k.table_name as t, r.delete_rule as rule
+             from information_schema.key_column_usage k
+             join information_schema.referential_constraints r
+               on r.constraint_schema = k.constraint_schema and r.constraint_name = k.constraint_name
+             where k.table_schema = database() and k.referenced_table_name = ? and k.column_name = ?',
             ['products', 'product_id'],
-        ))->pluck('t')->sort()->values()->all();
+        ));
 
+        // History: every table that refuses the delete must be one the guard inspects, and the
+        // reverse. A new history table added later fails here rather than quietly becoming a way
+        // to destroy records.
+        $restricting = $references->reject(fn ($row): bool => $row->rule === 'CASCADE')->pluck('t')->sort()->values()->all();
         $guarded = (new \ReflectionClass(ProductDeletionGuard::class))->getConstant('REFERENCES');
+        $this->assertSame($restricting, collect(array_keys($guarded))->sort()->values()->all());
 
-        $this->assertSame($referencing, collect(array_keys($guarded))->sort()->values()->all());
+        foreach (array_keys($guarded) as $table) {
+            $this->assertContains(
+                $references->firstWhere('t', $table)?->rule,
+                ['RESTRICT', 'NO ACTION'],
+                "{$table} is product history and must refuse the delete at the database too",
+            );
+        }
+
+        // Derived state, deliberately cascaded: low-stock episodes only de-duplicate WhatsApp
+        // automation alerts and are rebuilt from stock. Any other cascading reference must be
+        // reviewed and named here, so history can never be made to cascade unnoticed.
+        $this->assertSame(
+            ['whatsapp_low_stock_episodes'],
+            $references->where('rule', 'CASCADE')->pluck('t')->sort()->values()->all(),
+        );
     }
 
     public function test_a_manager_and_a_sales_representative_can_never_permanently_delete(): void

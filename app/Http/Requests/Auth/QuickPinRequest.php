@@ -17,4 +17,11 @@ class QuickPinRequest extends FormRequest
             'pin' => ['required', 'digits:4', 'confirmed'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'pin.confirmed' => 'The PINs did not match. Enter your new PIN again.',
+        ];
+    }
 }

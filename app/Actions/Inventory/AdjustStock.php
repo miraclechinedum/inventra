@@ -7,6 +7,7 @@ use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Support\Quantity;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -34,6 +35,17 @@ class AdjustStock
 
             if (bccomp($after, '0', 3) < 0) {
                 throw ValidationException::withMessages(['quantity' => 'The adjustment cannot make stock negative.']);
+            }
+
+            // Counted units move in whole numbers. The one exception is an adjustment that leaves
+            // stock whole: it is how a fractional balance recorded before this rule is corrected,
+            // and it can never create a new fraction.
+            if (! $locked->unit->allowsFraction()
+                && ! Quantity::isWhole(bcadd($data['quantity'], '0', 3))
+                && ! Quantity::isWhole($after)) {
+                throw ValidationException::withMessages([
+                    'quantity' => "{$locked->name} is counted in whole units ({$locked->unit->value}). Enter a whole number.",
+                ]);
             }
 
             $change = bcsub($after, $before, 3);

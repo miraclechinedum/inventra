@@ -440,6 +440,8 @@ class SaleDiscountWorkflowTest extends TestCase
     {
         [, $sale] = $this->sale('0.00');
         $admin = $this->admin();
+        // A second Administrator exists, so there is someone else to approve.
+        $this->admin();
         $request = $this->request($admin, $sale, '5000.00');
 
         $this->assertFalse($admin->can('approve', $request),
@@ -448,6 +450,89 @@ class SaleDiscountWorkflowTest extends TestCase
 
         // They may still close it, since declining moves no money.
         $this->assertTrue($admin->can('decline', $request));
+    }
+
+    /**
+     * Declining moves no money, so an Administrator may close their own request, as the policy
+     * already said. The action used to refuse what the policy offered, leaving a Decline button that
+     * always failed. Approval still needs a second person whenever one exists.
+     */
+    public function test_an_admin_may_decline_but_never_approve_their_own_request(): void
+    {
+        [, $sale] = $this->sale('0.00');
+        $admin = $this->admin();
+        // A second Administrator exists, so the two-person rule applies in full.
+        $this->admin();
+        $request = $this->request($admin, $sale, '5000.00');
+
+        $this->actingAs($admin)->post(route('discounts.approve', $request))->assertForbidden();
+
+        try {
+            app(DecideSaleDiscount::class)->approve($admin, $request);
+            $this->fail('An Administrator must not approve their own request, even outside HTTP.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(['You cannot approve your own discount request.'], $exception->errors()['request']);
+        }
+        $this->assertSame(DiscountRequestStatus::Pending, $request->fresh()->status);
+
+        $this->actingAs($admin)->post(route('discounts.decline', $request), ['decision_note' => 'Raised in error; closing it.'])
+            ->assertSessionHasNoErrors();
+
+        $declined = $request->fresh();
+        $this->assertSame(DiscountRequestStatus::Declined, $declined->status);
+        $this->assertSame($admin->id, $declined->decided_by);
+        $this->assertSame('0.00', $sale->fresh()->discount_amount, 'declining never changes the Sale');
+        $this->assertTrue(AuditLog::query()->where('action', 'sale_discount_declined')->where('auditable_id', $declined->id)->exists());
+    }
+
+    /**
+     * A Sales Representative may read the decision on a request they raised, including the reason a
+     * decline gives, but never decide it and never read anyone else's request.
+     */
+    public function test_a_sales_rep_may_read_the_decision_on_their_own_request_only(): void
+    {
+        [$rep, $sale] = $this->sale('0.00');
+        $request = $this->request($rep, $sale, '5000.00');
+        app(DecideSaleDiscount::class)->decline($this->admin(), $request, 'Margin is already thin on this line.');
+        $decisionUrl = route('discounts.show', $request);
+
+        $salePage = $this->actingAs($rep)->get(route('sales.show', $sale))->assertOk()->getContent();
+        $this->assertStringContainsString($decisionUrl, $salePage, 'the rep is linked to their own decision');
+
+        $this->actingAs($rep)->get($decisionUrl)->assertOk()
+            ->assertSee('Declined')
+            ->assertSee('Margin is already thin on this line.')
+            ->assertDontSee(route('discounts.approve', $request), false)
+            ->assertDontSee(route('discounts.decline', $request), false)
+            ->assertDontSee(route('discounts.index'), false);
+
+        // Reading is all: the decision routes stay management-only and Admin-only in the policy.
+        $this->actingAs($rep)->get(route('discounts.index'))->assertForbidden();
+        $this->actingAs($rep)->post(route('discounts.approve', $request))->assertForbidden();
+        $this->actingAs($rep)->post(route('discounts.decline', $request), ['decision_note' => 'x'])->assertForbidden();
+    }
+
+    /** Another representative, or a request management raised on the rep's own Sale, stays closed. */
+    public function test_a_sales_rep_cannot_read_requests_they_did_not_raise(): void
+    {
+        [$rep, $sale] = $this->sale('0.00');
+        $managerRaised = $this->request($this->manager(), $sale, '2000.00');
+        [$otherRep, $otherSale] = $this->sale('0.00');
+        $someoneElses = $this->request($otherRep, $otherSale, '3000.00');
+
+        foreach ([$managerRaised, $someoneElses] as $request) {
+            $this->actingAs($rep)->get(route('discounts.show', $request))->assertForbidden();
+        }
+
+        // The Sale page still lists the management request on the rep's own Sale, without a link.
+        $salePage = $this->actingAs($rep)->get(route('sales.show', $sale))->assertOk()->getContent();
+        $this->assertStringContainsString('2,000.00', $salePage);
+        $this->assertStringNotContainsString(route('discounts.show', $managerRaised), $salePage);
+
+        foreach ([$this->admin(), $this->manager()] as $viewer) {
+            $this->assertStringContainsString(route('discounts.show', $managerRaised), $this->actingAs($viewer)->get(route('sales.show', $sale))->assertOk()->getContent());
+            $this->actingAs($viewer)->get(route('discounts.show', $managerRaised))->assertOk();
+        }
     }
 
     public function test_a_sales_rep_may_request_only_on_their_own_sale(): void

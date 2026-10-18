@@ -3,6 +3,7 @@
 namespace App\Actions\Sale;
 
 use App\Enums\InventoryMovementType;
+use App\Enums\ProductUnit;
 use App\Models\Customer;
 use App\Models\InventoryMovement;
 use App\Models\Product;
@@ -156,6 +157,14 @@ class CorrectSale
 
             if ($previous === null && ! $product->is_active) {
                 throw ValidationException::withMessages(['products' => "{$product->name} is inactive and cannot be added."]);
+            }
+
+            // A line kept exactly as it was recorded is never refused, even if its quantity predates
+            // whole-unit validation. Anything new or changed must suit its unit: the unit it was
+            // sold in for an existing line, the product's unit for a new one.
+            if ($previous === null || bccomp((string) $previous->quantity, $quantity, 3) !== 0) {
+                $unit = $previous !== null ? (ProductUnit::tryFrom((string) $previous->unit_snapshot) ?? $product->unit) : $product->unit;
+                $unit->assertAccepts($quantity, 'products', $product->name);
             }
 
             $unitPrice = $previous !== null

@@ -178,6 +178,30 @@
             @error('tag')<p class="inventra-field-error">{{ $message }}</p>@enderror
         </label>
 
+        {{-- ── Internal details ──────────────────────────────────────────────────────────────
+             Management only. The fields are not rendered for anyone else, and the FormRequests
+             prohibit them outright for a Sales Representative, so leaving them out of the page is
+             not the control. Omitting them on submit leaves what is saved untouched. --}}
+        @if($canEditInternalDetails ?? false)
+            <fieldset class="cust-internal">
+                <legend class="cust-internal-title">Internal details <span>Admins and managers only</span></legend>
+
+                <label class="cust-field">
+                    <span class="cust-label">Address</span>
+                    <textarea name="address" rows="2" maxlength="500" autocomplete="street-address"
+                              @error('address') aria-invalid="true" @enderror>{{ \App\Support\OldInput::scalar('address', $isEdit ? (string) $customer->address : '') }}</textarea>
+                    @error('address')<p class="inventra-field-error">{{ $message }}</p>@enderror
+                </label>
+
+                <label class="cust-field">
+                    <span class="cust-label">Internal notes</span>
+                    <textarea name="notes" rows="4" maxlength="2000"
+                              @error('notes') aria-invalid="true" @enderror>{{ \App\Support\OldInput::scalar('notes', $isEdit ? (string) $customer->notes : '') }}</textarea>
+                    @error('notes')<p class="inventra-field-error">{{ $message }}</p>@enderror
+                </label>
+            </fieldset>
+        @endif
+
         {{-- ── Consent ───────────────────────────────────────────────────────────────────────
              Consent, not a number. It is recorded only because someone ticked this, never inferred
              from having a phone or from recording a sale.

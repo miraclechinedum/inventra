@@ -50,6 +50,8 @@ class RegisteredBusinessController extends Controller
             $owner->sendEmailVerificationNotification();
         } catch (Throwable $exception) {
             Log::warning('The signup verification email could not be sent.', ['user_id' => $owner->getKey(), 'exception' => $exception::class]);
+
+            return redirect()->route('verification.notice')->withErrors(['verification' => EmailVerificationController::UNSENT]);
         }
 
         // Verification first; then the optional quick PIN, the dashboard and its setup checklist.

@@ -100,7 +100,7 @@ class SecurityHeadersTest extends TestCase
         $this->withServerVariables([
             'REMOTE_ADDR' => '10.0.0.11',
             'HTTP_X_FORWARDED_PROTO' => 'https',
-        ])->get('/request-security')->assertSeeText('insecure');
+        ])->get($this->plainHttp('/request-security'))->assertSeeText('insecure');
     }
 
     public function test_empty_proxy_configuration_trusts_nothing(): void
@@ -111,7 +111,7 @@ class SecurityHeadersTest extends TestCase
         $this->withServerVariables([
             'REMOTE_ADDR' => '127.0.0.1',
             'HTTP_X_FORWARDED_PROTO' => 'https',
-        ])->get('/empty-proxy-test')->assertSeeText('insecure');
+        ])->get($this->plainHttp('/empty-proxy-test'))->assertSeeText('insecure');
     }
 
     public function test_hsts_is_sent_only_for_secure_production_requests(): void
@@ -126,5 +126,11 @@ class SecurityHeadersTest extends TestCase
         $this->get("https://{$host}/")
             ->assertOk()
             ->assertHeader('Strict-Transport-Security', 'max-age=31536000');
+    }
+
+    /** An untrusted header must be what fails to upgrade the request, whatever scheme APP_URL uses. */
+    private function plainHttp(string $path): string
+    {
+        return 'http://'.parse_url(config('app.url'), PHP_URL_HOST).$path;
     }
 }

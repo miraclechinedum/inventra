@@ -27,6 +27,13 @@ class PasswordOnboardingController extends Controller
         SecurityEventRecorder $events,
     ): RedirectResponse {
         $user = $request->user();
+
+        // Only a required first change is accepted here: it needs no current password, so serving
+        // anyone else would let a borrowed session replace the account's password.
+        if (! $user->force_password_change) {
+            return redirect()->route('onboarding.pin.edit');
+        }
+
         $user->password = $request->string('password')->toString();
         $user->force_password_change = false;
         $user->save();

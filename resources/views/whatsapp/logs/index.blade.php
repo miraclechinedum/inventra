@@ -101,6 +101,7 @@
                     <table class="wl-table">
                         <thead>
                             <tr>
+                                <th class="ui-sn">S/N</th>
                                 <th>Date &amp; time</th>
                                 <th>Name</th>
                                 <th>Recipient</th>
@@ -120,6 +121,8 @@
                                     'failed' => 'Failed', 'delivered' => 'Delivered', default => 'Pending',
                                 })
                                 <tr @class(['is-failed' => $tone === 'failed', 'is-open' => $selected?->id === $message->id])>
+                                    {{-- Counted across pages, like every standardized listing. --}}
+                                    <td class="ui-sn">{{ $messages->firstItem() + $loop->index }}</td>
                                     <td class="is-muted">{{ $message->created_at?->timezone(config('business.timezone'))->format('j M H:i') }}</td>
                                     <td class="wl-name">{{ $message->recipient_name }}</td>
                                     {{-- The full number stays in the DOM as the accessible name, so
@@ -139,7 +142,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="wl-empty">
+                                    <td colspan="7" class="wl-empty">
                                         <x-empty-state title="No WhatsApp messages match these filters."
                                             description="Messages appear here once an automation sends one." />
                                     </td>

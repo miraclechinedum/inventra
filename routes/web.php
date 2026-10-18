@@ -70,7 +70,9 @@ Route::middleware('auth')->group(function () {
     // stays outside so a refused session can always be ended.
     Route::middleware(['active', 'business', 'verified.owner', 'subscription'])->group(function () {
         // Email verification for public signup owners. Reachable before verification, by design.
-        Route::get('/email/verify', [EmailVerificationController::class, 'notice'])->name('verification.notice');
+        Route::get('/email/verify', [EmailVerificationController::class, 'notice'])
+            // Not cached: the back button must ask the server again, which moves a finished stage on.
+            ->middleware('cache.headers:no_store;private')->name('verification.notice');
         Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
             ->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
         Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])
@@ -79,13 +81,13 @@ Route::middleware('auth')->group(function () {
             ->middleware('throttle:verification-email')->name('verification.email.update');
 
         Route::get('/onboarding/password', [PasswordOnboardingController::class, 'edit'])
-            ->name('onboarding.password.edit');
+            ->middleware('cache.headers:no_store;private')->name('onboarding.password.edit');
         Route::post('/onboarding/password', [PasswordOnboardingController::class, 'update'])
             ->name('onboarding.password.update');
 
         Route::middleware('password.changed')->group(function () {
             Route::get('/onboarding/pin', [QuickPinOnboardingController::class, 'edit'])
-                ->name('onboarding.pin.edit');
+                ->middleware('cache.headers:no_store;private')->name('onboarding.pin.edit');
             Route::post('/onboarding/pin', [QuickPinOnboardingController::class, 'store'])
                 ->middleware('throttle:pin-setup')
                 ->name('onboarding.pin.store');
@@ -237,14 +239,21 @@ Route::middleware('auth')->group(function () {
             Route::middleware('pin.completed')->get('/sale-payments', [SalePaymentController::class, 'index'])
                 ->name('sale-payments.index');
 
+            // One decision, read by whoever SaleDiscountRequestPolicy@view allows: management, or the
+            // Sales Representative who raised the request, so they can see the outcome and the reason.
+            // Deciding stays in the management group below and Admin-only in the policy.
+            Route::middleware('pin.completed')->get('/sale-discounts/{discountRequest}', [SaleDiscountRequestController::class, 'show'])
+                ->name('discounts.show');
+            // Withdrawing a pending request: the requester or an Administrator, by policy.
+            Route::middleware('pin.completed')->post('/sale-discounts/{discountRequest}/cancel', [SaleDiscountRequestController::class, 'cancel'])
+                ->name('discounts.cancel');
+
             Route::middleware(['pin.completed', 'role:admin,manager'])->group(function () {
                 // Reviewing the queue is management; approving or declining is Admin-only and
                 // enforced by SaleDiscountRequestPolicy rather than by route middleware, so the
                 // rule lives with the decision instead of with the URL.
                 Route::get('/sale-discounts', [SaleDiscountRequestController::class, 'index'])
                     ->name('discounts.index');
-                Route::get('/sale-discounts/{discountRequest}', [SaleDiscountRequestController::class, 'show'])
-                    ->name('discounts.show');
                 Route::post('/sale-discounts/{discountRequest}/approve', [SaleDiscountRequestController::class, 'approve'])
                     ->name('discounts.approve');
                 Route::post('/sale-discounts/{discountRequest}/decline', [SaleDiscountRequestController::class, 'decline'])

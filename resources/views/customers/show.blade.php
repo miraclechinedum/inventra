@@ -126,6 +126,128 @@
             </div>
         </div>
 
+        {{-- ── Balances and payments ─────────────────────────────────────────────────────────
+             Outstanding is the Receivables report's own scope narrowed to this customer: completed
+             sales with a balance still due. Payments are those taken on completed sales. A Sales
+             Representative sees only the sales they recorded, in both. --}}
+        <section class="cust-card cust-balances" aria-labelledby="cust-balances-title">
+            <h2 class="cust-card-title" id="cust-balances-title">Balances &amp; payments</h2>
+
+            <dl class="cust-balance-figures">
+                <div>
+                    <dt>Outstanding balance</dt>
+                    <dd @class(['cust-balance-due' => $receivables['open_count'] > 0])>&#8358;{{ \App\Support\Money::format($receivables['outstanding']) }}</dd>
+                </div>
+                <div>
+                    <dt>Open sales</dt>
+                    <dd>{{ number_format($receivables['open_count']) }}</dd>
+                </div>
+                <div>
+                    <dt>Unpaid</dt>
+                    <dd>{{ number_format($receivables['unpaid_count']) }}</dd>
+                </div>
+                <div>
+                    <dt>Part-paid</dt>
+                    <dd>{{ number_format($receivables['partial_count']) }}</dd>
+                </div>
+            </dl>
+
+            <h3 class="cust-subtitle">Unpaid and part-paid sales</h3>
+            @if($receivables['sales']->isNotEmpty())
+                <div class="cust-table-scroll">
+                    <table class="cust-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Sale</th>
+                                <th scope="col" class="cust-numeric">Total</th>
+                                <th scope="col" class="cust-numeric">Paid</th>
+                                <th scope="col" class="cust-numeric">Balance</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($receivables['sales'] as $open)
+                                <tr>
+                                    <td class="cust-muted">{{ $open->sale_date->format('j M Y') }}</td>
+                                    <td><a href="{{ route('sales.show', $open) }}" class="cust-history-link">{{ $open->sale_number }}</a></td>
+                                    <td class="cust-numeric">&#8358;{{ \App\Support\Money::format((string) $open->total_amount) }}</td>
+                                    <td class="cust-numeric">&#8358;{{ \App\Support\Money::format((string) $open->amount_paid) }}</td>
+                                    <td class="cust-numeric cust-balance-due">&#8358;{{ \App\Support\Money::format((string) $open->balance_due) }}</td>
+                                    <td>
+                                        <span class="cust-pill {{ $open->payment_status === \App\Enums\PaymentStatus::Unpaid ? 'is-bad' : 'is-pending' }}">
+                                            <span class="cust-dot" aria-hidden="true"></span>{{ $open->payment_status === \App\Enums\PaymentStatus::Unpaid ? 'Unpaid' : 'Part-paid' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if($receivables['open_count'] > $receivables['sales']->count())
+                    <p class="cust-panel-foot">
+                        Showing the {{ $receivables['sales']->count() }} oldest of {{ number_format($receivables['open_count']) }} open sales.
+                    </p>
+                @endif
+            @else
+                <p class="cust-muted cust-panel-note">Nothing is owed on this customer's sales.</p>
+            @endif
+
+            <h3 class="cust-subtitle">Payment history</h3>
+            @if($payments->isNotEmpty())
+                <div class="cust-table-scroll">
+                    <table class="cust-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Payment</th>
+                                <th scope="col">Sale</th>
+                                <th scope="col">Method</th>
+                                <th scope="col" class="cust-numeric">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($payments as $payment)
+                                <tr>
+                                    <td class="cust-muted">{{ $payment->paid_at?->timezone(config('business.timezone'))->format('j M Y') }}</td>
+                                    <td>{{ $payment->payment_number }}</td>
+                                    <td><a href="{{ route('sales.show', $payment->sale) }}" class="cust-history-link">{{ $payment->sale->sale_number }}</a></td>
+                                    <td>{{ $payment->payment_method->label() }}</td>
+                                    <td class="cust-numeric cust-spent">&#8358;{{ \App\Support\Money::format((string) $payment->amount) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if($paymentCount > $payments->count())
+                    <p class="cust-panel-foot">
+                        Showing the {{ $payments->count() }} most recent of {{ number_format($paymentCount) }} payments.
+                    </p>
+                @endif
+            @else
+                <p class="cust-muted cust-panel-note">No payments recorded yet.</p>
+            @endif
+        </section>
+
+        {{-- ── Internal details ──────────────────────────────────────────────────────────────
+             Management only, by CustomerPolicy@viewInternalDetails. Escaped like everything else;
+             line breaks are kept by CSS, never by rendering the note as HTML. --}}
+        @if($canViewInternalDetails)
+            <section class="cust-card cust-internal-card" aria-labelledby="cust-internal-title">
+                <h2 class="cust-card-title" id="cust-internal-title">Internal details</h2>
+                <dl class="cust-internal-list">
+                    <div>
+                        <dt>Address</dt>
+                        <dd>@if(filled($customer->address)){{ $customer->address }}@else<span class="cust-muted">No address saved.</span>@endif</dd>
+                    </div>
+                    <div>
+                        <dt>Internal notes</dt>
+                        <dd>@if(filled($customer->notes)){{ $customer->notes }}@else<span class="cust-muted">No internal notes.</span>@endif</dd>
+                    </div>
+                </dl>
+            </section>
+        @endif
+
         <div class="cust-panels">
             {{-- ── Purchase history ──────────────────────────────────────────────────────── --}}
             <section class="cust-card">

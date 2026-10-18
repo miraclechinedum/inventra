@@ -34,6 +34,7 @@ use App\Models\SaleReturnRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\PerPage;
+use App\Support\SaleNumber;
 use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
@@ -178,7 +179,8 @@ class AuditTrailTest extends TestCase
 
         $this->assertSame($admin->name, $recorded->get('sale_created')->actor_name_snapshot);
         $this->assertSame(UserRole::Admin->value, $recorded->get('sale_created')->actor_role_snapshot);
-        $this->assertStringStartsWith('SALE-', $recorded->get('sale_created')->subject_label_snapshot);
+        // Sale references are random `S-` identifiers now, no longer derived from the primary key.
+        $this->assertMatchesRegularExpression(SaleNumber::pattern(), $recorded->get('sale_created')->subject_label_snapshot);
         $this->assertStringStartsWith('PAY-', $recorded->get('sale_payment_recorded')->subject_label_snapshot);
         $this->assertStringStartsWith('RET-', $recorded->get('sale_return_recorded')->subject_label_snapshot);
         $this->assertStringStartsWith('REF-', $recorded->get('sale_refund_recorded')->subject_label_snapshot);

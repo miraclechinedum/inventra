@@ -5,6 +5,7 @@ namespace Tests\Feature\Sale;
 use App\Actions\Sale\CreateSale;
 use App\Enums\InventoryMovementType;
 use App\Enums\PaymentStatus;
+use App\Enums\ProductUnit;
 use App\Enums\UserRole;
 use App\Models\Customer;
 use App\Models\Product;
@@ -13,11 +14,12 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Tests\Concerns\SubmitsSales;
 use Tests\TestCase;
 
 class SaleCreationTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, SubmitsSales;
 
     private User $seller;
 
@@ -34,10 +36,10 @@ class SaleCreationTest extends TestCase
     public function test_one_product_sale_uses_authoritative_price_snapshots_payment_and_ledger(): void
     {
         $product = Product::factory()->create(['selling_price' => '1250.50', 'current_stock' => '10.000']);
-        $this->post(route('sales.store'), $this->payload([
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload([
             'products' => [['product_id' => $product->id, 'quantity' => '2.000']],
             'amount_paid' => '2000.00',
-        ]))->assertRedirect();
+        ])))->assertRedirect();
 
         $sale = Sale::query()->sole();
         $item = $sale->items()->sole();
@@ -65,14 +67,15 @@ class SaleCreationTest extends TestCase
 
     public function test_duplicate_lines_aggregate_and_decimal_money_rounds_half_up(): void
     {
-        $product = Product::factory()->create(['selling_price' => '10.01', 'current_stock' => '10']);
-        $this->post(route('sales.store'), $this->payload([
+        // Measured in litres, so fractional lines are valid for the unit.
+        $product = Product::factory()->create(['selling_price' => '10.01', 'current_stock' => '10', 'unit' => ProductUnit::Litre]);
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload([
             'products' => [
                 ['product_id' => $product->id, 'quantity' => '1.250'],
                 ['product_id' => $product->id, 'quantity' => '0.250'],
             ],
             'amount_paid' => '15.02',
-        ]))->assertRedirect();
+        ])))->assertRedirect();
         $sale = Sale::query()->sole();
         $this->assertCount(1, $sale->items);
         $this->assertSame('1.500', $sale->items->first()->quantity);
@@ -84,7 +87,7 @@ class SaleCreationTest extends TestCase
     public function test_payment_states_and_overpayment_are_server_authoritative(): void
     {
         $product = Product::factory()->create(['selling_price' => '100.00', 'current_stock' => '5']);
-        $this->post(route('sales.store'), $this->payload(['products' => [['product_id' => $product->id, 'quantity' => '1']], 'amount_paid' => '0']))->assertRedirect();
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload(['products' => [['product_id' => $product->id, 'quantity' => '1']], 'amount_paid' => '0'])))->assertRedirect();
         $unpaid = Sale::query()->firstOrFail();
         $this->assertSame(PaymentStatus::Unpaid, $unpaid->payment_status);
         $this->assertSame('100.00', $unpaid->total_amount);
@@ -92,19 +95,19 @@ class SaleCreationTest extends TestCase
         $this->assertSame('100.00', $unpaid->balance_due);
 
         $partialProduct = Product::factory()->create(['selling_price' => '100.00', 'current_stock' => '5']);
-        $this->post(route('sales.store'), $this->payload(['products' => [['product_id' => $partialProduct->id, 'quantity' => '1']], 'amount_paid' => '50']))->assertRedirect();
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload(['products' => [['product_id' => $partialProduct->id, 'quantity' => '1']], 'amount_paid' => '50'])))->assertRedirect();
         $partial = Sale::query()->latest('id')->firstOrFail();
         $this->assertSame(PaymentStatus::Partial, $partial->payment_status);
         $this->assertSame('50.00', $partial->balance_due);
 
         $paidProduct = Product::factory()->create(['selling_price' => '100.00', 'current_stock' => '5']);
-        $this->post(route('sales.store'), $this->payload(['products' => [['product_id' => $paidProduct->id, 'quantity' => '1']], 'amount_paid' => '100']))->assertRedirect();
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload(['products' => [['product_id' => $paidProduct->id, 'quantity' => '1']], 'amount_paid' => '100'])))->assertRedirect();
         $paid = Sale::query()->latest('id')->firstOrFail();
         $this->assertSame(PaymentStatus::Paid, $paid->payment_status);
         $this->assertSame('0.00', $paid->balance_due);
 
         $second = Product::factory()->create(['selling_price' => '100.00', 'current_stock' => '5']);
-        $this->post(route('sales.store'), $this->payload(['products' => [['product_id' => $second->id, 'quantity' => '1']], 'amount_paid' => '100.01']))->assertSessionHasErrors('amount_paid');
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload(['products' => [['product_id' => $second->id, 'quantity' => '1']], 'amount_paid' => '100.01'])))->assertSessionHasErrors('amount_paid');
         $this->assertSame('5.000', $second->fresh()->current_stock);
     }
 
@@ -112,10 +115,10 @@ class SaleCreationTest extends TestCase
     {
         $product = Product::factory()->create(['selling_price' => '0.00', 'current_stock' => '1']);
 
-        $this->post(route('sales.store'), $this->payload([
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload([
             'products' => [['product_id' => $product->id, 'quantity' => '1']],
             'amount_paid' => '0.00',
-        ]))->assertRedirect();
+        ])))->assertRedirect();
 
         $sale = Sale::query()->sole();
         $this->assertSame('0.00', $sale->total_amount);
@@ -128,10 +131,10 @@ class SaleCreationTest extends TestCase
     {
         $first = Product::factory()->create(['current_stock' => '10']);
         $second = Product::factory()->create(['current_stock' => '1']);
-        $this->post(route('sales.store'), $this->payload(['products' => [
+        $this->post(route('sales.store'), $this->withSaleToken($this->payload(['products' => [
             ['product_id' => $first->id, 'quantity' => '2'],
             ['product_id' => $second->id, 'quantity' => '5'],
-        ]]))->assertSessionHasErrors('products');
+        ]])))->assertSessionHasErrors('products');
         $this->assertSame('10.000', $first->fresh()->current_stock);
         $this->assertSame('1.000', $second->fresh()->current_stock);
         $this->assertDatabaseCount('sales', 0);
@@ -171,8 +174,8 @@ class SaleCreationTest extends TestCase
             'product_name_snapshot' => 'Attacker', 'quantity_before' => '999', 'quantity_after' => '999',
         ]]]);
         $payload += ['sale_number' => 'HACK', 'subtotal' => '0', 'total_amount' => '0', 'status' => 'voided', 'payment_status' => 'paid', 'sold_by' => 999, 'sold_by_name_snapshot' => 'Attacker', 'customer_name_snapshot' => 'Attacker'];
-        $this->post(route('sales.store'), $payload)->assertSessionHasErrors();
-        $this->post(route('sales.store'), ['customer_id' => ['x'], 'products' => ['bad'], 'payment_method' => ['cash'], 'amount_paid' => ['0']])->assertSessionHasErrors();
+        $this->post(route('sales.store'), $this->withSaleToken($payload))->assertSessionHasErrors();
+        $this->post(route('sales.store'), $this->withSaleToken(['customer_id' => ['x'], 'products' => ['bad'], 'payment_method' => ['cash'], 'amount_paid' => ['0']]))->assertSessionHasErrors();
         $this->assertDatabaseCount('sales', 0);
     }
 

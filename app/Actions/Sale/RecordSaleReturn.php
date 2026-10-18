@@ -3,6 +3,7 @@
 namespace App\Actions\Sale;
 
 use App\Enums\InventoryMovementType;
+use App\Enums\ProductUnit;
 use App\Enums\ReturnDisposition;
 use App\Enums\SaleStatus;
 use App\Enums\UserRole;
@@ -15,6 +16,7 @@ use App\Models\SaleReturnRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\Money;
+use App\Support\ReturnValuation;
 use App\Support\SaleFinancials;
 use App\Tenancy\CurrentBusiness;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -67,17 +69,33 @@ class RecordSaleReturn
             }
             $prepared = [];
             $total = '0.00';
+            // The Sale's discount, allocated across all of its current lines. ReturnSettlementPreview
+            // values a proposed return through the same ReturnValuation, so the two never disagree.
+            $shares = ReturnValuation::shares($locked, $locked->items()->get());
             foreach ($data['items'] as $line) {
                 $item = $items[(int) $line['sale_item_id']];
-                $prior = (string) DB::table('sale_return_items')->where('sale_return_items.business_id', app(CurrentBusiness::class)->id())->where('sale_item_id', $item->id)->lockForUpdate()->sum('quantity_returned');
+                $returned = DB::table('sale_return_items')->where('sale_return_items.business_id', app(CurrentBusiness::class)->id())->where('sale_item_id', $item->id)->lockForUpdate()
+                    ->selectRaw('COALESCE(SUM(quantity_returned), 0) quantity, COALESCE(SUM(return_line_value), 0) value')->first();
+                $prior = bcadd((string) $returned->quantity, '0', 3);
                 $remaining = bcsub($item->quantity, $prior, 3);
                 if (bccomp($line['quantity'], $remaining, 3) > 0) {
                     throw ValidationException::withMessages(['items' => 'Returned quantity exceeds the remaining returnable quantity.']);
-                } $value = Money::round(bcmul($item->unit_price, $line['quantity'], 5));
-                if (bccomp($value, '0.00', 2) <= 0) {
+                }
+                // The unit the goods were sold in, not the product's unit today. A fractional
+                // remainder recorded before whole-unit validation can still be returned in full.
+                $unit = ProductUnit::tryFrom((string) $item->unit_snapshot);
+                if ($unit !== null && bccomp($line['quantity'], $remaining, 3) !== 0) {
+                    $unit->assertAccepts($line['quantity'], 'items', (string) $item->product_name_snapshot);
+                }
+                $share = $shares[$item->id] ?? '0.00';
+                $valued = ReturnValuation::line($item, $share, $line['quantity'], $prior, Money::round(bcadd((string) $returned->value, '0', 2)));
+                $value = $valued['value'];
+                // Worth nothing only because the discount covered it: a goods-only return, which
+                // creates no credit. Goods sold for nothing are still refused, as before.
+                if (bccomp($value, '0.00', 2) === 0 && bccomp($share, '0.00', 2) === 0) {
                     throw ValidationException::withMessages(['items' => 'Returned merchandise must have a positive value.']);
                 } $total = bcadd($total, $value, 2);
-                $prepared[] = [$item, $line, $value];
+                $prepared[] = [$item, $line, $valued];
             }
             $before = SaleFinancials::lockedState($locked);
             $reduction = bccomp($total, $before['balance'], 2) > 0 ? $before['balance'] : $total;
@@ -90,9 +108,9 @@ class RecordSaleReturn
             $number = 'RET-'.str_pad((string) $return->id, 6, '0', STR_PAD_LEFT);
             DB::table('sale_returns')->where('id', $return->id)->update(['return_number' => $number]);
             $return->setAttribute('return_number', $number);
-            foreach ($prepared as [$item,$line,$value]) {
+            foreach ($prepared as [$item,$line,$valued]) {
                 $ri = new SaleReturnItem;
-                foreach (['business_id' => $return->business_id, 'sale_return_id' => $return->id, 'sale_item_id' => $item->id, 'product_id' => $item->product_id, 'product_sku_snapshot' => $item->product_sku_snapshot, 'product_name_snapshot' => $item->product_name_snapshot, 'unit_snapshot' => $item->unit_snapshot, 'quantity_returned' => $line['quantity'], 'original_unit_price' => $item->unit_price, 'return_line_value' => $value, 'disposition' => $line['disposition'], 'created_at' => now()] as $k => $v) {
+                foreach (['business_id' => $return->business_id, 'sale_return_id' => $return->id, 'sale_item_id' => $item->id, 'product_id' => $item->product_id, 'product_sku_snapshot' => $item->product_sku_snapshot, 'product_name_snapshot' => $item->product_name_snapshot, 'unit_snapshot' => $item->unit_snapshot, 'quantity_returned' => $line['quantity'], 'original_unit_price' => $item->unit_price, 'return_line_value' => $valued['value'], 'gross_line_value' => $valued['gross'], 'discount_share' => $valued['discount'], 'disposition' => $line['disposition'], 'created_at' => now()] as $k => $v) {
                     $ri->$k = $v;
                 } $ri->save();
                 if (ReturnDisposition::from($line['disposition']) === ReturnDisposition::Restock) {

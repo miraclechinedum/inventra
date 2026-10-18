@@ -74,6 +74,10 @@ class StoreSaleRequest extends FormRequest
         return [
             // Ownership comes from the acting user and the parent document, never from the form.
             'business_id' => ['prohibited'],
+            // The page's single-use submission token. RecordSaleSubmission matches it to this
+            // operator, session and Business under a row lock; only its hash is ever stored.
+            'request_token' => ['required', 'string', 'size:64'],
+            'sale_request_id' => ['prohibited'],
             // A Sale names a registered customer or is explicitly a walk-in — never both, never
             // neither. The database CHECK enforces the same shape; this states it for the user.
             'is_walk_in' => ['required', 'boolean'],
@@ -84,8 +88,9 @@ class StoreSaleRequest extends FormRequest
                 'integer',
                 TenantRules::exists(Customer::class)->where('is_active', true),
             ],
-            // The day the trade happened. Backdating is legitimate; postdating is not.
-            'sale_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            // The day the trade happened. Backdating is legitimate; postdating is not. "Today" is the
+            // business's day, the same one Record Sale offers as its default, not the server's UTC day.
+            'sale_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.now(config('business.timezone'))->toDateString()],
             // A pre-approved discount, identified by its draft. Ownership, approval status and the
             // cart fingerprint are all re-checked server-side in CreateSale.
             'sale_draft_id' => ['nullable', 'integer', TenantRules::exists(SaleDraft::class)],
@@ -116,6 +121,13 @@ class StoreSaleRequest extends FormRequest
             'products.*.product_name_snapshot' => ['prohibited'],
             'products.*.quantity_before' => ['prohibited'],
             'products.*.quantity_after' => ['prohibited'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'sale_date.before_or_equal' => "Sale date can't be in the future.",
         ];
     }
 }

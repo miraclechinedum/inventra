@@ -16,6 +16,7 @@ use App\Models\Sale;
 use App\Models\SaleDraft;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Models\SaleRequest;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Support\Money;
@@ -25,6 +26,7 @@ use App\Tenancy\CurrentBusiness;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 class CreateSale
 {
@@ -34,8 +36,33 @@ class CreateSale
         private readonly CurrentBusiness $currentBusiness,
     ) {}
 
+    /**
+     * Records a Sale in its own transaction.
+     *
+     * For callers inside the application. A browser submission goes through RecordSaleSubmission,
+     * which spends the page's single-use token in the same transaction as the Sale.
+     */
     public function execute(User $actor, array $data): Sale
     {
+        $sale = DB::transaction(fn (): Sale => $this->record($actor, $data));
+
+        $this->afterCommit($sale);
+
+        return $sale;
+    }
+
+    /**
+     * Writes the Sale inside the caller's transaction, naming the submission it came from, if any.
+     *
+     * Refuses to run outside a transaction: the row locks below would otherwise be released
+     * statement by statement, and stock could be oversold between them.
+     */
+    public function record(User $actor, array $data, ?SaleRequest $submission = null): Sale
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('A Sale must be recorded inside a database transaction.');
+        }
+
         $quantities = $this->aggregateQuantities($data['products']);
         $productIds = array_keys($quantities);
         sort($productIds, SORT_NUMERIC);
@@ -43,186 +70,192 @@ class CreateSale
         // The seller's own Business; every customer, product and draft below is read inside it.
         $business = $this->currentBusiness->forActor($actor);
 
-        $sale = DB::transaction(function () use ($actor, $data, $productIds, $quantities, $business): Sale {
-            // A walk-in is a genuine absence of a customer, not a placeholder row. The Sale still
-            // carries readable identity snapshots so receipts, returns and reports stay legible.
-            $walkIn = (bool) ($data['is_walk_in'] ?? false);
-            $customer = null;
+        // A walk-in is a genuine absence of a customer, not a placeholder row. The Sale still
+        // carries readable identity snapshots so receipts, returns and reports stay legible.
+        $walkIn = (bool) ($data['is_walk_in'] ?? false);
+        $customer = null;
 
-            if (! $walkIn) {
-                $customer = Customer::query()->lockForUpdate()->findOrFail($data['customer_id']);
+        if (! $walkIn) {
+            $customer = Customer::query()->lockForUpdate()->findOrFail($data['customer_id']);
 
-                if (! $customer->is_active) {
-                    throw ValidationException::withMessages(['customer_id' => 'The selected customer is inactive.']);
-                }
+            if (! $customer->is_active) {
+                throw ValidationException::withMessages(['customer_id' => 'The selected customer is inactive.']);
+            }
+        }
+
+        $products = Product::query()
+            ->whereIn('id', $productIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        if ($products->count() !== count($productIds)) {
+            throw ValidationException::withMessages(['products' => 'One or more products are unavailable.']);
+        }
+
+        $lines = [];
+        $subtotal = '0.00';
+
+        foreach ($productIds as $productId) {
+            $product = $products->get($productId);
+            $quantity = $quantities[$productId];
+
+            if (! $product->is_active) {
+                throw ValidationException::withMessages(['products' => "{$product->name} is inactive."]);
             }
 
-            $products = Product::query()
-                ->whereIn('id', $productIds)
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
+            // After aggregation, so two lines of one product must still add up to a whole unit.
+            $product->unit->assertAccepts($quantity, 'products', $product->name);
 
-            if ($products->count() !== count($productIds)) {
-                throw ValidationException::withMessages(['products' => 'One or more products are unavailable.']);
+            $after = bcsub($product->current_stock, $quantity, 3);
+
+            if (bccomp($after, '0', 3) < 0) {
+                throw ValidationException::withMessages(['products' => "Insufficient stock for {$product->name}."]);
             }
 
-            $lines = [];
-            $subtotal = '0.00';
+            $lineTotal = $this->lineTotal($product->selling_price, $quantity);
+            $subtotal = bcadd($subtotal, $lineTotal, 2);
 
-            foreach ($productIds as $productId) {
-                $product = $products->get($productId);
-                $quantity = $quantities[$productId];
-
-                if (! $product->is_active) {
-                    throw ValidationException::withMessages(['products' => "{$product->name} is inactive."]);
-                }
-
-                $after = bcsub($product->current_stock, $quantity, 3);
-
-                if (bccomp($after, '0', 3) < 0) {
-                    throw ValidationException::withMessages(['products' => "Insufficient stock for {$product->name}."]);
-                }
-
-                $lineTotal = $this->lineTotal($product->selling_price, $quantity);
-                $subtotal = bcadd($subtotal, $lineTotal, 2);
-
-                if (bccomp($subtotal, '9999999999999.99', 2) > 0) {
-                    throw ValidationException::withMessages(['products' => 'The sale total exceeds the supported monetary limit.']);
-                }
-                $lines[] = compact('product', 'quantity', 'after', 'lineTotal');
+            if (bccomp($subtotal, '9999999999999.99', 2) > 0) {
+                throw ValidationException::withMessages(['products' => 'The sale total exceeds the supported monetary limit.']);
             }
+            $lines[] = compact('product', 'quantity', 'after', 'lineTotal');
+        }
 
-            // An approved discount is spent here or not at all. The approval is bound to a cart
-            // fingerprint, so a basket edited after approval no longer matches and the approval is
-            // refused rather than silently applied to different goods.
-            $draft = $this->resolveApprovedDraft($actor, $data, $lines, $subtotal);
-            $discount = $draft === null ? '0.00' : Money::round((string) $draft['amount']);
-            $total = bcsub($subtotal, $discount, 2);
+        // An approved discount is spent here or not at all. The approval is bound to a cart
+        // fingerprint, so a basket edited after approval no longer matches and the approval is
+        // refused rather than silently applied to different goods.
+        $draft = $this->resolveApprovedDraft($actor, $data, $lines, $subtotal);
+        $discount = $draft === null ? '0.00' : Money::round((string) $draft['amount']);
+        $total = bcsub($subtotal, $discount, 2);
 
-            if (bccomp($total, '0.00', 2) < 0) {
-                throw ValidationException::withMessages(['products' => 'The approved discount exceeds the sale total.']);
-            }
-            $amountPaid = bcadd($data['amount_paid'], '0', 2);
+        if (bccomp($total, '0.00', 2) < 0) {
+            throw ValidationException::withMessages(['products' => 'The approved discount exceeds the sale total.']);
+        }
+        $amountPaid = bcadd($data['amount_paid'], '0', 2);
 
-            if (bccomp($amountPaid, $total, 2) > 0) {
-                throw ValidationException::withMessages(['amount_paid' => 'Amount paid cannot exceed the sale total.']);
-            }
+        if (bccomp($amountPaid, $total, 2) > 0) {
+            throw ValidationException::withMessages(['amount_paid' => 'Amount paid cannot exceed the sale total.']);
+        }
 
-            $balance = bcsub($total, $amountPaid, 2);
-            $paymentStatus = match (true) {
-                bccomp($balance, '0', 2) === 0 => PaymentStatus::Paid,
-                bccomp($amountPaid, '0', 2) === 0 => PaymentStatus::Unpaid,
-                default => PaymentStatus::Partial,
-            };
+        $balance = bcsub($total, $amountPaid, 2);
+        $paymentStatus = match (true) {
+            bccomp($balance, '0', 2) === 0 => PaymentStatus::Paid,
+            bccomp($amountPaid, '0', 2) === 0 => PaymentStatus::Unpaid,
+            default => PaymentStatus::Partial,
+        };
 
-            $sale = new Sale;
-            $sale->business_id = $business->getKey();
-            // Assigned once, up front. The old scheme derived the number from the primary key and
-            // so needed a placeholder and a second save; a random reference needs neither.
-            $sale->sale_number = SaleNumber::generate();
-            $sale->is_walk_in = $walkIn;
-            $sale->customer_id = $customer?->id;
-            $sale->customer_code_snapshot = $customer?->customer_code ?? Sale::WALK_IN_CODE;
-            $sale->customer_name_snapshot = $customer?->full_name ?? Sale::WALK_IN_NAME;
-            $sale->customer_phone_snapshot = $customer?->phone;
-            // When the trade happened, which a user may legitimately backdate. `created_at` remains
-            // the moment the row was written and is what audit chronology continues to use.
-            $sale->sale_date = $data['sale_date'] ?? now()->toDateString();
-            $sale->sold_by_name_snapshot = $actor->name;
-            $sale->status = SaleStatus::Completed;
-            $sale->payment_method = PaymentMethod::from($data['payment_method']);
-            $sale->payment_status = $paymentStatus;
-            $sale->subtotal = $subtotal;
-            $sale->discount_amount = $discount;
-            $sale->total_amount = $total;
-            $sale->amount_paid = $amountPaid;
-            $sale->balance_due = $balance;
-            $sale->notes = $data['notes'] ?? null;
-            $sale->sold_by = $actor->id;
-            $sale->save();
+        $sale = new Sale;
+        $sale->business_id = $business->getKey();
+        $sale->sale_request_id = $submission?->id;
+        // Assigned once, up front. The old scheme derived the number from the primary key and
+        // so needed a placeholder and a second save; a random reference needs neither.
+        $sale->sale_number = SaleNumber::generate();
+        $sale->is_walk_in = $walkIn;
+        $sale->customer_id = $customer?->id;
+        $sale->customer_code_snapshot = $customer?->customer_code ?? Sale::WALK_IN_CODE;
+        $sale->customer_name_snapshot = $customer?->full_name ?? Sale::WALK_IN_NAME;
+        $sale->customer_phone_snapshot = $customer?->phone;
+        // When the trade happened, which a user may legitimately backdate. `created_at` remains
+        // the moment the row was written and is what audit chronology continues to use.
+        $sale->sale_date = $data['sale_date'] ?? now(config('business.timezone'))->toDateString();
+        $sale->sold_by_name_snapshot = $actor->name;
+        $sale->status = SaleStatus::Completed;
+        $sale->payment_method = PaymentMethod::from($data['payment_method']);
+        $sale->payment_status = $paymentStatus;
+        $sale->subtotal = $subtotal;
+        $sale->discount_amount = $discount;
+        $sale->total_amount = $total;
+        $sale->amount_paid = $amountPaid;
+        $sale->balance_due = $balance;
+        $sale->notes = $data['notes'] ?? null;
+        $sale->sold_by = $actor->id;
+        $sale->save();
 
-            foreach ($lines as $line) {
-                /** @var Product $product */
-                $product = $line['product'];
-                $item = new SaleItem;
-                $item->business_id = $sale->business_id;
-                $item->sale_id = $sale->id;
-                $item->product_id = $product->id;
-                $item->product_sku_snapshot = $product->sku;
-                $item->product_name_snapshot = $product->name;
-                $item->unit_snapshot = $product->unit->value;
-                $item->quantity = $line['quantity'];
-                $item->unit_price = $product->selling_price;
-                $item->line_total = $line['lineTotal'];
-                $item->save();
+        foreach ($lines as $line) {
+            /** @var Product $product */
+            $product = $line['product'];
+            $item = new SaleItem;
+            $item->business_id = $sale->business_id;
+            $item->sale_id = $sale->id;
+            $item->product_id = $product->id;
+            $item->product_sku_snapshot = $product->sku;
+            $item->product_name_snapshot = $product->name;
+            $item->unit_snapshot = $product->unit->value;
+            $item->quantity = $line['quantity'];
+            $item->unit_price = $product->selling_price;
+            $item->line_total = $line['lineTotal'];
+            $item->save();
 
-                $movement = new InventoryMovement;
-                $movement->business_id = $product->business_id;
-                $movement->product_id = $product->id;
-                $movement->type = InventoryMovementType::Sale;
-                $movement->quantity_change = bcsub('0', $line['quantity'], 3);
-                $movement->quantity_before = $product->current_stock;
-                $movement->quantity_after = $line['after'];
-                $movement->reference_type = $sale->getMorphClass();
-                $movement->reference_id = $sale->id;
-                $movement->reason = 'Sale '.$sale->sale_number;
-                $movement->performed_by = $actor->id;
-                $movement->save();
+            $movement = new InventoryMovement;
+            $movement->business_id = $product->business_id;
+            $movement->product_id = $product->id;
+            $movement->type = InventoryMovementType::Sale;
+            $movement->quantity_change = bcsub('0', $line['quantity'], 3);
+            $movement->quantity_before = $product->current_stock;
+            $movement->quantity_after = $line['after'];
+            $movement->reference_type = $sale->getMorphClass();
+            $movement->reference_id = $sale->id;
+            $movement->reason = 'Sale '.$sale->sale_number;
+            $movement->performed_by = $actor->id;
+            $movement->save();
 
-                $product->current_stock = $line['after'];
-                $product->updated_by = $actor->id;
-                $product->save();
-            }
+            $product->current_stock = $line['after'];
+            $product->updated_by = $actor->id;
+            $product->save();
+        }
 
-            if (bccomp($amountPaid, '0.00', 2) > 0) {
-                $payment = new SalePayment;
-                $payment->business_id = $sale->business_id;
-                $payment->payment_number = 'PENDING-'.Str::random(20);
-                $payment->sale_id = $sale->id;
-                $payment->customer_id = $customer?->id;
-                $payment->amount = $amountPaid;
-                $payment->payment_method = $sale->payment_method;
-                $payment->payment_type = SalePaymentType::Initial;
-                $payment->recorded_by = $actor->id;
-                $payment->recorded_by_name_snapshot = $actor->name;
-                $payment->paid_at = $sale->created_at;
-                $payment->note = null;
-                $payment->cumulative_paid_after = $amountPaid;
-                $payment->balance_after = $balance;
-                $payment->payment_status_after = $paymentStatus;
-                $payment->initial_sale_guard = $sale->id;
-                $payment->save();
-                $payment->payment_number = PaymentNumber::fromId($payment->id);
-                $payment->save();
+        if (bccomp($amountPaid, '0.00', 2) > 0) {
+            $payment = new SalePayment;
+            $payment->business_id = $sale->business_id;
+            $payment->payment_number = 'PENDING-'.Str::random(20);
+            $payment->sale_id = $sale->id;
+            $payment->customer_id = $customer?->id;
+            $payment->amount = $amountPaid;
+            $payment->payment_method = $sale->payment_method;
+            $payment->payment_type = SalePaymentType::Initial;
+            $payment->recorded_by = $actor->id;
+            $payment->recorded_by_name_snapshot = $actor->name;
+            $payment->paid_at = $sale->created_at;
+            $payment->note = null;
+            $payment->cumulative_paid_after = $amountPaid;
+            $payment->balance_after = $balance;
+            $payment->payment_status_after = $paymentStatus;
+            $payment->initial_sale_guard = $sale->id;
+            $payment->save();
+            $payment->payment_number = PaymentNumber::fromId($payment->id);
+            $payment->save();
 
-                $this->audit->record('sale_initial_payment_recorded', $payment, $actor, newValues: $payment->getAttributes());
-            }
+            $this->audit->record('sale_initial_payment_recorded', $payment, $actor, newValues: $payment->getAttributes());
+        }
 
-            if ($draft !== null) {
-                $draft['model']->markConsumed($sale);
-            }
+        if ($draft !== null) {
+            $draft['model']->markConsumed($sale);
+        }
 
-            $this->audit->record('sale_created', $sale, $actor, newValues: $sale->getAttributes(), metadata: [
-                'item_count' => count($lines),
-                'is_walk_in' => $walkIn,
-                'sale_draft_id' => $draft['model']->id ?? null,
-            ]);
-
-            return $sale;
-        });
-
-        // The sale is committed and irreversible. The post-purchase automation is triggered
-        // afterwards so the provider stays entirely outside the sale transaction: the scheduler
-        // sends it later, and the trigger swallows every failure, so a WhatsApp problem can never
-        // affect a recorded sale.
-        //
-        // This replaces the former automatic WhatsApp *receipt*. There is deliberately only one
-        // call here: two would mean a customer receiving two messages for one purchase.
-        $this->whatsapp->salePaid($sale);
+        $this->audit->record('sale_created', $sale, $actor, newValues: $sale->getAttributes(), metadata: [
+            'item_count' => count($lines),
+            'is_walk_in' => $walkIn,
+            'sale_draft_id' => $draft['model']->id ?? null,
+        ]);
 
         return $sale;
+    }
+
+    /**
+     * What follows a committed Sale.
+     *
+     * The post-purchase automation is triggered only once the Sale is committed, so the provider
+     * stays entirely outside the sale transaction: the scheduler sends it later, and the trigger
+     * swallows every failure, so a WhatsApp problem can never affect a recorded sale.
+     *
+     * This replaces the former automatic WhatsApp *receipt*. It runs once per recorded Sale, never
+     * for a replayed submission: two calls would mean a customer receiving two messages.
+     */
+    public function afterCommit(Sale $sale): void
+    {
+        $this->whatsapp->salePaid($sale);
     }
 
     /**
@@ -233,7 +266,8 @@ class CreateSale
      *   - the draft is locked, so two concurrent submissions cannot both spend it;
      *   - it must belong to the user recording the sale;
      *   - it must not already have been consumed by another Sale;
-     *   - its latest decision must be an approval, not a pending or declined request;
+     *   - its latest decision must be an approval, not a pending, declined, cancelled or expired
+     *     request, and the approval must still be within its business day;
      *   - and its fingerprint must still match the cart in hand, so editing the basket after
      *     approval invalidates the approval instead of discounting different goods.
      *
@@ -262,6 +296,18 @@ class CreateSale
 
         $request = $draft->latestDecidedRequest();
 
+        // An approval lasts until the end of the business day it was granted. That is measured
+        // against now, never against the Sale's date, so backdating a Sale cannot revive one.
+        if ($request !== null && ($request->status === DiscountRequestStatus::Expired || $request->isApprovalExpired())) {
+            throw ValidationException::withMessages([
+                'products' => 'That discount approval has expired. Request a new discount for this sale.',
+            ]);
+        }
+
+        if ($request !== null && $request->status === DiscountRequestStatus::Cancelled) {
+            throw ValidationException::withMessages(['products' => 'That discount request was cancelled.']);
+        }
+
         if ($request === null || $request->status !== DiscountRequestStatus::Approved) {
             throw ValidationException::withMessages(['products' => 'No approved discount is available for this sale.']);
         }
@@ -281,6 +327,27 @@ class CreateSale
         if (! $draft->matches($current, $walkIn, $customerId, $saleDate)) {
             throw ValidationException::withMessages([
                 'products' => 'The sale changed after the discount was approved. Request a new discount for the updated cart, customer and date.',
+            ]);
+        }
+
+        // The fingerprint fixes the goods and quantities but not their prices. The approved amount
+        // was judged against the prices the Admin saw, so a price change since then — up or down —
+        // changes what the discount means and the approval no longer applies.
+        $approvedPrices = array_column((array) $draft->cart_snapshot, 'unit_price', 'product_id');
+
+        foreach ($lines as $line) {
+            $approvedPrice = $approvedPrices[$line['product']->id] ?? null;
+
+            if (! is_numeric($approvedPrice) || bccomp((string) $approvedPrice, (string) $line['product']->selling_price, 2) !== 0) {
+                throw ValidationException::withMessages([
+                    'products' => 'A product price changed after the discount was approved. Request a new discount for the current prices.',
+                ]);
+            }
+        }
+
+        if (bccomp((string) $draft->subtotal_snapshot, $subtotal, 2) !== 0) {
+            throw ValidationException::withMessages([
+                'products' => 'A product price changed after the discount was approved. Request a new discount for the current prices.',
             ]);
         }
 

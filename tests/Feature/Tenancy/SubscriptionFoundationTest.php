@@ -8,6 +8,7 @@ use App\Contracts\WhatsAppConnectionProvider;
 use App\Enums\BusinessStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\UserRole;
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Models\Business;
 use App\Models\BusinessSubscription;
 use App\Models\Customer;
@@ -26,10 +27,15 @@ use Carbon\CarbonImmutable;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use RuntimeException;
+use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Tests\Concerns\BuildsWhatsAppWorld;
 use Tests\Fakes\FakeWhatsAppProvider;
 use Tests\TestCase;
@@ -223,6 +229,84 @@ class SubscriptionFoundationTest extends TestCase
 
         $this->assertSame([302, 302, 429], $statuses);
         Notification::assertSentToTimes($owner, VerifyEmail::class, 2);
+    }
+
+    public function test_signup_delivers_a_signed_link_through_the_mail_transport_that_verifies_the_owner(): void
+    {
+        $this->post(route('register.store'), [
+            'owner_name' => 'Ada Obi', 'email' => 'ada@mail.test', 'phone' => '08035550211', 'password' => 'Secret123',
+            'password_confirmation' => 'Secret123', 'business_name' => 'Mail Ltd',
+        ])->assertRedirect(route('verification.notice'));
+
+        // The real mailer, not a notification fake: the message was rendered and handed to the transport.
+        $messages = app('mailer')->getSymfonyTransport()->messages();
+        $this->assertCount(1, $messages);
+        $email = $messages->first()->getOriginalMessage();
+        $this->assertSame('ada@mail.test', $email->getTo()[0]->getAddress());
+        $this->assertSame(1, preg_match('#href="([^"]*/email/verify/[^"]+)"#', (string) $email->getHtmlBody(), $match));
+        $link = html_entity_decode($match[1]);
+        $this->assertStringContainsString('signature=', $link);
+        $this->assertStringContainsString('expires=', $link);
+
+        $owner = User::query()->where('email', 'ada@mail.test')->sole();
+        $this->assertFalse($owner->hasVerifiedEmail(), 'signing up never verifies by itself');
+        $this->get(route('verification.notice'))->assertOk()->assertSee('We sent a verification link to:')->assertSee('ada@mail.test');
+
+        $this->get($link)->assertRedirect(route('onboarding.pin.edit'));
+        $this->assertTrue($owner->fresh()->hasVerifiedEmail());
+        $this->get(route('verification.notice'))->assertRedirect(route('dashboard'));
+    }
+
+    public function test_a_verified_owner_cannot_trigger_another_verification_email(): void
+    {
+        Notification::fake();
+        $owner = $this->provision('Done Ltd', 'owner@done.test', '08035550212');
+        $owner->forceFill(['email_verified_at' => now(), 'quick_pin_setup_completed' => true])->save();
+
+        $this->actingAs($owner)->post(route('verification.send'))
+            ->assertRedirect(route('dashboard'))->assertSessionMissing('status');
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_a_failing_mail_transport_is_reported_honestly_and_never_verifies_the_account(): void
+    {
+        Mail::extend('failing', fn () => new class extends AbstractTransport
+        {
+            protected function doSend(SentMessage $message): void
+            {
+                throw new TransportException('Connection refused by smtp.example.test with credentials secret-value');
+            }
+
+            public function __toString(): string
+            {
+                return 'failing://';
+            }
+        });
+        config(['mail.mailers.failing' => ['transport' => 'failing'], 'mail.default' => 'failing']);
+        Log::spy();
+
+        $this->post(route('register.store'), [
+            'owner_name' => 'Ada Obi', 'email' => 'ada@down.test', 'phone' => '08035550213', 'password' => 'Secret123',
+            'password_confirmation' => 'Secret123', 'business_name' => 'Down Ltd',
+        ])->assertRedirect(route('verification.notice'))->assertSessionHasErrors(['verification' => EmailVerificationController::UNSENT]);
+
+        $owner = User::query()->where('email', 'ada@down.test')->sole();
+        $this->assertFalse($owner->hasVerifiedEmail());
+
+        $this->get(route('verification.notice'));
+        $this->post(route('verification.send'))
+            ->assertRedirect(route('verification.notice'))
+            ->assertSessionHasErrors(['verification' => EmailVerificationController::UNSENT])
+            ->assertSessionMissing('status');
+        $this->get(route('verification.notice'));
+        $this->followingRedirects()->post(route('verification.send'))->assertOk()
+            ->assertSee(EmailVerificationController::UNSENT)->assertSee('Your verification link will be sent to:')
+            ->assertDontSee('A new verification link has been sent');
+
+        $this->assertFalse($owner->fresh()->hasVerifiedEmail());
+        Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => ! str_contains(json_encode($context), 'secret-value')
+            && $context['exception'] === TransportException::class);
     }
 
     public function test_signup_cannot_choose_its_plan_state_or_trial(): void

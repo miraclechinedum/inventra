@@ -6,6 +6,7 @@ use App\Actions\Sale\RecordSaleRefund;
 use App\Actions\Sale\RecordSaleReturn;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Enums\ProductUnit;
 use App\Enums\SalePaymentType;
 use App\Enums\UserRole;
 use App\Models\Product;
@@ -360,7 +361,8 @@ class ReturnRefundValidationUxTest extends TestCase
     private function fixture(string $paid, ?User $actor = null): array
     {
         $actor ??= User::factory()->create(['role' => UserRole::Admin]);
-        $product = Product::factory()->create(['current_stock' => '10.000']);
+        // Measured in litres, so the fractional quantities below are valid for the unit.
+        $product = Product::factory()->create(['current_stock' => '10.000', 'unit' => ProductUnit::Litre]);
         $sale = Sale::factory()->create([
             'subtotal' => '100000.00', 'total_amount' => '100000.00', 'amount_paid' => $paid,
             'balance_due' => bcsub('100000.00', $paid, 2),

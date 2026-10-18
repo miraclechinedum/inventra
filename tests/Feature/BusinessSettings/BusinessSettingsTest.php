@@ -2,15 +2,20 @@
 
 namespace Tests\Feature\BusinessSettings;
 
+use App\Actions\Sale\CreateSale;
 use App\Actions\Settings\UpdateBusinessSettings;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\BusinessSetting;
+use App\Models\Customer;
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
+use App\Models\WhatsAppAutomation;
+use App\Models\WhatsAppConnection;
+use App\Models\WhatsAppMessage;
 use App\Services\AuditLogger;
 use App\Settings\BusinessSettings;
-use App\Support\WhatsAppReceiptTemplate;
 use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
@@ -609,25 +614,58 @@ class BusinessSettingsTest extends TestCase
         $this->assertSame(1, DB::table('sales')->count());
     }
 
-    public function test_whatsapp_receipt_content_carries_no_business_identity(): void
+    /**
+     * WhatsApp messages carry the business name as it was when they were queued.
+     *
+     * The post-purchase automation fills an approved template with an allowlisted set of values,
+     * the business name among them, and snapshots them on the message. Renaming the business later
+     * must not alter a message already queued, and no other setting, such as the receipt footer,
+     * reaches message content at all.
+     */
+    public function test_a_queued_whatsapp_message_keeps_the_business_identity_it_was_queued_with(): void
     {
         $admin = $this->admin();
         $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
             'business_name' => 'Adaeze Stores', 'receipt_footer' => 'Thank you for your business.',
         ]))->assertSessionHasNoErrors();
 
-        $this->receiptUrls($admin);
-        $sale = Sale::query()->latest('id')->firstOrFail();
-        $parameters = WhatsAppReceiptTemplate::parameters($sale);
+        WhatsAppConnection::query()->firstOrCreate(['singleton_key' => 'whatsapp'])->forceFill([
+            'provider' => 'fake', 'waba_id' => '100000000000001', 'phone_number_id' => '200000000000001',
+            'display_phone_number' => '+234 700 000 1234', 'phone_number' => '+2347000001234',
+            'access_token' => 'fake-business-token', 'status' => 'connected',
+            'verified_at' => now(), 'connected_at' => now(),
+        ])->save();
+        WhatsAppAutomation::forKey(WhatsAppAutomation::POST_PURCHASE)->update([
+            'enabled' => true, 'template_name' => 'inventra_post_purchase',
+            'template_language' => 'en', 'template_status' => 'APPROVED',
+        ]);
+        $customer = Customer::factory()->create([
+            'phone' => '+2348090000001', 'is_active' => true,
+            'whatsapp_opt_in' => true, 'whatsapp_opt_in_at' => now(), 'whatsapp_opt_out_at' => null,
+        ]);
+        $product = Product::factory()->create(['selling_price' => '2500.00', 'current_stock' => '10.000']);
 
-        // WhatsApp message bodies come from a provider-approved template filled with immutable Sale
-        // snapshots. No business setting reaches them, so changing settings cannot alter historical
-        // or re-rendered WhatsApp content.
-        $encoded = (string) json_encode($parameters);
-        $this->assertStringNotContainsString('Adaeze Stores', $encoded);
-        $this->assertStringNotContainsString('Thank you for your business.', $encoded);
-        $this->assertSame(['customer_name', 'sale_number', 'total_amount', 'payment_status', 'sold_by_name'],
-            array_keys($parameters));
+        // A paid Sale queues its post-purchase message as part of being recorded.
+        app(CreateSale::class)->execute($admin, [
+            'is_walk_in' => false, 'customer_id' => $customer->id,
+            'sale_date' => now(config('business.timezone'))->toDateString(),
+            'products' => [['product_id' => $product->id, 'quantity' => '2']],
+            'payment_method' => 'cash', 'amount_paid' => '5000.00',
+        ]);
+        $message = WhatsAppMessage::query()->where('type', 'post_purchase')->sole();
+
+        $this->assertEqualsCanonicalizing(['customer_name', 'business_name', 'sale_total', 'balance_due'], array_keys($message->template_values));
+        $this->assertSame('Adaeze Stores', $message->template_values['business_name']);
+        $this->assertStringNotContainsString('Thank you for your business.', $message->body.json_encode($message->template_values));
+
+        $this->actingAs($admin)->put(route('settings.business.update'), $this->payload([
+            'business_name' => 'Renamed Stores', 'receipt_footer' => 'A different footer.',
+        ]))->assertSessionHasNoErrors();
+
+        $after = $message->fresh();
+        $this->assertSame($message->body, $after->body);
+        $this->assertSame($message->template_values, $after->template_values);
+        $this->assertStringNotContainsString('Renamed Stores', $after->body.json_encode($after->template_values));
     }
 
     /* ------------------------------------------------------- clearing optional settings */

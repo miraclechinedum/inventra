@@ -39,6 +39,8 @@ class AuditLogger
         // All are money or short free text; none carry personal data.
         'returned_amount', 'refunded_amount', 'refundable_credit',
         'requested_amount', 'reason', 'decision_note',
+        // Discount request lifecycle: the sole-Administrator exception and a recorded expiry.
+        'self_approved', 'expired_at',
         // Server-generated random image filenames. They contain no client-supplied text.
         'image_path', 'photo_path', 'logo_path',
         'business_name', 'business_phone', 'business_email', 'business_address',

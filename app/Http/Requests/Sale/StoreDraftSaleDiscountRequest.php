@@ -50,7 +50,7 @@ class StoreDraftSaleDiscountRequest extends FormRequest
                 'integer',
                 TenantRules::exists(Customer::class)->where('is_active', true),
             ],
-            'sale_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'sale_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.now(config('business.timezone'))->toDateString()],
 
             'products' => ['required', 'array', 'min:1', 'max:100'],
             'products.*' => ['required', 'array:product_id,quantity'],

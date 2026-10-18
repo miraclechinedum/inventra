@@ -6,6 +6,10 @@ use App\Models\Business;
 use App\Tenancy\CurrentBusiness;
 use Illuminate\Database\Connection;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +45,33 @@ abstract class TestCase extends BaseTestCase
         if (Schema::hasTable('businesses') && ($business = Business::query()->orderBy('id')->first()) !== null) {
             app(CurrentBusiness::class)->set($business);
         }
+    }
+
+    /**
+     * Gives a DatabaseTransactions test a schema to run in.
+     *
+     * DatabaseTransactions wraps each test in a transaction but never migrates, so it relies on the
+     * schema already being there. A migration test using DatabaseMigrations rolls the whole schema
+     * back when it finishes, and a class that ran after one, or alone, would meet empty tables.
+     * RefreshDatabaseState records whether the schema is current: RefreshDatabase sets it after
+     * migrating and DatabaseMigrations clears it after rolling back. This migrates whenever it is
+     * clear, through the same guard as every other destructive step, so any class runs in isolation
+     * and in any order.
+     */
+    protected function setUpTraits()
+    {
+        $uses = $this->traitsUsedByTest ?? class_uses_recursive(static::class);
+
+        if (isset($uses[DatabaseTransactions::class])
+            && ! isset($uses[RefreshDatabase::class])
+            && ! isset($uses[DatabaseMigrations::class])
+            && ! RefreshDatabaseState::$migrated) {
+            static::assertSafeTestDatabase(DB::connection());
+            Artisan::call('migrate:fresh', ['--force' => true]);
+            RefreshDatabaseState::$migrated = true;
+        }
+
+        return parent::setUpTraits();
     }
 
     /**

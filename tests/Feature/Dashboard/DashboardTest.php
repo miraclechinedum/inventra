@@ -11,6 +11,7 @@ use App\Actions\Sale\VoidSale;
 use App\Actions\Supplier\CreateSupplier;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Enums\ProductUnit;
 use App\Enums\SalePaymentType;
 use App\Enums\SaleStatus;
 use App\Enums\UserRole;
@@ -24,9 +25,14 @@ use App\Models\SalePayment;
 use App\Models\SaleRefundRequest;
 use App\Models\SaleReturnRequest;
 use App\Models\User;
+use App\Reports\BusinessReports;
+use App\Reports\ReportFilters;
+use App\Support\Money;
+use App\Tenancy\CurrentBusiness;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -277,6 +283,55 @@ class DashboardTest extends TestCase
         $this->assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
         $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
         $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
+    }
+
+    /**
+     * "My Collections" follows the Staff Performance report: payments on a Sale that was later voided
+     * are not attributed to the seller until a refund ledger can reverse them.
+     */
+    public function test_my_collections_excludes_payments_on_voided_sales_and_matches_staff_performance(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $rep = User::factory()->create(['role' => UserRole::SalesRep]);
+
+        $this->sale('60000.00', '10000.00', null, $rep);
+        [$voided] = $this->sale('30000.00', '30000.00', null, $rep);
+        app(VoidSale::class)->execute($admin, $voided->fresh(), 'Recorded twice by mistake.');
+
+        $html = $this->actingAs($rep)->get(route('operations'))->assertOk()->getContent();
+        $this->assertSame('10000.00', $this->metric($html, 'My Collections'));
+
+        $staff = app(CurrentBusiness::class)->run($rep->business, fn (): array => app(BusinessReports::class)
+            ->staff(ReportFilters::fromRequest(Request::create('/'))));
+        $row = collect($staff['rows']->items())->firstWhere('id', $rep->id);
+        $this->assertSame('10000.00', Money::zero((string) $row->seller_sale_collections));
+    }
+
+    /**
+     * An impossible calendar date is refused like any other malformed value. Carbon would otherwise
+     * read 2026-02-31 as 3 March, so DATE-column figures and timestamp-bounded figures would cover
+     * different ranges under one heading.
+     */
+    public function test_impossible_calendar_dates_fall_back_to_the_default_period(): void
+    {
+        $default = CarbonImmutable::now(config('business.timezone'));
+        $defaultFrom = $default->startOfMonth()->toDateString();
+        $defaultTo = $default->endOfMonth()->toDateString();
+
+        foreach (['2026-02-29', '2026-02-30', '2026-02-31', '2026-04-31', '2026-06-31', '2026-00-10', '2026-01-00'] as $impossible) {
+            $filters = ReportFilters::fromRequest(Request::create('/', 'GET', ['to' => $impossible]));
+            $this->assertSame($defaultTo, $filters->to, "{$impossible} must not be accepted");
+        }
+
+        // A real leap day is still a date.
+        $leap = ReportFilters::fromRequest(Request::create('/', 'GET', ['from' => '2028-02-29', 'to' => '2028-02-29']));
+        $this->assertSame('2028-02-29', $leap->from);
+        $this->assertSame('2028-02-29', $leap->to);
+
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $this->actingAs($admin)->get(route('operations', ['from' => $defaultFrom, 'to' => '2026-02-31']))->assertOk()
+            ->assertSee("Period {$defaultFrom} through {$defaultTo} inclusive")
+            ->assertDontSee('2026-02-31');
     }
 
     public function test_malformed_and_hostile_filters_never_break_the_dashboard(): void
@@ -595,7 +650,8 @@ class DashboardTest extends TestCase
     {
         $seller ??= User::factory()->create(['role' => UserRole::Admin]);
         $customer = Customer::factory()->create();
-        $product = Product::factory()->create(['current_stock' => '50.000']);
+        // Measured in litres: the return fixtures send back fractional quantities.
+        $product = Product::factory()->create(['current_stock' => '50.000', 'unit' => ProductUnit::Litre]);
         $balance = bcsub($total, $paid, 2);
         $sale = new Sale;
         $sale->business_id = $customer->business_id;

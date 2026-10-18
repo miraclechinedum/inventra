@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Sale\CreateSale;
 use App\Actions\Sale\IssueSalePaymentRequest;
+use App\Actions\Sale\IssueSaleRequest;
+use App\Actions\Sale\RecordSaleSubmission;
 use App\Actions\Sale\VoidSale;
 use App\Actions\WhatsAppAutomation\WhatsAppAutomationEligibility;
+use App\Enums\DiscountRequestStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\SaleStatus;
@@ -17,6 +19,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleDiscountRequest;
+use App\Models\SaleDraft;
 use App\Models\User;
 use App\Support\Initials;
 use App\Support\Money;
@@ -293,7 +296,7 @@ class SaleController extends Controller
      * The JSON branch serves the product combobox. It returns only what the picker needs to render
      * a row and price a line — never cost price, which no sales screen is entitled to see.
      */
-    public function create(Request $request): View|JsonResponse
+    public function create(Request $request, IssueSaleRequest $tokens): View|JsonResponse
     {
         Gate::authorize('create', Sale::class);
         $searchInput = $request->query('product_search');
@@ -326,6 +329,9 @@ class SaleController extends Controller
                 ->map($this->customerPayload(...))->values(),
             'today' => CarbonImmutable::now(config('business.timezone'))->toDateString(),
             'canRequestDiscount' => Gate::allows('createForDraft', SaleDiscountRequest::class),
+            // Issued per page load, so a rejected submission comes back with a fresh one and a
+            // recorded Sale can never be recorded again from the same page.
+            'requestToken' => $tokens->execute($request->user(), $request->session()),
         ]);
     }
 
@@ -399,6 +405,8 @@ class SaleController extends Controller
             }
         }
 
+        $approval = $this->restorableApproval($request);
+
         return [
             'isWalkIn' => $walkIn,
             'customer' => $customer,
@@ -408,10 +416,41 @@ class SaleController extends Controller
             // The draft is re-checked by CreateSale against the cart, buyer and date it is finally
             // given, so carrying the id back cannot spend a stale approval — a changed context is
             // refused there. It is dropped entirely when the cart could not be restored intact.
-            'saleDraftId' => $lines !== [] && is_numeric($request->old('sale_draft_id'))
-                ? (int) $request->old('sale_draft_id')
-                : null,
+            'saleDraftId' => $lines !== [] ? $approval['id'] ?? null : null,
+            // The approved amount comes from the decision on record, never from old input, so the
+            // restored cart shows the same discounted total the server will charge.
+            'approvedAmount' => $lines !== [] ? $approval['amount'] ?? null : null,
         ];
+    }
+
+    /**
+     * The approval a rejected submission was carrying, if it is still one this operator could spend:
+     * their own draft, not yet consumed, whose latest decision is an approval. Anything else is
+     * dropped, so the form never shows a discount CreateSale would refuse outright.
+     *
+     * @return array{id: int, amount: string}|null
+     */
+    private function restorableApproval(Request $request): ?array
+    {
+        $draftId = $request->old('sale_draft_id');
+
+        if (! is_numeric($draftId)) {
+            return null;
+        }
+
+        $draft = SaleDraft::query()->find((int) $draftId);
+
+        if ($draft === null || (int) $draft->created_by !== (int) $request->user()->id || $draft->isConsumed()) {
+            return null;
+        }
+
+        $decision = $draft->latestDecidedRequest();
+
+        if ($decision === null || $decision->status !== DiscountRequestStatus::Approved || $decision->isApprovalExpired()) {
+            return null;
+        }
+
+        return ['id' => $draft->id, 'amount' => Money::round((string) $decision->requested_amount)];
     }
 
     /**
@@ -538,12 +577,17 @@ class SaleController extends Controller
             // "0.5" stays "0.5" — so the picker's stock comparisons are unaffected, and CreateSale
             // re-reads the real column under a row lock regardless of what is shown here.
             'stock' => Quantity::trim((string) $product->current_stock),
+            // Whether the quantity may be fractional. The cart offers the matching step; CreateSale
+            // enforces the rule against the locked product regardless.
+            'fractional' => $product->unit->allowsFraction(),
         ];
     }
 
-    public function store(StoreSaleRequest $request, CreateSale $action): RedirectResponse
+    public function store(StoreSaleRequest $request, RecordSaleSubmission $action): RedirectResponse
     {
-        $sale = $action->execute($request->user(), $request->validated());
+        // A replayed submission resolves to the Sale it already recorded, and lands on that Sale's
+        // completion state exactly as the first delivery did.
+        $sale = $action->execute($request->user(), $request->validated(), $request->session()->getId())['sale'];
 
         // Back to a fresh Record Sale page carrying the completion state, rather than straight to
         // the Sale. Recording one sale is usually followed by recording another, and the success

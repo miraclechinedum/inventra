@@ -14,7 +14,7 @@
 - UI visibility is not authorization.
 - Use database transactions for stock-affecting operations and critical sales operations.
 - Use row locking where concurrent inventory changes are possible.
-- MySQL is the only supported database engine for development, testing and production.
+- MySQL is the only supported database engine for development, testing and production. The minimum server version is MySQL 8.0.19: migrations use the general `ALTER TABLE ... DROP CONSTRAINT` syntax (8.0.19) and depend on enforced CHECK constraints and `information_schema.CHECK_CONSTRAINTS` (8.0.16). MariaDB is not supported.
 - Automated tests must resolve to the local `inventra_test` MySQL database before destructive test helpers can run.
 - Avoid unnecessary MySQL 9.6-specific features until the production hosting version is verified.
 - Never commit credentials, tokens, passwords or API keys.
@@ -83,9 +83,14 @@
 - Aggregate duplicate sale product lines, sort unique Product IDs ascending, and acquire every Product row lock in that deterministic order before validating or changing stock.
 - Completed Sales and SaleItems are immutable snapshots; corrections use explicit audited void transitions that restore stock through `sale_void` ledger movements.
 - Future receipts and messages render Customer and Product snapshots captured from locked authoritative rows, never current mutable records or browser-submitted labels and prices.
-- Phase 1 Sales require a registered Customer; never create synthetic walk-in Customers or use fake or placeholder phone numbers to bypass registration.
+- A Sale names either a registered Customer or is explicitly a walk-in (`is_walk_in`, no `customer_id`), never both and never neither; the database CHECK enforces the shape. Never create synthetic walk-in Customers or use fake or placeholder phone numbers; a walk-in Sale carries readable customer snapshots and receives no WhatsApp message.
 - Derive persisted Sales payment status from authoritative total, amount-paid and balance values; partial and unpaid balances require a future audited payment ledger for settlement history.
-- Cash amount-paid records the amount applied to the Sale; tender and change tracking are deferred, and discounts remain unsupported.
+- Cash amount-paid records the amount applied to the Sale; tender and change tracking are deferred.
+- Discounts exist only as approved Sale-level amounts: a pre-sale request bound by fingerprint to an exact cart, buyer, sale date and approved prices, or a post-sale request on a completed Sale. Only an Administrator decides, never their own request, except as the audited sole-active-Administrator exception verified under lock. The approved amount always comes from the request row, never from the browser.
+- Discount requests are pending, approved, declined, cancelled or expired; every transition is locked, audited and terminal. Pending requests expire after 24 hours and approved pre-sale discounts at the end of their approval business day; expiry is enforced at the moment of use, and the scheduler only records it.
+- A discounted Sale's Returns are valued net of the discount, allocated proportionally across Sale lines in fixed-precision arithmetic with deterministic rounding, and the return that exhausts a line takes its exact remainder. Preview and recording use the same valuation. A zero-value goods-only return may restore stock but never creates refundable credit.
+- Record Sale submissions require a hashed, actor-bound, session-bound, expiring, database-backed single-use token whose replay resolves to the original Sale without duplicating stock, payments or ledger history. Prune only expired, unused, unlinked submissions.
+- Quantities follow the unit they are counted in: `ProductUnit` decides whether a unit is fractional (litres to three decimal places) and every whole-number unit takes whole numbers in sales, returns, purchases and stock adjustments. Returns follow the Sale line's unit snapshot, and valid legacy records are never rewritten.
 - Preserve the immutable seller-name snapshot on historical receipts while retaining `sold_by` as the relational Staff reference.
 - Future WhatsApp delivery records are append-oriented and must capture Sale, Customer, destination, consent snapshots and check time, lifecycle timestamps, provider identity, status, failure reason and attempt number.
 - Future WhatsApp receipt content comes from immutable Sale and SaleItem snapshots, while recipient eligibility and destination come from a locked live Customer immediately before delivery.
@@ -161,7 +166,7 @@
 - Retry alert projection transactions on concurrency errors, and keep the projector the outermost transaction — Laravel will not retry a nested one, so wrapping reconciliation or an observer in an outer transaction silently disables the retries.
 - Resolve alert recipients once per role set per run, never once per subject. Keep that cache on the instance so it cannot go stale between runs.
 - Log a failed projection as exception class and code plus the subject reference. Never log the exception message: a `QueryException` carries the SQL and its bindings, which include product and customer names and amounts.
-- The alert tables require MySQL >= 8.0.16 for CHECK enforcement; the UNIQUE `active_key` is the version-independent duplicate protection.
+- The alert tables rely on CHECK enforcement (MySQL >= 8.0.16, within the 8.0.19 installation minimum); the UNIQUE `active_key` is the version-independent duplicate protection.
 - Never store a URL on an alert. Destinations are derived from a route name and the subject id, and an alert whose subject is gone renders with no link at all.
 - Do not prune operational alerts, and do not delete recipient rows when an alert resolves or an account is deactivated.
 - Plans are platform-level system data with no business_id, identified by a stable `key`; write them only through migrations and `inventra:sync-plans`, never from a request. Business subscriptions are Business-owned, one per Business.

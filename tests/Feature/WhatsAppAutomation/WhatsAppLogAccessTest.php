@@ -355,6 +355,38 @@ class WhatsAppLogAccessTest extends TestCase
         $this->assertStringContainsString('search=Row', $response->getContent());
     }
 
+    /** S/N counts across pages and restarts within a filtered result, newest message first. */
+    public function test_the_serial_number_follows_pagination_and_filters(): void
+    {
+        foreach (range(1, 14) as $index) {
+            $this->travel(1)->minutes();
+            $this->message(['recipient_name' => 'Row '.$index]);
+        }
+        $this->message(['recipient_name' => 'Somebody else']);
+
+        $serials = function (array $query): array {
+            $html = $this->actingAs($this->manager)->get(route('whatsapp.logs.index', $query))->assertOk()->getContent();
+            preg_match_all('/<td class="ui-sn">(\d+)<\/td>\s*<td class="is-muted">[^<]*<\/td>\s*<td class="wl-name">([^<]+)<\/td>/', $html, $rows);
+
+            return array_combine($rows[1], array_map('trim', $rows[2]));
+        };
+
+        $first = $serials(['range' => 'all', 'search' => 'Row']);
+        $this->assertSame(range(1, 10), array_keys($first));
+        $this->assertSame('Row 14', $first[1], 'newest first');
+        $this->assertSame('Row 5', $first[10]);
+
+        // Page two continues the count, and keeps the filter that produced it.
+        $second = $serials(['range' => 'all', 'search' => 'Row', 'page' => 2]);
+        $this->assertSame([11 => 'Row 4', 12 => 'Row 3', 13 => 'Row 2', 14 => 'Row 1'], $second);
+
+        // A different filter numbers its own result from one.
+        $this->assertSame([1 => 'Somebody else'], $serials(['range' => 'all', 'search' => 'Somebody']));
+
+        $html = $this->actingAs($this->manager)->get(route('whatsapp.logs.index', ['range' => 'all']))->getContent();
+        $this->assertMatchesRegularExpression('/<th class="ui-sn">S\/N<\/th>\s*<th>Date &amp; time<\/th>/', $html);
+    }
+
     /** Nothing on the page is a Figma sample value. */
     public function test_an_empty_log_renders_zeroes_and_no_sample_data(): void
     {

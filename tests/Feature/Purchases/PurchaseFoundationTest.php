@@ -5,6 +5,7 @@ namespace Tests\Feature\Purchases;
 use App\Actions\Purchase\ReceivePurchase;
 use App\Actions\Supplier\CreateSupplier;
 use App\Enums\InventoryMovementType;
+use App\Enums\ProductUnit;
 use App\Enums\UserRole;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -59,8 +60,9 @@ class PurchaseFoundationTest extends TestCase
     {
         $manager = User::factory()->create(['role' => UserRole::Manager, 'name' => 'Receiver A']);
         $supplier = app(CreateSupplier::class)->execute($manager, ['name' => 'Original Supplier', 'phone' => '+442071234567']);
-        $first = Product::factory()->create(['current_stock' => '10.125', 'cost_price' => '9.99']);
-        $second = Product::factory()->create(['current_stock' => '2.000']);
+        // Measured in litres: this exercises three-decimal quantities.
+        $first = Product::factory()->create(['current_stock' => '10.125', 'cost_price' => '9.99', 'unit' => ProductUnit::Litre]);
+        $second = Product::factory()->create(['current_stock' => '2.000', 'unit' => ProductUnit::Litre]);
         $purchase = $this->receive($manager, $supplier, [
             ['product_id' => $second->id, 'quantity' => '2.500', 'unit_cost' => '10.01'],
             ['product_id' => $first->id, 'quantity' => '1.250', 'unit_cost' => '3.33'],
@@ -234,7 +236,7 @@ class PurchaseFoundationTest extends TestCase
     {
         $manager = User::factory()->create(['role' => UserRole::Manager]);
         $supplier = app(CreateSupplier::class)->execute($manager, ['name' => 'HTTP Supplier']);
-        $product = Product::factory()->create(['current_stock' => '10.000']);
+        $product = Product::factory()->create(['current_stock' => '10.000', 'unit' => ProductUnit::Litre]);
         $this->actingAs($manager)->startSession();
         $response = $this->get(route('purchases.create'))->assertOk();
         preg_match('/name="request_token" value="([^"]+)"/', $response->getContent(), $matches);

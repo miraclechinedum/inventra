@@ -74,11 +74,11 @@ class SaleDraft extends Model
             ->first();
     }
 
-    /** The most recent decision made on this cart, whatever it was. */
+    /** The most recent outcome on this cart, whatever it was: decided, cancelled or expired. */
     public function latestDecidedRequest(): ?SaleDiscountRequest
     {
         return $this->discountRequests()
-            ->whereIn('status', [DiscountRequestStatus::Approved->value, DiscountRequestStatus::Declined->value])
+            ->where('status', '<>', DiscountRequestStatus::Pending->value)
             ->latest('decided_at')
             ->latest('id')
             ->first();

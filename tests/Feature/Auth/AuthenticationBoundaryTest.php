@@ -29,6 +29,45 @@ class AuthenticationBoundaryTest extends TestCase
         $this->get(rtrim(config('app.url'), '/').'/login')->assertOk();
     }
 
+    public function test_a_listed_development_host_is_accepted_only_in_local_and_only_exactly(): void
+    {
+        $tunnel = 'quiet-river-example.trycloudflare.com';
+        config(['security.development_hosts' => [$tunnel]]);
+
+        // Outside local development the list is ignored entirely.
+        $this->get("https://{$tunnel}/login")->assertBadRequest();
+        $this->app->detectEnvironment(fn (): string => 'production');
+        $this->get("https://{$tunnel}/login")->assertBadRequest();
+
+        $this->app->detectEnvironment(fn (): string => 'local');
+        $this->get("https://{$tunnel}/login")->assertOk();
+        $this->get(rtrim(config('app.url'), '/').'/login')->assertOk();
+
+        // Redirects stay on the origin the visitor used.
+        $this->get("https://{$tunnel}/dashboard")->assertRedirect("https://{$tunnel}/login");
+
+        foreach (['attacker.example', "evil.{$tunnel}", "{$tunnel}.attacker.example", 'other-tunnel.trycloudflare.com'] as $host) {
+            $this->get("https://{$host}/login")->assertBadRequest();
+        }
+    }
+
+    public function test_a_development_host_entry_that_is_not_a_bare_hostname_is_refused(): void
+    {
+        $this->app->detectEnvironment(fn (): string => 'local');
+        $this->withoutExceptionHandling();
+
+        foreach (['*.trycloudflare.com', 'https://quiet-river-example.trycloudflare.com', '.*', 'localhost'] as $entry) {
+            config(['security.development_hosts' => [$entry]]);
+
+            try {
+                $this->get(rtrim(config('app.url'), '/').'/login');
+                $this->fail("{$entry} must not widen the allowed hosts");
+            } catch (LogicException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
     public function test_external_and_scheme_relative_intended_redirects_are_rejected(): void
     {
         foreach (['https://attacker.example/phish', '//attacker.example/phish', '/\\attacker.example', '/%5Cattacker.example'] as $intended) {

@@ -26,17 +26,29 @@ use App\Models\Sale;
 final class ReturnSettlementPreview
 {
     /**
-     * @param  array<int, array{quantity: string, unit_price: string}>  $lines
+     * @param  array<int, array{sale_item_id: int, quantity: string}>  $lines
      * @return array{merchandise: string, reduction: string, credit: string}
      */
     public static function for(Sale $sale, array $lines): array
     {
+        // Valued by ReturnValuation from the Sale's own lines, at the price they were sold for and
+        // net of their share of any discount, exactly as RecordSaleReturn values them. A line that
+        // is not on this Sale is not valued.
+        $items = $sale->items()->get()->keyBy('id');
+        $shares = ReturnValuation::shares($sale, $items);
+        $prior = ReturnValuation::prior((int) $sale->business_id, $items->keys()->all());
         $merchandise = '0.00';
 
         foreach ($lines as $line) {
-            // The price as sold, never the Product's price today — the same `unit_price` column
-            // RecordSaleReturn multiplies, rounded the same way.
-            $merchandise = bcadd($merchandise, Money::round(bcmul($line['unit_price'], $line['quantity'], 5)), 2);
+            $item = $items->get((int) $line['sale_item_id']);
+
+            if ($item === null) {
+                continue;
+            }
+
+            $returned = $prior[$item->id] ?? ['quantity' => '0.000', 'value' => '0.00'];
+            $valued = ReturnValuation::line($item, $shares[$item->id] ?? '0.00', $line['quantity'], $returned['quantity'], $returned['value']);
+            $merchandise = bcadd($merchandise, $valued['value'], 2);
         }
 
         return self::split($sale, $merchandise);
@@ -56,7 +68,7 @@ final class ReturnSettlementPreview
      * Still only a preview. RecordSaleReturn re-reads the balance under a row lock and recomputes
      * this split at the moment it commits, because the balance can move while the panel is open.
      *
-     * @param  array<int, array{quantity: string, unit_price: string}>  $lines
+     * @param  array<int, array{sale_item_id: int, quantity: string}>  $lines
      * @return array{
      *     merchandise: string, reduction: string, credit: string,
      *     units: string, restock_units: string, non_restock_units: string,
@@ -128,8 +140,13 @@ final class ReturnSettlementPreview
         }
 
         // Nothing selected yet: say so rather than producing a sentence about nothing.
-        if ($clauses === []) {
+        if ($clauses === [] && bccomp($settlement['units'], '0', 3) <= 0) {
             return [['label' => 'Select an item to see the effect.', 'amount' => '']];
+        }
+
+        // Goods the discount fully covered come back without any money changing hands.
+        if ($clauses === []) {
+            $clauses[] = ['label' => 'No refund or balance change', 'amount' => ''];
         }
 
         $units = $settlement['units'];

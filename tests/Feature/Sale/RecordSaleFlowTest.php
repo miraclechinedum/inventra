@@ -14,7 +14,9 @@ use App\Models\SaleDraft;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\SubmitsSales;
 use Tests\TestCase;
 
 /**
@@ -26,7 +28,7 @@ use Tests\TestCase;
  */
 class RecordSaleFlowTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, SubmitsSales;
 
     private User $rep;
 
@@ -78,7 +80,7 @@ class RecordSaleFlowTest extends TestCase
         $this->assertStringNotContainsString('name="payment_method"', $form);
         $this->assertStringNotContainsString('Payment method', $form);
 
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload())
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload()))
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $sale = Sale::query()->sole();
@@ -90,13 +92,13 @@ class RecordSaleFlowTest extends TestCase
     public function test_an_explicit_payment_method_is_still_honoured_and_validated(): void
     {
         $this->actingAs($this->rep)
-            ->post(route('sales.store'), $this->payload(['payment_method' => 'transfer']))
+            ->post(route('sales.store'), $this->withSaleToken($this->payload(['payment_method' => 'transfer'])))
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(PaymentMethod::Transfer, Sale::query()->sole()->payment_method);
 
         $this->actingAs($this->rep)
-            ->post(route('sales.store'), $this->payload(['payment_method' => 'bitcoin']))
+            ->post(route('sales.store'), $this->withSaleToken($this->payload(['payment_method' => 'bitcoin'])))
             ->assertSessionHasErrors('payment_method');
     }
 
@@ -121,7 +123,7 @@ class RecordSaleFlowTest extends TestCase
     public function test_a_registered_sale_posts_and_lands_on_the_completion_state(): void
     {
         $this->actingAs($this->rep)
-            ->post(route('sales.store'), $this->payload())
+            ->post(route('sales.store'), $this->withSaleToken($this->payload()))
             ->assertRedirect(route('sales.create'))
             ->assertSessionHas('completedSale');
 
@@ -138,10 +140,10 @@ class RecordSaleFlowTest extends TestCase
 
     public function test_a_walk_in_sale_records_without_a_customer_and_offers_no_whatsapp(): void
     {
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'is_walk_in' => '1',
             'customer_id' => null,
-        ]))->assertRedirect(route('sales.create'));
+        ])))->assertRedirect(route('sales.create'));
 
         $sale = Sale::query()->sole();
         $this->assertTrue($sale->isWalkIn());
@@ -157,13 +159,13 @@ class RecordSaleFlowTest extends TestCase
 
     public function test_partial_and_unpaid_sales_record_the_balance_they_claim(): void
     {
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload(['amount_paid' => '500.00']))
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload(['amount_paid' => '500.00'])))
             ->assertRedirect();
         $partial = Sale::query()->sole();
         $this->assertSame(PaymentStatus::Partial, $partial->payment_status);
         $this->assertSame('1500.00', $partial->balance_due);
 
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload(['amount_paid' => '0.00']))
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload(['amount_paid' => '0.00'])))
             ->assertRedirect();
         $unpaid = Sale::query()->latest('id')->first();
         $this->assertSame(PaymentStatus::Unpaid, $unpaid->payment_status);
@@ -172,14 +174,14 @@ class RecordSaleFlowTest extends TestCase
 
     public function test_the_server_refuses_a_future_sale_date_and_an_oversell(): void
     {
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
-        ]))->assertSessionHasErrors('sale_date');
+        ])))->assertSessionHasErrors('sale_date');
 
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'products' => [['product_id' => $this->product->id, 'quantity' => '999']],
             'amount_paid' => '0.00',
-        ]))->assertSessionHasErrors();
+        ])))->assertSessionHasErrors();
 
         $this->assertSame(0, Sale::query()->count());
     }
@@ -212,10 +214,10 @@ class RecordSaleFlowTest extends TestCase
             ->assertOk()->assertJsonPath('status', 'approved')
             ->assertJsonPath('requested_amount', '300.00');
 
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'sale_draft_id' => $draftId,
             'amount_paid' => '1700.00',
-        ]))->assertRedirect();
+        ])))->assertRedirect();
 
         $sale = Sale::query()->sole();
         $this->assertSame('300.00', $sale->discount_amount);
@@ -241,9 +243,9 @@ class RecordSaleFlowTest extends TestCase
         );
 
         // Submitting the declined draft is refused outright; the sale must be recorded at full price.
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'sale_draft_id' => $response->json('sale_draft_id'),
-        ]))->assertSessionHasErrors();
+        ])))->assertSessionHasErrors();
 
         $this->assertSame(0, Sale::query()->count());
     }
@@ -266,13 +268,174 @@ class RecordSaleFlowTest extends TestCase
         );
 
         // A different quantity is a different sale, whatever the page believes.
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'sale_draft_id' => $response->json('sale_draft_id'),
             'products' => [['product_id' => $this->product->id, 'quantity' => '3']],
             'amount_paid' => '0.00',
-        ]))->assertSessionHasErrors();
+        ])))->assertSessionHasErrors();
 
         $this->assertSame(0, Sale::query()->count());
+    }
+
+    /**
+     * The approval was judged against the prices the Admin saw. The cart fingerprint fixes goods and
+     * quantities only, so a price change in either direction must void the approval rather than turn
+     * the same naira amount into a different discount.
+     */
+    #[DataProvider('priceChangeProvider')]
+    public function test_an_approval_is_refused_once_a_product_price_has_changed(string $newPrice): void
+    {
+        $draftId = $this->approvedDraft('300');
+
+        $this->product->forceFill(['selling_price' => $newPrice])->saveQuietly();
+
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
+            'sale_draft_id' => $draftId,
+            'amount_paid' => '0.00',
+        ])))->assertSessionHasErrors(['products' => 'A product price changed after the discount was approved. Request a new discount for the current prices.']);
+
+        $this->assertSame(0, Sale::query()->count());
+        $this->assertNull(SaleDraft::query()->find($draftId)->consumed_by_sale_id, 'a refused approval stays unspent');
+    }
+
+    public static function priceChangeProvider(): array
+    {
+        return ['price lowered' => ['400.00'], 'price raised' => ['1200.00']];
+    }
+
+    /**
+     * "Today" is the business's day. 23:30 UTC is already 00:30 the next day in Lagos, which is the
+     * date Record Sale offers by default, so the server must accept it.
+     */
+    public function test_the_sale_date_is_validated_against_the_business_day_not_utc(): void
+    {
+        $now = Carbon::parse('2026-09-30 23:30:00', 'UTC');
+        Carbon::setTestNow($now);
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-09-30 23:30:00', 'UTC'));
+
+        try {
+            $this->assertSame('2026-10-01', $this->today());
+
+            $this->actingAs($this->rep)->postJson(route('sales.discounts.draft.store'), [
+                'amount' => '300',
+                'reason' => 'Requested just after midnight',
+                'is_walk_in' => false,
+                'customer_id' => $this->customer->id,
+                'sale_date' => '2026-10-01',
+                'products' => [['product_id' => $this->product->id, 'quantity' => '2']],
+            ])->assertCreated();
+
+            $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload(['sale_date' => '2026-10-01'])))
+                ->assertSessionHasNoErrors();
+            $this->assertSame('2026-10-01', Sale::query()->sole()->sale_date->toDateString());
+
+            $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload(['sale_date' => '2026-10-02'])))
+                ->assertSessionHasErrors(['sale_date' => "Sale date can't be in the future."]);
+            $this->assertSame(1, Sale::query()->count());
+        } finally {
+            Carbon::setTestNow();
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    /**
+     * A rejected submission carrying an approval comes back with the approved amount the server has
+     * on record, so the restored cart shows the discounted total that will actually be charged.
+     */
+    public function test_a_restored_approval_carries_its_approved_amount(): void
+    {
+        $draftId = $this->approvedDraft('300');
+
+        $this->actingAs($this->rep)->from(route('sales.create'))
+            ->post(route('sales.store'), $this->withSaleToken($this->payload([
+                'sale_draft_id' => $draftId,
+                'amount_paid' => '1700.00',
+                'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
+            ])))->assertSessionHasErrors('sale_date');
+
+        $restored = $this->actingAs($this->rep)->get(route('sales.create'))->assertOk()->viewData('restored');
+
+        $this->assertSame($draftId, $restored['saleDraftId']);
+        $this->assertSame('300.00', $restored['approvedAmount']);
+        $this->assertSame('1700.00', $restored['amountPaid']);
+    }
+
+    /** Only an approval this operator could still spend is restored; anything else is dropped. */
+    public function test_a_restored_draft_that_is_not_a_spendable_approval_is_dropped(): void
+    {
+        $declined = $this->actingAs($this->rep)->postJson(route('sales.discounts.draft.store'), [
+            'amount' => '300',
+            'reason' => 'Asking for a discount that is refused',
+            'is_walk_in' => false,
+            'customer_id' => $this->customer->id,
+            'sale_date' => $this->today(),
+            'products' => [['product_id' => $this->product->id, 'quantity' => '2']],
+        ])->assertCreated();
+        app(DecideSaleDiscount::class)->decline(
+            $this->admin,
+            SaleDiscountRequest::query()->find($declined->json('discount_request_id')),
+            'Margin is already thin on this line.',
+        );
+
+        $otherRep = User::factory()->create(['role' => UserRole::SalesRep]);
+        $someoneElses = $this->approvedDraft('300', $otherRep);
+
+        foreach ([$declined->json('sale_draft_id'), $someoneElses] as $draftId) {
+            $this->actingAs($this->rep)->from(route('sales.create'))
+                ->post(route('sales.store'), $this->withSaleToken($this->payload([
+                    'sale_draft_id' => $draftId,
+                    'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
+                ])))->assertSessionHasErrors('sale_date');
+
+            $restored = $this->actingAs($this->rep)->get(route('sales.create'))->assertOk()->viewData('restored');
+
+            $this->assertNull($restored['saleDraftId']);
+            $this->assertNull($restored['approvedAmount']);
+        }
+    }
+
+    /** The representative who asked about a cart can read the decision; nobody else below management can. */
+    public function test_a_pre_sale_decision_is_readable_by_its_requester_only(): void
+    {
+        $response = $this->actingAs($this->rep)->postJson(route('sales.discounts.draft.store'), [
+            'amount' => '300',
+            'reason' => 'Asking for a discount that is refused',
+            'is_walk_in' => false,
+            'customer_id' => $this->customer->id,
+            'sale_date' => $this->today(),
+            'products' => [['product_id' => $this->product->id, 'quantity' => '2']],
+        ])->assertCreated();
+        $request = SaleDiscountRequest::query()->find($response->json('discount_request_id'));
+        app(DecideSaleDiscount::class)->decline($this->admin, $request, 'Margin is already thin on this line.');
+
+        $this->actingAs($this->rep)->get(route('discounts.show', $request))->assertOk()
+            ->assertSee('Margin is already thin on this line.')
+            ->assertSee(route('sales.create'), false)
+            ->assertDontSee(route('discounts.index'), false);
+
+        $this->actingAs(User::factory()->create(['role' => UserRole::SalesRep]))
+            ->get(route('discounts.show', $request))->assertForbidden();
+    }
+
+    /** Requests a pre-sale discount on the default cart and has an Admin approve it. */
+    private function approvedDraft(string $amount, ?User $requester = null): int
+    {
+        $response = $this->actingAs($requester ?? $this->rep)->postJson(route('sales.discounts.draft.store'), [
+            'amount' => $amount,
+            'reason' => 'Approved against one specific cart',
+            'is_walk_in' => false,
+            'customer_id' => $this->customer->id,
+            'sale_date' => $this->today(),
+            'products' => [['product_id' => $this->product->id, 'quantity' => '2']],
+        ])->assertCreated();
+
+        app(DecideSaleDiscount::class)->approve(
+            $this->admin,
+            SaleDiscountRequest::query()->find($response->json('discount_request_id')),
+            null,
+        );
+
+        return (int) $response->json('sale_draft_id');
     }
 
     public function test_a_saved_pending_sale_can_be_resumed_from_its_draft(): void
@@ -315,10 +478,10 @@ class RecordSaleFlowTest extends TestCase
             null,
         );
 
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'sale_draft_id' => $response->json('sale_draft_id'),
             'amount_paid' => '1750.00',
-        ]))->assertRedirect();
+        ])))->assertRedirect();
 
         $this->assertNotNull(SaleDraft::query()->find($response->json('sale_draft_id'))->consumed_by_sale_id);
         $this->actingAs($this->rep)->getJson(route('sales.discounts.draft.resumable'))
@@ -373,7 +536,7 @@ class RecordSaleFlowTest extends TestCase
             ->getJson(route('sales.create', ['product_search' => 'Cut Hose']))->json('products.0.id'));
 
         // And the recorded sale's own line reads the same way on the receipt.
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload())->assertRedirect();
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload()))->assertRedirect();
         $sale = Sale::query()->sole();
 
         $this->actingAs($this->rep)->get(route('sales.receipt', $sale))->assertOk()
@@ -416,10 +579,10 @@ class RecordSaleFlowTest extends TestCase
         // Priced so every accepted amount is at or below the total and none is an overpayment.
         $product = Product::factory()->create(['selling_price' => '12500.00', 'current_stock' => '50.000']);
 
-        $response = $this->actingAs($this->rep)->post(route('sales.store'), $this->payload([
+        $response = $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload([
             'products' => [['product_id' => $product->id, 'quantity' => '2']],
             'amount_paid' => $amount,
-        ]));
+        ])));
 
         if ($valid) {
             $response->assertSessionDoesntHaveErrors('amount_paid');
@@ -435,14 +598,14 @@ class RecordSaleFlowTest extends TestCase
 
         // Rejected on the sale date, so everything else is valid and must survive.
         $this->actingAs($this->rep)->from(route('sales.create'))
-            ->post(route('sales.store'), $this->payload([
+            ->post(route('sales.store'), $this->withSaleToken($this->payload([
                 'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
                 'products' => [
                     ['product_id' => $this->product->id, 'quantity' => '3'],
                     ['product_id' => $second->id, 'quantity' => '2'],
                 ],
                 'amount_paid' => '1500.00',
-            ]))
+            ])))
             ->assertRedirect(route('sales.create'))
             ->assertSessionHasErrors('sale_date');
 
@@ -463,11 +626,11 @@ class RecordSaleFlowTest extends TestCase
     public function test_a_rejected_walk_in_submission_restores_walk_in_and_no_customer(): void
     {
         $this->actingAs($this->rep)->from(route('sales.create'))
-            ->post(route('sales.store'), $this->payload([
+            ->post(route('sales.store'), $this->withSaleToken($this->payload([
                 'is_walk_in' => '1',
                 'customer_id' => null,
                 'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
-            ]))->assertSessionHasErrors('sale_date');
+            ])))->assertSessionHasErrors('sale_date');
 
         $restored = $this->actingAs($this->rep)->get(route('sales.create'))->assertOk()->viewData('restored');
 
@@ -482,10 +645,10 @@ class RecordSaleFlowTest extends TestCase
     public function test_restored_rows_carry_authoritative_prices_not_client_ones(): void
     {
         $this->actingAs($this->rep)->from(route('sales.create'))
-            ->post(route('sales.store'), $this->payload([
+            ->post(route('sales.store'), $this->withSaleToken($this->payload([
                 'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
                 'products' => [['product_id' => $this->product->id, 'quantity' => '2']],
-            ]))->assertSessionHasErrors('sale_date');
+            ])))->assertSessionHasErrors('sale_date');
 
         // The catalogue moves between attempts.
         $this->product->forceFill(['selling_price' => '1750.00', 'name' => 'Renamed Pad'])->saveQuietly();
@@ -501,9 +664,9 @@ class RecordSaleFlowTest extends TestCase
     public function test_a_product_archived_between_attempts_is_not_restored(): void
     {
         $this->actingAs($this->rep)->from(route('sales.create'))
-            ->post(route('sales.store'), $this->payload([
+            ->post(route('sales.store'), $this->withSaleToken($this->payload([
                 'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
-            ]))->assertSessionHasErrors('sale_date');
+            ])))->assertSessionHasErrors('sale_date');
 
         $this->product->forceFill(['is_active' => false])->saveQuietly();
 
@@ -517,9 +680,9 @@ class RecordSaleFlowTest extends TestCase
     public function test_a_customer_deactivated_between_attempts_is_not_restored(): void
     {
         $this->actingAs($this->rep)->from(route('sales.create'))
-            ->post(route('sales.store'), $this->payload([
+            ->post(route('sales.store'), $this->withSaleToken($this->payload([
                 'sale_date' => CarbonImmutable::now(config('business.timezone'))->addDay()->toDateString(),
-            ]))->assertSessionHasErrors('sale_date');
+            ])))->assertSessionHasErrors('sale_date');
 
         $this->customer->forceFill(['is_active' => false])->saveQuietly();
 
@@ -531,30 +694,30 @@ class RecordSaleFlowTest extends TestCase
     /** Fixing the money rule must not make an empty sale recordable. */
     public function test_an_empty_sale_is_still_rejected(): void
     {
-        $this->actingAs($this->rep)->post(route('sales.store'), [
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken([
             'is_walk_in' => '0',
             'customer_id' => null,
             'sale_date' => $this->today(),
             'products' => [],
             'amount_paid' => '0.00',
-        ])->assertSessionHasErrors(['customer_id', 'products']);
+        ]))->assertSessionHasErrors(['customer_id', 'products']);
 
         $this->assertSame(0, Sale::query()->count());
 
         // A walk-in with no lines is equally not a sale.
-        $this->actingAs($this->rep)->post(route('sales.store'), [
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken([
             'is_walk_in' => '1',
             'sale_date' => $this->today(),
             'products' => [],
             'amount_paid' => '0.00',
-        ])->assertSessionHasErrors('products');
+        ]))->assertSessionHasErrors('products');
 
         $this->assertSame(0, Sale::query()->count());
     }
 
     public function test_the_receipt_pdf_is_served_to_a_viewer_and_withheld_from_others(): void
     {
-        $this->actingAs($this->rep)->post(route('sales.store'), $this->payload())->assertRedirect();
+        $this->actingAs($this->rep)->post(route('sales.store'), $this->withSaleToken($this->payload()))->assertRedirect();
         $sale = Sale::query()->sole();
 
         $response = $this->actingAs($this->rep)->get(route('sales.receipt.pdf', $sale))->assertOk();

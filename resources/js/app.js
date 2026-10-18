@@ -485,6 +485,21 @@ Alpine.data('lifecycleConfirm', () => ({
 //
 // The CSP-safe Alpine build evaluates only identifiers and literals inside attributes, so all
 // configuration arrives through data attributes and every behaviour is a named method.
+// Quantities in integer thousandths. Every quantity column holds three decimal places, so a whole
+// number of thousandths is exact, and stepping or comparing one never drifts the way a float would.
+const toThousandths = (value) => {
+    const clean = String(value ?? '').trim();
+    if (!/^\d+(\.\d{0,3})?$/.test(clean)) return 0;
+    const [whole, fraction = ''] = clean.split('.');
+    return Number(whole) * 1000 + Number((fraction + '000').slice(0, 3));
+};
+
+const fromThousandths = (value) => {
+    const whole = Math.floor(value / 1000);
+    const fraction = String(value % 1000).padStart(3, '0').replace(/0+$/, '');
+    return fraction === '' ? String(whole) : whole + '.' + fraction;
+};
+
 Alpine.data('recordSale', () => ({
     products: [],
     customers: [],
@@ -551,6 +566,7 @@ Alpine.data('recordSale', () => ({
             customers: data.customersUrl || '',
             draftStore: data.draftStoreUrl || '',
             draftStatus: data.draftStatusUrl || '',
+            draftCancel: data.draftCancelUrl || '',
             resumable: data.resumableUrl || '',
         };
         this.productResults = this.products;
@@ -596,10 +612,12 @@ Alpine.data('recordSale', () => ({
         if (!this.lines.length) this.addLine();
 
         if (state.saleDate) this.saleDate = state.saleDate;
-        if (state.saleDraftId) {
+        if (state.saleDraftId && typeof state.approvedAmount === 'string') {
             // Carried back only so the sale can be re-submitted against the same approval. If the
-            // cart, buyer or date has moved, CreateSale re-fingerprints and refuses it there.
+            // cart, buyer or date has moved, CreateSale re-fingerprints and refuses it there. The
+            // amount is the server's record of the decision, so the total below is the one charged.
             this.draftId = state.saleDraftId;
+            this.approvedAmount = state.approvedAmount;
             this.requestState = 'approved';
         }
 
@@ -648,6 +666,7 @@ Alpine.data('recordSale', () => ({
                 // CreateSale re-reads it under a row lock either way.
                 stock: line.quantity,
                 unit: '',
+                fractional: line.fractional === true,
             },
             quantity: line.quantity,
         }));
@@ -910,21 +929,40 @@ Alpine.data('recordSale', () => ({
     // only against the component, so a bare `Number(...)` in markup would throw at evaluation.
     outOfStock(row) { return Number(row.stock) <= 0; },
 
-    // Quantity. The input is a real number field; these only nudge it, and the server is still the
-    // authority on whether the resulting quantity can be sold.
+    // Quantity. Counted units move in whole numbers; litres may be fractional, to three decimal
+    // places. Quantities are handled here in integer thousandths so a step never drifts the way a
+    // float would. The input is a real number field; these only nudge it, and CreateSale enforces
+    // the unit rule against the locked product regardless.
+    isFractional(line) { return Boolean(line && line.product && line.product.fractional); },
+
+    quantityStep(line) { return this.isFractional(line) ? '0.001' : '1'; },
+
+    thousandths(value) { return toThousandths(value); },
+
+    fromThousandths(value) { return fromThousandths(value); },
+
     step(index, direction) {
         const line = this.lines[index];
         if (!line) return;
-        const next = Math.max(1, (Number(line.quantity) || 0) + direction);
-        line.quantity = String(next);
+        const current = this.thousandths(line.quantity);
+        const base = this.isFractional(line) ? current : Math.round(current / 1000) * 1000;
+        const next = Math.max(this.isFractional(line) ? 1 : 1000, base + direction * 1000);
+        line.quantity = this.fromThousandths(next);
         this.invalidateApproval('cart');
+    },
+
+    // A counted product given a fractional quantity. Shown before submission; refused by the server.
+    wrongUnit(line) {
+        return Boolean(line.product) && !this.isFractional(line) && this.thousandths(line.quantity) % 1000 !== 0;
     },
 
     quantityChanged() { this.invalidateApproval('cart'); },
 
+    // Rounded half-up to the kobo per line, exactly as CreateSale rounds each line, so a "paid in
+    // full" amount always matches the total the server records.
     lineTotal(line) {
         if (!line.product) return 0;
-        return this.kobo(line.product.price) * (Number(line.quantity) || 0);
+        return Math.floor((this.kobo(line.product.price) * this.thousandths(line.quantity) + 500) / 1000);
     },
 
     // The inline warning from the Figma. Advisory only: CreateSale re-reads stock under a row lock,
@@ -987,6 +1025,7 @@ Alpine.data('recordSale', () => ({
         if (!this.buyerChosen) found.push('Choose a customer, or record this as a walk-in sale.');
         if (!this.filledLines.length) found.push('Add at least one product.');
         if (this.anyOverStock) found.push('One or more lines ask for more stock than is available.');
+        if (this.lines.some((line) => this.wrongUnit(line))) found.push('Counted products are sold in whole numbers. Only litres may be fractional.');
         if (this.saleDate === '') found.push('Choose the date this sale happened.');
         if (this.futureDate) found.push('A sale cannot be dated in the future.');
         if (this.overpaying) found.push('Amount paid cannot be more than the sale total.');
@@ -1109,8 +1148,20 @@ Alpine.data('recordSale', () => ({
         try {
             const url = this.endpoints.draftStatus.replace('__ID__', String(this.requestId));
             const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin'});
+            // Signed out, no longer permitted, or the request is gone: retrying cannot change the
+            // answer, so the wait ends and the operator is told, rather than polling forever.
+            if ([401, 403, 404, 419].includes(response.status)) {
+                this.closeRequest('The discount request can no longer be checked from this page. Reload the page to continue.');
+                return;
+            }
             if (!response.ok) return;
             const body = await response.json();
+            if (body.status === 'expired' || body.status === 'cancelled') {
+                this.closeRequest(body.status === 'expired'
+                    ? 'The discount request expired before a decision. Request a new discount if you still need one.'
+                    : 'The discount request was cancelled.');
+                return;
+            }
             if (body.status === 'approved') {
                 this.approvedAmount = body.requested_amount || '0.00';
                 this.requestState = 'approved';
@@ -1130,15 +1181,40 @@ Alpine.data('recordSale', () => ({
         }
     },
 
-    // "Continue without discount": the pending request is left on record for the Admin to see, but
-    // this sale stops waiting for it and is recorded at its original total. Nothing is cancelled or
-    // rewritten, and because no draft id is submitted, no discount can be applied.
+    // "Continue without discount": this sale stops waiting and is recorded at its original total.
+    // The pending request is cancelled so it leaves the approval queue rather than waiting there
+    // for a decision no one needs. Because no draft id is submitted, no discount can be applied
+    // whether or not the cancellation reaches the server; an unanswered request still expires.
     continueWithoutDiscount() {
+        const requestId = this.requestId;
         this.stopPolling();
         this.stopClock();
         this.requestState = 'abandoned';
         this.draftId = null;
         this.approvedAmount = '0.00';
+        this.syncPaidAmount();
+        if (requestId !== null && this.endpoints.draftCancel) {
+            fetch(this.endpoints.draftCancel.replace('__ID__', String(requestId)), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '',
+                },
+            }).catch(() => {});
+        }
+    },
+
+    // A request that can no longer be answered here: expired, cancelled, or out of reach. The cart
+    // returns to its ordinary total and the notice says why.
+    closeRequest(message) {
+        this.stopPolling();
+        this.stopClock();
+        this.requestState = 'none';
+        this.requestId = null;
+        this.draftId = null;
+        this.approvedAmount = '0.00';
+        this.staleNotice = message;
         this.syncPaidAmount();
     },
 
@@ -1375,25 +1451,42 @@ Alpine.data('returnPanel', () => ({
         return this.picked.map(Number).includes(Number(id));
     },
 
-    quantityOf(id) {
-        // One unit is the sensible opening position for a return, and the common case.
-        return this.quantities[id] ?? 1;
-    },
-
-    maxOf(id) {
+    // Quantities are held in integer thousandths. A line sold in litres takes any amount up to what
+    // remains; a counted line moves in whole units, and may also take exactly a fractional
+    // remainder recorded before whole-unit validation. The server enforces both regardless.
+    isFractional(id) {
         const line = this.lineOf(id);
-        return line ? Number(line.remaining) : 0;
+        return Boolean(line && line.fractional);
     },
 
-    atMin(id) { return this.quantityOf(id) <= 1; },
-    atMax(id) { return this.quantityOf(id) >= this.maxOf(id); },
+    maxMilli(id) {
+        const line = this.lineOf(id);
+        return line ? toThousandths(line.remainingRaw) : 0;
+    },
+
+    minMilli(id) { return this.isFractional(id) ? 1 : Math.min(1000, this.maxMilli(id)); },
+
+    milliOf(id) {
+        // One unit is the sensible opening position for a return, and the common case.
+        return this.quantities[id] ?? Math.min(1000, this.maxMilli(id));
+    },
+
+    quantityOf(id) { return fromThousandths(this.milliOf(id)); },
+
+    atMin(id) { return this.milliOf(id) <= this.minMilli(id); },
+    atMax(id) { return this.milliOf(id) >= this.maxMilli(id); },
 
     step(id, by) {
-        const next = this.quantityOf(id) + by;
-        if (next < 1 || next > this.maxOf(id)) return;
+        const next = Math.max(this.minMilli(id), Math.min(this.maxMilli(id), this.milliOf(id) + by * 1000));
         // Replaced rather than mutated in place: `$watch` on an object compares references, so an
         // in-place write would change the quantity without the summary ever hearing about it.
         this.quantities = {...this.quantities, [id]: next};
+    },
+
+    // The typed amount for a line sold in litres, kept within what can still be returned.
+    setQuantity(id, value) {
+        const typed = toThousandths(value);
+        this.quantities = {...this.quantities, [id]: Math.max(this.minMilli(id), Math.min(this.maxMilli(id), typed))};
     },
 
     // The settlement is never computed here.
@@ -1459,8 +1552,10 @@ Alpine.data('returnPanel', () => ({
     get valid() {
         if (!this.picked.length || !this.reason) return false;
         return this.picked.every((id) => {
-            const quantity = this.quantityOf(id);
-            return quantity >= 1 && quantity <= this.maxOf(id);
+            const quantity = this.milliOf(id);
+            const max = this.maxMilli(id);
+            const fits = this.isFractional(id) || quantity % 1000 === 0 || quantity === max;
+            return quantity >= this.minMilli(id) && quantity <= max && fits;
         });
     },
 }));
@@ -1976,16 +2071,22 @@ Alpine.data('whatsappAutomation', () => ({
     },
 
     async post(url, body, method = 'POST') {
-        const response = await fetch(url, {
-            method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                'X-Requested-With': 'XMLHttpRequest',
-                Accept: 'application/json',
-            },
-            body: JSON.stringify(body),
-        });
+        let response;
+        try {
+            response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+        } catch (error) {
+            // Offline or unreachable: reported like any other failure instead of leaving a step busy.
+            return { ok: false, status: 0, payload: { message: "We couldn't reach Inventra. Check your connection and try again." } };
+        }
         let payload = {};
         try { payload = await response.json(); } catch (error) { payload = {}; }
         return { ok: response.ok, status: response.status, payload };
@@ -2049,7 +2150,8 @@ Alpine.data('whatsappAutomation', () => ({
 
         if (!result.ok || !result.payload?.configured || !result.payload?.state) {
             this.connect.preparing = false;
-            this.connect.error = this.firstError(result.payload, 'Unable to start Meta connection. WhatsApp is not configured for this installation.');
+            // Missing configuration is the server's to say; it answers with that reason itself.
+            this.connect.error = this.firstError(result.payload, 'Unable to start Meta connection. Please try again.');
             return;
         }
 
@@ -2354,6 +2456,86 @@ Alpine.data('logoutTrigger', () => ({
     ask() { window.dispatchEvent(new CustomEvent('open-logout')); },
 }));
 
+// ── Quick PIN setup ─────────────────────────────────────────────────────────────────────────────
+// The PIN is entered on the keypad or the keyboard, then entered again to confirm. Both values are
+// submitted separately so the server's own `confirmed` rule stays the authority; the mismatch check
+// here only saves a round trip. The CSP-safe Alpine build cannot evaluate the conditionals this
+// needs inside attributes, so every interaction is a method.
+Alpine.data('quickPinSetup', (length = 4) => ({
+    length,
+    pin: '',
+    confirmation: '',
+    confirming: false,
+    mismatch: false,
+    submitting: false,
+
+    entered() { return this.confirming ? this.confirmation : this.pin; },
+    dotClass(index) { return index <= this.entered().length ? 'is-filled' : ''; },
+    prompt() { return this.confirming ? 'Enter the same PIN again to confirm it.' : `Enter a ${this.length}-digit PIN.`; },
+    ready() { return this.pin.length === this.length && this.confirmation === this.pin; },
+    blocked() { return this.submitting || !this.ready(); },
+
+    press(digit) {
+        if (this.submitting) return;
+        this.mismatch = false;
+
+        if (!this.confirming) {
+            if (this.pin.length < this.length) this.pin += String(digit);
+            this.confirming = this.pin.length === this.length;
+            return;
+        }
+
+        if (this.confirmation.length < this.length) this.confirmation += String(digit);
+
+        // A wrong confirmation starts the whole entry again rather than leaving the user to guess
+        // which of the two PINs was mistyped.
+        if (this.confirmation.length === this.length && this.confirmation !== this.pin) {
+            this.pin = '';
+            this.confirmation = '';
+            this.confirming = false;
+            this.mismatch = true;
+        }
+    },
+
+    remove() {
+        if (this.submitting) return;
+        this.mismatch = false;
+
+        if (this.confirming && this.confirmation === '') {
+            this.confirming = false;
+            this.pin = this.pin.slice(0, -1);
+        } else if (this.confirming) {
+            this.confirmation = this.confirmation.slice(0, -1);
+        } else {
+            this.pin = this.pin.slice(0, -1);
+        }
+    },
+
+    keydown(event) {
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+        if (/^[0-9]$/.test(event.key)) {
+            event.preventDefault();
+            this.press(event.key);
+        } else if (event.key === 'Backspace' || event.key === 'Delete') {
+            event.preventDefault();
+            this.remove();
+        } else if (event.key === 'Enter' && this.ready()) {
+            event.preventDefault();
+            this.$root.requestSubmit();
+        }
+    },
+
+    submit(event) {
+        if (this.blocked()) {
+            event.preventDefault();
+            return;
+        }
+
+        this.submitting = true;
+    },
+}));
+
 // ── Global navbar search ────────────────────────────────────────────────────────────────────────
 // Type-ahead over customers and products. The server decides what may be returned — each half is
 // behind its own policy — so this component only debounces, renders and handles keyboard movement.
@@ -2640,53 +2822,17 @@ document.addEventListener('change', (event) => {
     }
 });
 
-const productSearch = document.querySelector('[data-sale-product-search]');
-
-if (productSearch) {
-    const button = productSearch.querySelector('button');
-    const status = document.querySelector('[data-sale-search-status]');
-    button.disabled = false;
-
-    productSearch.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        if (button.disabled) return;
-        button.disabled = true;
-        status.textContent = 'Searching products…';
-
-        try {
-            const url = new URL(productSearch.action);
-            url.searchParams.set('product_search', productSearch.elements.product_search.value);
-            const response = await fetch(url, {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
-            if (!response.ok) throw new Error('Search unavailable');
-            const { products } = await response.json();
-            if (!Array.isArray(products) || !products.every(product => Number.isInteger(product.id) && typeof product.label === 'string')) {
-                throw new Error('Invalid search results');
-            }
-
-            document.querySelectorAll('[data-sale-product]').forEach(select => {
-                const selected = select.value;
-                const previous = select.selectedOptions[0]?.cloneNode(true);
-                const options = [new Option('Select product', '')];
-                products.forEach(product => options.push(new Option(product.label, String(product.id))));
-                if (selected && previous && !products.some(product => String(product.id) === selected)) {
-                    options.push(previous);
-                }
-                select.replaceChildren(...options);
-                select.value = selected;
-            });
-            status.textContent = products.length
-                ? `${products.length} products found. Your selected products and sale details have been kept.`
-                : 'No matching products. Your selected products and sale details have been kept.';
-        } catch {
-            status.textContent = 'Product search is unavailable. Your sale details have been kept. Try again without reloading the page.';
-        } finally {
-            button.disabled = false;
-        }
-    });
-}
+// Receive Purchase: each line's quantity takes the step of the product chosen for it, whole numbers
+// for counted units and three decimal places for litres. ReceivePurchase enforces the same rule.
+document.addEventListener('change', (event) => {
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement) || !select.hasAttribute('data-purchase-product')) return;
+    const quantity = select.parentElement?.querySelector('[data-purchase-quantity]');
+    if (!quantity) return;
+    const step = select.selectedOptions[0]?.dataset.quantityStep || '0.001';
+    quantity.step = step;
+    quantity.min = step;
+});
 
 document.addEventListener('submit', (event) => {
     const form = event.target;

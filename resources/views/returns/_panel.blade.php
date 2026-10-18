@@ -54,7 +54,7 @@
                                 @if($line['exhausted'])
                                     Already returned in full
                                 @else
-                                    Bought {{ $line['sold'] }} &middot; &#8358;{{ $line['unitPrice'] }} each
+                                    Bought {{ $line['sold'] }} &middot; &#8358;{{ $line['unitPrice'] }} each{{ $line['discounted'] ? ' after discount' : '' }}
                                     @if($line['returned'] !== '0')
                                         &middot; {{ $line['returned'] }} returned
                                     @endif
@@ -66,15 +66,24 @@
                     {{-- The stepper appears only for a chosen line. Its ceiling is this line's
                          remaining quantity, which the server re-derives and enforces regardless. --}}
                     <template x-if="isPicked({{ $line['id'] }})">
-                        <span class="ui-return-stepper">
-                            <button type="button" x-on:click="step({{ $line['id'] }}, -1)"
-                                    x-bind:disabled="atMin({{ $line['id'] }})"
-                                    aria-label="Reduce quantity for {{ $line['name'] }}">&minus;</button>
-                            <span x-text="quantityOf({{ $line['id'] }})"></span>
-                            <button type="button" x-on:click="step({{ $line['id'] }}, 1)"
-                                    x-bind:disabled="atMax({{ $line['id'] }})"
-                                    aria-label="Increase quantity for {{ $line['name'] }}">+</button>
-                        </span>
+                        @if($line['fractional'])
+                            {{-- Measured goods: any amount up to what remains, to three decimal places. --}}
+                            <input type="number" class="ui-return-quantity" inputmode="decimal"
+                                   min="0.001" step="0.001" max="{{ $line['remainingRaw'] }}"
+                                   x-bind:value="quantityOf({{ $line['id'] }})"
+                                   x-on:change="setQuantity({{ $line['id'] }}, $event.target.value)"
+                                   aria-label="Quantity of {{ $line['name'] }} to return, in {{ $line['unit'] }}">
+                        @else
+                            <span class="ui-return-stepper">
+                                <button type="button" x-on:click="step({{ $line['id'] }}, -1)"
+                                        x-bind:disabled="atMin({{ $line['id'] }})"
+                                        aria-label="Reduce quantity for {{ $line['name'] }}">&minus;</button>
+                                <span x-text="quantityOf({{ $line['id'] }})"></span>
+                                <button type="button" x-on:click="step({{ $line['id'] }}, 1)"
+                                        x-bind:disabled="atMax({{ $line['id'] }})"
+                                        aria-label="Increase quantity for {{ $line['name'] }}">+</button>
+                            </span>
+                        @endif
                     </template>
                     <span class="ui-return-dash" x-show="!isPicked({{ $line['id'] }})" aria-hidden="true">&mdash;</span>
 

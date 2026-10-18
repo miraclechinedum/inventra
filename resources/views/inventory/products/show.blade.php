@@ -186,7 +186,14 @@
                             <option value="decrease">Decrease by</option>
                             <option value="set">Set exact quantity</option>
                         </select>
-                        <input aria-label="Quantity" name="quantity" inputmode="decimal" placeholder="Quantity" required>
+                        {{-- Counted units move in whole numbers and litres to three decimal places. A counted
+                             product holding a fraction recorded before that rule may be corrected by a
+                             fraction, which AdjustStock allows only when it leaves the balance whole. --}}
+                        @php($adjustStep = $product->unit->allowsFraction() || ! \App\Support\Quantity::isWhole((string) $product->current_stock) ? '0.001' : '1')
+                        <input aria-label="Quantity" name="quantity" type="number" min="0" step="{{ $adjustStep }}" inputmode="decimal" placeholder="Quantity" required>
+                        @unless($product->unit->allowsFraction())
+                            <p class="ui-detail-hint">Counted in whole units ({{ $product->unit->value }}).</p>
+                        @endunless
                         <textarea aria-label="Reason" name="reason" rows="2" placeholder="Reason"></textarea>
                         <button class="ui-button ui-button-primary">Apply adjustment</button>
                     </form>

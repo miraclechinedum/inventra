@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use LogicException;
+use Tests\Concerns\SubmitsSales;
 use Tests\TestCase;
 
 /**
@@ -19,7 +20,7 @@ use Tests\TestCase;
  */
 class SalePublicIdTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, SubmitsSales;
 
     private function sale(?User $seller = null): Sale
     {
@@ -82,13 +83,13 @@ class SalePublicIdTest extends TestCase
         $customer = Customer::factory()->create(['is_active' => true]);
         $product = Product::factory()->create(['selling_price' => '1000.00', 'current_stock' => '10.000']);
 
-        $this->actingAs($admin)->post(route('sales.store'), [
+        $this->actingAs($admin)->post(route('sales.store'), $this->withSaleToken([
             'is_walk_in' => '0',
             'customer_id' => $customer->id,
             'sale_date' => now(config('business.timezone'))->toDateString(),
             'products' => [['product_id' => $product->id, 'quantity' => '2']],
             'amount_paid' => '2000.00',
-        ])->assertRedirect();
+        ]))->assertRedirect();
 
         $sale = Sale::query()->sole();
 

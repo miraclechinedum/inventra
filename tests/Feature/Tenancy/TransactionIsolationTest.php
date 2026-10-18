@@ -43,6 +43,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 use Tests\Concerns\BuildsTransactionWorld;
+use Tests\Concerns\SubmitsSales;
 use Tests\TestCase;
 
 /**
@@ -52,7 +53,7 @@ use Tests\TestCase;
  */
 class TransactionIsolationTest extends TestCase
 {
-    use BuildsTransactionWorld, RefreshDatabase;
+    use BuildsTransactionWorld, RefreshDatabase, SubmitsSales;
 
     private Business $a;
 
@@ -199,7 +200,7 @@ class TransactionIsolationTest extends TestCase
             'sale_draft_id' => array_merge($payload, ['sale_draft_id' => $this->worldB['draft']->sale_draft_id]),
             'business_id' => array_merge($payload, ['business_id' => $this->b->id]),
         ] as $field => $attempt) {
-            $this->actingAs($a['admin'])->post(route('sales.store'), $attempt)->assertSessionHasErrors($field);
+            $this->actingAs($a['admin'])->post(route('sales.store'), $this->withSaleToken($attempt))->assertSessionHasErrors($field);
         }
 
         $this->inBusiness($this->a, function () use ($a): void {

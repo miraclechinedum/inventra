@@ -173,13 +173,7 @@
 .inventra-content :is(section,article) > .flex.justify-between { gap: 14px; }
 .inventra-content :is(section,article) > .flex.justify-between > strong { flex: none; font-variant-numeric: tabular-nums; }
 @media print { .inventra-content div:has(> table) { overflow: visible; } }
-[data-sale-product-search] { align-items: center; }
-[data-sale-product-search] button { flex: none; min-height: 44px; white-space: nowrap; }
 .ui-section-title + p { margin-bottom: 14px; }
-@media (max-width: 480px) {
-    [data-sale-product-search] { flex-wrap: wrap; }
-    [data-sale-product-search] button { width: 100%; }
-}
 .ui-standalone-receipt { overflow-wrap: anywhere; }
 .ui-standalone-receipt th, .ui-standalone-receipt td { padding: 10px; }
 @media (max-width: 480px) {
@@ -1155,6 +1149,8 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
 .ui-return-item-meta { font-size: 13px; color: #94a3b8; }
 
 .ui-return-stepper { display: inline-flex; flex: none; align-items: center; gap: 2px; border: 1px solid #e3e8ef; border-radius: 10px; background: #fff; }
+/* Measured goods (litres) take a typed amount instead of the whole-unit stepper. */
+.inventra-content .ui-return-quantity { width: 96px; flex: none; min-height: 36px; border: 1px solid #e3e8ef; border-radius: 10px; padding: 0 10px; text-align: right; font-variant-numeric: tabular-nums; }
 .ui-return-stepper button { display: grid; place-items: center; width: 32px; height: 36px; border: 0; background: none; color: #475569; font: inherit; font-size: 16px; cursor: pointer; }
 .ui-return-stepper button:disabled { color: #cbd5e1; cursor: default; }
 .ui-return-stepper button:not(:disabled):hover { color: #0f172a; }
@@ -1530,6 +1526,24 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
 .cust-history-link { color: #0f172a; }
 .cust-history-link:hover { color: var(--inventra-primary, #1d4ed8); }
 .cust-panel-foot { margin-top: 12px; color: #94a3b8; font-size: 12.5px; }
+/* Balances & payments: four figures, then the open sales and recent payments behind them. */
+.cust-balance-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.cust-balance-figures div { padding: 12px 14px; border: 1px solid #eef1f6; border-radius: 12px; background: #f8fafc; }
+.cust-balance-figures dt { color: #64748b; font-size: 12.5px; font-weight: 600; }
+.cust-balance-figures dd { margin-top: 4px; color: #0f172a; font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.cust-subtitle { margin-top: 20px; margin-bottom: 8px; color: #0f172a; font-size: 14px; font-weight: 700; }
+.cust-balance-due { color: #b45309; font-weight: 700; }
+.cust-panel-note { font-size: 13.5px; }
+/* Internal details: management-only address and notes, on the profile and in the shared form. */
+.cust-internal { display: flex; flex-direction: column; gap: 16px; margin: 0; padding: 16px; border: 1px dashed #d8dee8; border-radius: 12px; }
+.cust-internal-title { padding: 0 6px; color: #0f172a; font-size: 14px; font-weight: 700; }
+.cust-internal-title span { margin-left: 6px; color: #64748b; font-size: 12px; font-weight: 600; }
+.inventra-content .cust-field textarea { width: 100%; min-height: 72px; border: 1px solid #e3e8ef; border-radius: 10px; padding: 10px 14px; color: #0f172a; font-size: 14.5px; line-height: 1.5; resize: vertical; }
+.inventra-content .cust-field textarea:focus { border-color: var(--inventra-primary, #1d4ed8); box-shadow: 0 0 0 3px #dbeafe; outline: none; }
+.inventra-content .cust-field textarea[aria-invalid=true] { border-color: #dc2626; }
+.cust-internal-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
+.cust-internal-list dt { color: #64748b; font-size: 12.5px; font-weight: 600; }
+.cust-internal-list dd { margin-top: 4px; color: #0f172a; font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
 
 .cust-messages { display: flex; flex-direction: column; margin: 14px 0 0; padding: 0; list-style: none; }
 .cust-message { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #f4f7fa; }
@@ -1552,6 +1566,8 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
 
 @media (max-width: 767px) {
     .cust-kpis { grid-template-columns: minmax(0, 1fr); }
+    .cust-balance-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cust-internal-list { grid-template-columns: minmax(0, 1fr); }
     .cust-toolbar-filters, .cust-toolbar-actions { width: 100%; }
     .cust-search { flex: 1 1 auto; min-width: 0; }
     .cust-toolbar .cust-select.cust-select.cust-select.cust-select { flex: 1 1 auto; min-width: 0; }
@@ -2254,6 +2270,9 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
 
 /* KPI row */
 .dash-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+/* A Sales Representative has no cost-priced inventory card, so their row holds three cards. Three
+   equal tracks keep it full instead of leaving a fourth slot (or, at two columns, an odd one) empty. */
+.dash-kpis.is-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dash-kpi { display: flex; flex-direction: column; gap: 4px; padding: 18px; border: 1px solid var(--ui-border, #e6eaf1); border-radius: 14px; background: #fff; }
 .dash-kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; min-height: 38px; }
 .dash-kpi-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px; }
@@ -2408,7 +2427,8 @@ th[aria-sort='ascending'], th[aria-sort='descending'] { color: #1d4ed8; }
     .topbar-search { flex-basis: 220px; }
 }
 @media (max-width: 720px) {
-    .dash-kpis { grid-template-columns: 1fr; }
+    .dash-kpis,
+    .dash-kpis.is-three { grid-template-columns: 1fr; }
     .dash-card-head { flex-wrap: wrap; }
     .dash-low-callout { flex-wrap: wrap; }
     /* A grid child defaults to min-content width, which the chart's own columns push past the

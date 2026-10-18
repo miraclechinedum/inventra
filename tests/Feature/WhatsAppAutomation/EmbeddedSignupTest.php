@@ -75,6 +75,25 @@ class EmbeddedSignupTest extends TestCase
 
     /* ------------------------------------------------------------ onboarding state */
 
+    public function test_an_unconfigured_installation_refuses_to_start_and_issues_nothing(): void
+    {
+        $this->app->instance(WhatsAppConnectionProvider::class, app(MetaWhatsAppProvider::class));
+
+        foreach (['whatsapp.app_id', 'whatsapp.app_secret', 'whatsapp.config_id'] as $missing) {
+            config([$missing => null]);
+
+            $this->start($this->adminA)->assertUnprocessable()
+                ->assertJsonPath('errors.connection.0', OnboardingFailure::NotConfigured->message())
+                ->assertJsonMissingPath('state')->assertJsonMissingPath('app_id')->assertJsonMissingPath('config_id');
+
+            config(['whatsapp.app_id' => '555000111', 'whatsapp.app_secret' => 'app-secret-never-shown', 'whatsapp.config_id' => 'cfg-1']);
+        }
+
+        $this->assertSame(0, DB::table('whatsapp_onboarding_attempts')->count(), 'no attempt is opened that could never complete');
+        $this->assertFalse(WhatsAppConnection::forBusiness($this->a)->isConnected());
+        $this->assertStringNotContainsString('app-secret-never-shown', $this->start($this->adminA)->assertOk()->getContent());
+    }
+
     public function test_a_state_is_issued_to_one_business_and_operator_and_stored_only_as_a_hash(): void
     {
         $state = $this->start($this->adminA)->assertOk()->assertJsonMissingPath('app_secret')->json('state');

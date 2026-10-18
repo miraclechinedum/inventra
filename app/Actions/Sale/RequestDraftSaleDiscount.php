@@ -65,6 +65,8 @@ class RequestDraftSaleDiscount
                     throw ValidationException::withMessages(['products' => "{$product->name} is inactive."]);
                 }
 
+                $product->unit->assertAccepts($line['quantity'], 'products', $product->name);
+
                 $lineTotal = Money::round(bcmul((string) $product->selling_price, $line['quantity'], 4));
                 $subtotal = bcadd($subtotal, $lineTotal, 2);
 

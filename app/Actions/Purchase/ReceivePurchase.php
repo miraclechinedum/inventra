@@ -86,6 +86,7 @@ class ReceivePurchase
 
                 $line = $input[$id];
                 $quantity = bcadd($line['quantity'], '0', 3);
+                $product->unit->assertAccepts($quantity, 'items', $product->name);
                 $cost = bcadd($line['unit_cost'], '0', 2);
                 $total = Money::round(bcmul($quantity, $cost, 5));
                 $after = bcadd($product->current_stock, $quantity, 3);

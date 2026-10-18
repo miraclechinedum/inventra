@@ -143,7 +143,7 @@ class AddProductFormTest extends TestCase
 
     public function test_initial_stock_creates_the_one_immutable_opening_movement(): void
     {
-        $this->post(route('inventory.products.store'), $this->payload(['initial_stock' => '12.500']))->assertRedirect();
+        $this->post(route('inventory.products.store'), $this->payload(['initial_stock' => '12.500', 'unit' => 'litre']))->assertRedirect();
 
         $product = Product::query()->where('sku', 'FLT-0921')->firstOrFail();
         $movement = $product->movements()->sole();

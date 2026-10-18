@@ -3,6 +3,7 @@
 namespace Tests\Feature\Ui;
 
 use App\Enums\UserRole;
+use App\Models\Customer;
 use App\Models\User;
 use App\Support\PerPage;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -40,7 +41,8 @@ class RecordTableCoverageTest extends TestCase
             'refunds.index' => 'rows',
             'notifications.index' => 'notifications',
             'audit.index' => 'events',
-            'whatsapp.deliveries.index' => 'deliveries',
+            // The WhatsApp message log replaced the removed per-sale delivery list.
+            'whatsapp.logs.index' => 'messages',
             'discounts.index' => 'requests',
             'reports.sales' => 'rows',
             'reports.collections' => 'rows',
@@ -54,9 +56,17 @@ class RecordTableCoverageTest extends TestCase
         ];
     }
 
+    /**
+     * An Administrator in a business that has at least one customer. The Customers list renders
+     * its first-run empty state, with no table and no footer, until a customer exists, so the
+     * listing is only exercised once there is a row to list.
+     */
     private function admin(): User
     {
-        return User::factory()->create(['role' => UserRole::Admin]);
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        Customer::factory()->create();
+
+        return $admin;
     }
 
     public function test_every_standardized_listing_renders_the_shared_footer(): void
@@ -121,7 +131,7 @@ class RecordTableCoverageTest extends TestCase
             'refunds.index' => 'Refund',
             'audit.index' => 'Event',
             'inventory.categories.index' => 'Category',
-            'whatsapp.deliveries.index' => null,
+            'whatsapp.logs.index' => 'Date &amp; time',
             'reports.sales' => 'Report rows',
         ];
 

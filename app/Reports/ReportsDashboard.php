@@ -428,42 +428,20 @@ class ReportsDashboard
     }
 
     /**
-     * The four products that earned the most in the period, net of what came back.
+     * The four products with the most net product revenue in the period.
      *
-     * Ranked on `sale_items.line_total` — the price as sold, with any line-level discount already
-     * in it — less `sale_return_items.return_line_value` for the same product. A product whose
-     * every unit was returned therefore ranks at zero rather than standing as though it sold.
+     * Net of each line's share of its Sale's discount and of what came back, as ProductSales defines
+     * it, so the ranked figures reconcile to the Revenue headline and a discounted Sale returned in
+     * full contributes nothing. A product whose every unit was returned ranks at zero rather than
+     * standing as though it sold.
      *
      * @return list<array<string, string>>
      */
     private function topProducts(string $from, string $to): array
     {
-        $sold = DB::table('sale_items')->where('sale_items.business_id', $this->businessId())
-            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-            ->selectRaw('sale_items.product_id AS product, SUM(sale_items.line_total) AS amount')
-            ->where('sales.status', 'completed')
-            ->whereBetween('sales.sale_date', [$from, $to])
-            ->groupBy('sale_items.product_id')
-            ->pluck('amount', 'product');
-
-        $returned = DB::table('sale_return_items')->where('sale_return_items.business_id', $this->businessId())
-            ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
-            ->join('sales', 'sales.id', '=', 'sale_returns.sale_id')
-            ->selectRaw('sale_return_items.product_id AS product, SUM(sale_return_items.return_line_value) AS amount')
-            ->where('sales.status', 'completed')
-            // By the sale's trading day, matching Revenue, so a product cannot be ranked on one
-            // basis while the headline uses another.
-            ->whereBetween('sales.sale_date', [$from, $to])
-            ->groupBy('sale_return_items.product_id')
-            ->pluck('amount', 'product');
-
         $net = [];
-        foreach ($sold as $productId => $value) {
-            $net[(int) $productId] = Money::zero((string) $value);
-        }
-        foreach ($returned as $productId => $value) {
-            $id = (int) $productId;
-            $net[$id] = bcsub($net[$id] ?? '0.00', Money::zero((string) $value), 2);
+        foreach (ProductSales::forPeriod($this->businessId(), $from, $to) as $productId => $figures) {
+            $net[(int) $productId] = $figures['revenue'];
         }
 
         // Only products that actually earned something appear; a net-zero or negative line is not a

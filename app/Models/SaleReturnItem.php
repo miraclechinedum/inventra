@@ -29,6 +29,6 @@ class SaleReturnItem extends Model
 
     protected function casts(): array
     {
-        return ['disposition' => ReturnDisposition::class, 'quantity_returned' => 'decimal:3', 'original_unit_price' => 'decimal:2', 'return_line_value' => 'decimal:2', 'created_at' => 'datetime'];
+        return ['disposition' => ReturnDisposition::class, 'quantity_returned' => 'decimal:3', 'original_unit_price' => 'decimal:2', 'return_line_value' => 'decimal:2', 'gross_line_value' => 'decimal:2', 'discount_share' => 'decimal:2', 'created_at' => 'datetime'];
     }
 }

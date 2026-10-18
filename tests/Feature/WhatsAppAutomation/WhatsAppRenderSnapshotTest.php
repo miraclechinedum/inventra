@@ -11,16 +11,13 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Renders the module's real pages to disk so they can be opened in a browser for visual and
- * responsive checking. It asserts the structure the Figma requires; the files are a by-product.
- *
- * Writes only to the scratchpad, never into `public/`.
+ * Renders the module's real pages so they can be opened in a browser for visual and responsive
+ * checking. It always asserts the structure the Figma requires; the files are a by-product, written
+ * only when WA_SNAPSHOT_DIR names a directory, and never into `public/`.
  */
 class WhatsAppRenderSnapshotTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const OUT = '/private/tmp/claude-501/-Users-apple-Sites-inventra/75bd0aad-2c29-4585-98d4-2842195925de/scratchpad';
 
     public function test_it_renders_both_states(): void
     {
@@ -30,7 +27,7 @@ class WhatsAppRenderSnapshotTest extends TestCase
 
         // ── Disconnected ──
         $html = $this->actingAs($admin)->get(route('whatsapp.automation.index'))->assertOk()->getContent();
-        file_put_contents(self::OUT.'/wa-disconnected.html', $html);
+        $this->snapshot('wa-disconnected.html', $html);
 
         $this->assertStringContainsString('WhatsApp automation', $html);
         $this->assertStringContainsString("WhatsApp isn't connected yet", $html);
@@ -80,7 +77,7 @@ class WhatsAppRenderSnapshotTest extends TestCase
         ]);
 
         $html = $this->actingAs($admin)->get(route('whatsapp.automation.index'))->assertOk()->getContent();
-        file_put_contents(self::OUT.'/wa-connected.html', $html);
+        $this->snapshot('wa-connected.html', $html);
 
         // Connected: the indicator replaces the button. Never both at once.
         $this->assertStringContainsString('Business number connected', $html);
@@ -115,5 +112,15 @@ class WhatsAppRenderSnapshotTest extends TestCase
 
         // The connection's token never reaches the page.
         $this->assertStringNotContainsString('render-fixture-token', $html);
+    }
+
+    /** Writes a rendered page for manual review, only when a snapshot directory is configured. */
+    private function snapshot(string $file, string $html): void
+    {
+        $directory = env('WA_SNAPSHOT_DIR');
+
+        if (is_string($directory) && $directory !== '' && is_dir($directory)) {
+            file_put_contents(rtrim($directory, '/').'/'.$file, $html);
+        }
     }
 }

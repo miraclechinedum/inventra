@@ -8,6 +8,7 @@ use App\Actions\Sale\RecordSaleRefund;
 use App\Actions\Sale\RecordSaleReturn;
 use App\Actions\Sale\RequestSaleDiscount;
 use App\Actions\Sale\VoidSale;
+use App\Actions\WhatsAppAutomation\WhatsAppAutomationTriggers;
 use App\Contracts\WhatsAppConnectionProvider;
 use App\Enums\InventoryMovementType;
 use App\Enums\PaymentMethod;
@@ -21,19 +22,22 @@ use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleCorrection;
+use App\Models\SaleDiscountRequest;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\SaleRefundRequest;
 use App\Models\SaleReturnRequest;
 use App\Models\User;
-use App\Models\WhatsAppDelivery;
+use App\Models\WhatsAppAutomation;
+use App\Models\WhatsAppConnection;
+use App\Models\WhatsAppMessage;
 use App\Support\SaleCorrectionEligibility;
-use App\Support\WhatsAppSendResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
+use Tests\Concerns\SubmitsSales;
 use Tests\Fakes\FakeWhatsAppProvider;
 use Tests\TestCase;
 
@@ -49,7 +53,7 @@ use Tests\TestCase;
  */
 class SaleCorrectionTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, SubmitsSales;
 
     private FakeWhatsAppProvider $client;
 
@@ -478,8 +482,8 @@ class SaleCorrectionTest extends TestCase
     {
         $admin = $this->user(UserRole::Admin);
         [$sale, $product] = $this->sale($admin);
-        // Force a discount straight onto the sale to reach the guard without the approval workflow,
-        // which would itself block correction.
+        // Force a discount straight onto the sale without the approval workflow. Eligibility now
+        // refuses any discounted Sale, and CorrectSale's own subtotal guard stays behind it.
         // balance_due must move with the total, or the reconcile CHECK rejects the seed itself.
         DB::table('sales')->where('id', $sale->id)->update([
             'discount_amount' => '20000.00', 'total_amount' => '30000.00', 'balance_due' => '30000.00',
@@ -578,6 +582,47 @@ class SaleCorrectionTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $this->correct($admin, $sale->fresh(), [['product_id' => $product->id, 'quantity' => '1.000']]);
+    }
+
+    /**
+     * A discount approved before the Sale existed never names the Sale on its request, so the
+     * approved-request check cannot see it. The Sale's own discount is what blocks the correction:
+     * otherwise the lines or the buyer the approval was bound to could be changed afterwards.
+     */
+    public function test_15e_a_discount_approved_before_recording_blocks_correction(): void
+    {
+        $admin = $this->user(UserRole::Admin);
+        $rep = $this->user(UserRole::SalesRep);
+        $customer = Customer::factory()->create(['is_active' => true]);
+        $product = Product::factory()->create(['current_stock' => '100.000', 'selling_price' => '5000.00']);
+        $today = now(config('business.timezone'))->toDateString();
+        $cart = [['product_id' => $product->id, 'quantity' => '4']];
+
+        $draft = $this->actingAs($rep)->postJson(route('sales.discounts.draft.store'), [
+            'amount' => '2000', 'reason' => 'Agreed bulk price for this order.', 'is_walk_in' => false,
+            'customer_id' => $customer->id, 'sale_date' => $today, 'products' => $cart,
+        ])->assertCreated();
+        app(DecideSaleDiscount::class)->approve($admin, SaleDiscountRequest::query()->find($draft->json('discount_request_id')));
+
+        $this->actingAs($rep)->post(route('sales.store'), $this->withSaleToken([
+            'is_walk_in' => '0', 'customer_id' => $customer->id, 'sale_date' => $today, 'products' => $cart,
+            'amount_paid' => '0.00', 'sale_draft_id' => $draft->json('sale_draft_id'),
+        ]))->assertSessionHasNoErrors();
+
+        $sale = Sale::query()->sole();
+        $this->assertSame('2000.00', $sale->discount_amount);
+        $this->assertSame(0, $sale->discountRequests()->count(), 'the pre-sale request is not linked by sale_id');
+
+        $this->assertStringContainsString('approved before it was recorded', SaleCorrectionEligibility::blockedReason($sale));
+        $this->assertFalse(SaleCorrectionEligibility::permitsCustomerChange($sale));
+
+        try {
+            $this->correct($admin, $sale, [['product_id' => $product->id, 'quantity' => '1.000']]);
+            $this->fail('A discounted Sale must not be corrected.');
+        } catch (ValidationException) {
+            $this->assertSame('4.000', $sale->fresh()->items()->sole()->quantity);
+            $this->assertSame(0, SaleCorrection::query()->count());
+        }
     }
 
     public function test_15d_a_voided_sale_cannot_be_corrected(): void
@@ -774,37 +819,51 @@ class SaleCorrectionTest extends TestCase
         $this->assertStringContainsString('data-print-trigger', $after, 'printing still works');
     }
 
-    public function test_20_whatsapp_history_survives_and_no_receipt_is_auto_resent(): void
+    /**
+     * A correction sends nothing and erases nothing on the WhatsApp side.
+     *
+     * Per-sale WhatsApp receipts were replaced by the post-purchase automation, which queues one
+     * message per Sale. Correcting the Sale must not queue a second message, rewrite the one already
+     * queued, or remove legacy delivery history recorded before the change.
+     */
+    public function test_20_whatsapp_history_survives_and_no_message_is_auto_resent(): void
     {
         $admin = $this->user(UserRole::Admin);
         [$sale, $product, $customer] = $this->sale($admin, '50000.00');
         $customer->forceFill([
+            'phone' => '+2348090000001', 'is_active' => true,
             'whatsapp_opt_in' => true, 'whatsapp_opt_in_at' => now()->subMinute(), 'whatsapp_opt_out_at' => null,
         ])->save();
 
-        // A receipt was sent before the correction.
-        $this->client->configured = true;
-        $this->client->result = WhatsAppSendResult::accepted('wamid.before-correction');
-        $token = (string) Str::uuid();
-        $this->actingAs($admin)->withSession(['whatsapp.send.'.$sale->id => $token])
-            ->post(route('sales.whatsapp.send', $sale), ['request_token' => $token])->assertRedirect();
-        $this->assertCount(1, $this->client->requests);
+        WhatsAppConnection::query()->firstOrCreate(['singleton_key' => 'whatsapp'])->forceFill([
+            'provider' => 'fake', 'waba_id' => '100000000000001', 'phone_number_id' => '200000000000001',
+            'display_phone_number' => '+234 700 000 1234', 'phone_number' => '+2347000001234',
+            'access_token' => 'fake-business-token', 'status' => 'connected',
+            'verified_at' => now(), 'connected_at' => now(),
+        ])->save();
+        WhatsAppAutomation::forKey(WhatsAppAutomation::POST_PURCHASE)->update([
+            'enabled' => true, 'template_name' => 'inventra_post_purchase',
+            'template_language' => 'en', 'template_status' => 'APPROVED',
+        ]);
 
-        $this->correct($admin, $sale, [['product_id' => $product->id, 'quantity' => '2.000']]);
+        // A receipt delivered under the legacy system, and the automation's message for this Sale.
+        DB::table('whatsapp_deliveries')->insert([
+            'business_id' => $sale->business_id, 'sale_id' => $sale->id, 'customer_id' => $customer->id,
+            'request_id' => (string) Str::uuid(), 'origin' => 'manual', 'destination_phone' => '+2348090000001',
+            'consent_checked_at' => now(), 'requested_at' => now(), 'status' => 'sent', 'attempt' => 1,
+            'created_by' => $admin->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        app(WhatsAppAutomationTriggers::class)->salePaid($sale->fresh());
+        $queued = WhatsAppMessage::query()->where('type', 'post_purchase')->sole();
+        $delivery = (array) DB::table('whatsapp_deliveries')->sole();
 
-        // The correction sends nothing on its own: there is no product rule for auto-replacing a
-        // receipt a customer has already received.
-        $this->assertCount(1, $this->client->requests, 'a correction must not auto-send a replacement receipt');
-        $this->assertSame(1, WhatsAppDelivery::query()->count(), 'the earlier delivery record is preserved');
+        $this->correct($admin, $sale->fresh(), [['product_id' => $product->id, 'quantity' => '2.000']]);
 
-        // Manual re-send remains available, and sends the corrected receipt.
-        $resendToken = (string) Str::uuid();
-        $this->actingAs($admin)->withSession(['whatsapp.send.'.$sale->id => $resendToken])
-            ->post(route('sales.whatsapp.send', $sale), ['request_token' => $resendToken])->assertRedirect();
-
-        $this->assertCount(2, $this->client->requests);
-        $this->assertSame(2, WhatsAppDelivery::query()->count());
-        $this->assertSame(2, WhatsAppDelivery::query()->max('attempt'));
+        $this->assertSame([], $this->client->sent, 'a correction never calls the provider');
+        $this->assertSame(1, WhatsAppMessage::query()->count(), 'a correction queues no replacement message');
+        $this->assertSame($queued->body, $queued->fresh()->body, 'the queued message is not rewritten');
+        $this->assertSame($queued->template_values, $queued->fresh()->template_values);
+        $this->assertSame($delivery, (array) DB::table('whatsapp_deliveries')->sole(), 'legacy delivery history is preserved');
     }
 
     // ═════════════════════════════════ customer correction ════════════════════════════════════

@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Enums\DiscountRequestStatus;
 use App\Enums\SaleStatus;
 use App\Models\Sale;
 
@@ -29,7 +28,7 @@ class SaleDiscountEligibility
             return $blocked;
         }
 
-        if ($sale->discountRequests()->where('status', DiscountRequestStatus::Pending->value)->exists()) {
+        if ($sale->discountRequests()->awaitingDecision()->exists()) {
             return 'This Sale already has a discount request awaiting a decision.';
         }
 

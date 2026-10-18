@@ -70,7 +70,7 @@ class Entitlements
             throw new LogicException('A plan allowance can only be claimed inside the transaction that uses it.');
         }
 
-        BusinessSubscription::acrossBusinesses()->where('business_id', $business->getKey())->lockForUpdate()->firstOrFail();
+        $this->lockStaffing($business);
 
         $allowed = $this->limit($business, $limit);
 
@@ -81,12 +81,36 @@ class Entitlements
         }
     }
 
-    /** The role place a staff account of $role is about to take, if its role has a cap. */
+    /**
+     * The role place a staff account of $role is about to take, if its role has a cap.
+     *
+     * An uncapped role still takes the staffing lock. Every way an account comes to hold a role —
+     * created, promoted, reactivated — passes through here, so anything that must count the holders
+     * of a role, such as the sole-Administrator discount exception, can rely on that lock to keep
+     * the count from changing under it.
+     */
     public function claimRolePlace(Business $business, UserRole $role): void
     {
         if (($limit = Entitlement::forRole($role)) !== null) {
             $this->claim($business, $limit);
+
+            return;
         }
+
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('A role place can only be claimed inside the transaction that uses it.');
+        }
+
+        $this->lockStaffing($business);
+    }
+
+    /**
+     * Serialises every change to who holds which staff role in a Business, on its subscription row.
+     * Must run inside the transaction whose count it protects.
+     */
+    public function lockStaffing(Business $business): void
+    {
+        BusinessSubscription::acrossBusinesses()->where('business_id', $business->getKey())->lockForUpdate()->firstOrFail();
     }
 
     private function activeAccounts(int $business, UserRole $role): int

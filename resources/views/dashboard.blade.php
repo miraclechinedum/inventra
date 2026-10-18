@@ -23,15 +23,18 @@
     <div class="dash-page">
         {{-- ── First-run setup. Administrators only, answered from live data, gone once done. ── --}}
         @if ($setup)
-            <section class="dash-card dash-setup" aria-labelledby="dash-setup-title">
-                <header class="dash-card-head">
-                    <div>
-                        <h2 id="dash-setup-title">Set up {{ app(\App\Settings\BusinessSettings::class)->current()->business_name }}</h2>
-                        <p class="dash-card-sub">{{ collect($setup)->where('done', true)->count() }} of {{ count($setup) }} done. You can use Inventra while you finish.</p>
-                    </div>
+            @php($businessName = app(\App\Settings\BusinessSettings::class)->current()->business_name)
+            <section @class(['dash-card', 'dash-setup', 'is-complete' => $setup['complete']]) aria-labelledby="dash-setup-title">
+                <header class="dash-setup-head">
+                    <h2 id="dash-setup-title">{{ $setup['complete'] ? $businessName.' is set up' : 'Set up '.$businessName }}</h2>
+                    <p class="dash-card-sub">
+                        <strong>{{ $setup['done'] }} of {{ $setup['total'] }} complete.</strong>
+                        {{ $setup['complete'] ? 'Optional extras are here whenever you want them.' : 'You can use Inventra while you finish.' }}
+                    </p>
                 </header>
                 <ol class="dash-setup-steps">
-                    @foreach ($setup as $step)
+                    {{-- Once the required steps are done, only what is still on offer is listed. --}}
+                    @foreach ($setup['complete'] ? collect($setup['steps'])->where('done', false) : $setup['steps'] as $step)
                         <li @class(['dash-setup-step', 'is-done' => $step['done']])>
                             <span class="dash-setup-mark" aria-hidden="true">{{ $step['done'] ? '✓' : '' }}</span>
                             @if ($step['done'])
@@ -47,16 +50,19 @@
         @endif
 
         {{-- ── KPI cards ────────────────────────────────────────────────────────────────────── --}}
-        <section class="dash-kpis" aria-label="Business summary">
-            <article class="dash-kpi">
-                <span class="dash-kpi-head">
-                    <span class="dash-kpi-icon is-blue" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h3"/></svg>
+        <section @class(['dash-kpis', 'is-three' => $kpis['inventoryValue'] === null]) aria-label="Business summary">
+            {{-- Priced at cost, so shown to Administrators and Managers only; the value is null otherwise. --}}
+            @if ($kpis['inventoryValue'] !== null)
+                <article class="dash-kpi">
+                    <span class="dash-kpi-head">
+                        <span class="dash-kpi-icon is-blue" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M16 15h3"/></svg>
+                        </span>
                     </span>
-                </span>
-                <p class="dash-kpi-label">Total Inventory Value</p>
-                <strong class="dash-kpi-value">{{ $money($kpis['inventoryValue']) }}</strong>
-            </article>
+                    <p class="dash-kpi-label">Total Inventory Value</p>
+                    <strong class="dash-kpi-value">{{ $money($kpis['inventoryValue']) }}</strong>
+                </article>
+            @endif
 
             <article class="dash-kpi">
                 <span class="dash-kpi-head">
@@ -121,7 +127,9 @@
                                 @endif
                             </p>
                         </div>
-                        <a href="{{ route('reports.sales') }}" class="dash-button is-primary">View Report</a>
+                        @can('viewAny', \App\Models\Report::class)
+                            <a href="{{ route('reports.sales') }}" class="dash-button is-primary">View Report</a>
+                        @endcan
                     </header>
 
                     {{-- A plain CSS/SVG-free bar chart: heights are percentages of a ceiling the

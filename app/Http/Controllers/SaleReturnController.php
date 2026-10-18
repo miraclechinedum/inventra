@@ -6,24 +6,28 @@ use App\Actions\Sale\IssueRefundRequest;
 use App\Actions\Sale\IssueReturnRequest;
 use App\Actions\Sale\RecordSaleRefund;
 use App\Actions\Sale\RecordSaleReturn;
+use App\Enums\ProductUnit;
 use App\Enums\ReturnDisposition;
 use App\Enums\SaleStatus;
 use App\Enums\UserRole;
 use App\Http\Requests\RecordSaleRefundRequest;
 use App\Http\Requests\RecordSaleReturnRequest;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\SaleRefund;
 use App\Models\SaleReturn;
 use App\Support\Money;
 use App\Support\PerPage;
 use App\Support\Quantity;
 use App\Support\ReturnSettlementPreview;
+use App\Support\ReturnValuation;
 use App\Support\SaleFinancials;
 use App\Tenancy\CurrentBusiness;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SaleReturnController extends Controller
@@ -54,6 +58,7 @@ class SaleReturnController extends Controller
     {
         $this->authorizeUser($request);
         abort_unless($sale->status->value === 'completed', 422);
+
         $sale->load('items');
         $prior = DB::table('sale_return_items')->where('sale_return_items.business_id', app(CurrentBusiness::class)->id())->selectRaw('sale_item_id,SUM(quantity_returned) quantity')->whereIn('sale_item_id', $sale->items->pluck('id'))->groupBy('sale_item_id')->pluck('quantity', 'sale_item_id');
 
@@ -93,7 +98,11 @@ class SaleReturnController extends Controller
 
         // Only lines with something left to send back can be chosen; the rest are shown as
         // already returned rather than quietly omitted, so the operator can see why.
-        $lines = $sale->items->map(function ($item) use ($prior): array {
+        // Each line's share of the Sale's discount, so the price shown is what the goods are worth
+        // back, the same figure RecordSaleReturn values them at.
+        $shares = ReturnValuation::shares($sale, $sale->items);
+
+        $lines = $sale->items->map(function ($item) use ($prior, $shares): array {
             $returned = (string) ($prior[$item->id] ?? '0');
             $remaining = bcsub((string) $item->quantity, $returned, 3);
 
@@ -106,9 +115,15 @@ class SaleReturnController extends Controller
                 'remaining' => Quantity::trim($remaining),
                 'remainingRaw' => $remaining,
                 // The price as sold. The Product's price today is deliberately not read.
-                'unitPrice' => Money::compact((string) $item->unit_price),
+                // The price as sold, never the Product's price today, net of the line's share of
+                // any discount. Display only; the recorded value is computed by ReturnValuation.
+                'unitPrice' => Money::compact($this->netUnitPrice($item, $shares[$item->id] ?? '0.00')),
                 'unitPriceRaw' => (string) $item->unit_price,
+                'discounted' => bccomp($shares[$item->id] ?? '0.00', '0.00', 2) > 0,
                 'exhausted' => bccomp($remaining, '0', 3) <= 0,
+                // Whether the unit the goods were sold in is measured rather than counted. Counted
+                // lines move in whole units; RecordSaleReturn enforces the same rule.
+                'fractional' => ProductUnit::tryFrom((string) $item->unit_snapshot)?->allowsFraction() ?? false,
             ];
         })->values();
 
@@ -138,6 +153,16 @@ class SaleReturnController extends Controller
      *
      * This is informational and writes nothing. Authorization is the same as the panel's.
      */
+    /** A line's net value per unit, for display: its total less its discount share, over its quantity. */
+    private function netUnitPrice(SaleItem $item, string $share): string
+    {
+        if (bccomp($share, '0.00', 2) === 0) {
+            return (string) $item->unit_price;
+        }
+
+        return Money::round(bcdiv(bcsub(Money::round((string) $item->line_total), $share, 2), (string) $item->quantity, 5));
+    }
+
     public function preview(Request $request, Sale $sale): JsonResponse
     {
         $this->authorizeUser($request);
@@ -175,7 +200,7 @@ class SaleReturnController extends Controller
                 continue;
             }
 
-            $lines[] = ['quantity' => $quantity, 'unit_price' => (string) $item->unit_price];
+            $lines[] = ['sale_item_id' => $item->id, 'quantity' => $quantity];
         }
 
         $settlement = ReturnSettlementPreview::describe($sale, $lines, (bool) ($validated['restock'] ?? true));
@@ -197,7 +222,20 @@ class SaleReturnController extends Controller
 
     public function store(RecordSaleReturnRequest $request, Sale $sale, RecordSaleReturn $action): RedirectResponse
     {
-        $return = $action->execute($request->user(), $sale, $request->validated(), $request->session()->getId());
+        try {
+            $return = $action->execute($request->user(), $sale, $request->validated(), $request->session()->getId());
+        } catch (ValidationException $exception) {
+            // Refusals decided under the Sale lock — an over-return, an expired or reused token —
+            // arrive here rather than through the FormRequest. A panel submission is sent to the
+            // Sales list by name for the same reason RecordSaleReturnRequest gives.
+            if ($request->input('return_to') !== 'index') {
+                throw $exception;
+            }
+
+            return redirect()->route('sales.index')
+                ->withErrors($exception->errors(), $exception->errorBag)
+                ->with('returnFailed', true);
+        }
 
         // A return recorded from the Sales-list panel goes back to the list, which re-renders every
         // row from the database — so the settlement rows the operator just changed are read back

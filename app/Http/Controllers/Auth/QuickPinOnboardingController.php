@@ -23,6 +23,12 @@ class QuickPinOnboardingController extends Controller
 
     public function store(QuickPinRequest $request, SetQuickPin $setQuickPin): RedirectResponse
     {
+        // Onboarding sets the first PIN once. A repeated or replayed submission must not replace a
+        // PIN, or a skipped setup, without the reauthentication a real PIN change would require.
+        if ($request->user()->quick_pin_setup_completed) {
+            return redirect()->route('dashboard');
+        }
+
         $setQuickPin->handle($request->user(), $request->string('pin')->toString());
 
         return redirect()->route('dashboard');
@@ -31,6 +37,11 @@ class QuickPinOnboardingController extends Controller
     public function skip(Request $request, SecurityEventRecorder $events): RedirectResponse
     {
         $user = $request->user();
+
+        if ($user->quick_pin_setup_completed) {
+            return redirect()->route('dashboard');
+        }
+
         $user->quick_pin_setup_completed = true;
         $user->save();
 

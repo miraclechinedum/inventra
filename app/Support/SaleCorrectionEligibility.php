@@ -35,12 +35,20 @@ class SaleCorrectionEligibility
             return 'This Sale has a recorded Refund. Cash has already gone out against its current figures, so it cannot be corrected.';
         }
 
-        if ($sale->discountRequests()->where('status', DiscountRequestStatus::Pending->value)->exists()) {
+        if ($sale->discountRequests()->awaitingDecision()->exists()) {
             return 'This Sale has a discount request awaiting a decision. Decide that request first, so the correction and the discount cannot disagree about the total.';
         }
 
         if ($sale->discountRequests()->where('status', DiscountRequestStatus::Approved->value)->exists()) {
             return 'This Sale carries an approved discount. Correcting it would invalidate the figures that discount was approved against.';
+        }
+
+        // A discount approved before the Sale was recorded is bound to the cart, buyer and date it
+        // was approved for, but its request never names the Sale, so the check above cannot see it.
+        // The Sale's own figure is what proves it exists. Until a reviewed workflow defines how a
+        // discount follows corrected lines, any discounted Sale is refused.
+        if (bccomp((string) $sale->discount_amount, '0.00', 2) > 0) {
+            return 'This Sale carries a discount approved before it was recorded. Correcting it would invalidate the cart that discount was approved against.';
         }
 
         return null;

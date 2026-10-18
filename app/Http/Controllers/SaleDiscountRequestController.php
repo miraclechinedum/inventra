@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Sale\CancelSaleDiscount;
 use App\Actions\Sale\DecideSaleDiscount;
 use App\Actions\Sale\RequestDraftSaleDiscount;
 use App\Actions\Sale\RequestSaleDiscount;
@@ -9,6 +10,7 @@ use App\Enums\DiscountRequestStatus;
 use App\Http\Requests\Sale\DecideSaleDiscountRequest;
 use App\Http\Requests\Sale\StoreDraftSaleDiscountRequest;
 use App\Http\Requests\Sale\StoreSaleDiscountRequest;
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleDiscountRequest;
 use App\Models\SaleDraft;
@@ -42,7 +44,7 @@ class SaleDiscountRequestController extends Controller
             'requests' => $requests,
             'statuses' => $statuses,
             'activeStatus' => is_string($statusInput) ? $statusInput : '',
-            'pendingCount' => SaleDiscountRequest::query()->where('status', DiscountRequestStatus::Pending->value)->count(),
+            'pendingCount' => SaleDiscountRequest::query()->awaitingDecision()->count(),
         ]);
     }
 
@@ -80,7 +82,9 @@ class SaleDiscountRequestController extends Controller
         abort_if($discountRequest->sale_draft_id === null, 404);
 
         return response()->json([
-            'status' => $discountRequest->status->value,
+            // Expiry is derived from the request's own timestamps, so it is reported as soon as it
+            // applies rather than once the scheduler has recorded it.
+            'status' => $this->effectiveStatus($discountRequest)->value,
             'sale_draft_id' => $discountRequest->sale_draft_id,
             'requested_amount' => (string) $discountRequest->requested_amount,
             'decided_at' => $discountRequest->decided_at?->toIso8601String(),
@@ -110,10 +114,18 @@ class SaleDiscountRequestController extends Controller
             ->limit(10)
             ->get();
 
-        $rows = $drafts->map(function (SaleDraft $draft): ?array {
+        // Units for the products these carts name, in one query, so a resumed cart offers the same
+        // quantity step a freshly built one would.
+        $units = Product::query()
+            ->whereIn('id', $drafts->flatMap(fn (SaleDraft $draft): array => array_column((array) $draft->cart_snapshot, 'product_id'))->unique()->all())
+            ->pluck('unit', 'id');
+
+        $rows = $drafts->map(function (SaleDraft $draft) use ($units): ?array {
             $decision = $draft->latestDecidedRequest() ?? $draft->pendingDiscountRequest();
 
-            if ($decision === null) {
+            // A cancelled or expired request has nothing left to resume: the cart can no longer be
+            // recorded against it, and a new request starts from a new cart.
+            if ($decision === null || in_array($this->effectiveStatus($decision), [DiscountRequestStatus::Cancelled, DiscountRequestStatus::Expired], true)) {
                 return null;
             }
 
@@ -145,6 +157,7 @@ class SaleDiscountRequestController extends Controller
                         'name' => (string) ($line['name'] ?? ''),
                         'sku' => (string) ($line['sku'] ?? ''),
                         'price' => (string) ($line['unit_price'] ?? '0'),
+                        'fractional' => ($units[(int) ($line['product_id'] ?? 0)] ?? null)?->allowsFraction() ?? false,
                     ])->values()->all(),
             ];
         })->filter()->values();
@@ -163,6 +176,32 @@ class SaleDiscountRequestController extends Controller
                 'requester:id,name', 'decider:id,name',
             ]),
         ]);
+    }
+
+    /**
+     * Withdraws a pending request: by the person who asked, or by an Administrator. Answers JSON to
+     * the Record Sale page, which cancels the request it stops waiting for, and redirects otherwise.
+     */
+    public function cancel(Request $request, SaleDiscountRequest $discountRequest, CancelSaleDiscount $action): JsonResponse|RedirectResponse
+    {
+        Gate::authorize('cancel', $discountRequest);
+
+        $action->execute($request->user(), $discountRequest);
+
+        if ($request->expectsJson()) {
+            return response()->json(['status' => DiscountRequestStatus::Cancelled->value]);
+        }
+
+        return redirect()->route('discounts.show', $discountRequest)
+            ->with('status', 'Discount request cancelled. Nothing about the Sale changed.');
+    }
+
+    /** The request's status as it stands now, counting an expiry the scheduler has not yet recorded. */
+    private function effectiveStatus(SaleDiscountRequest $discountRequest): DiscountRequestStatus
+    {
+        return $discountRequest->isPendingExpired() || $discountRequest->isApprovalExpired()
+            ? DiscountRequestStatus::Expired
+            : $discountRequest->status;
     }
 
     public function store(StoreSaleDiscountRequest $request, Sale $sale, RequestSaleDiscount $action): RedirectResponse

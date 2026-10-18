@@ -39,6 +39,11 @@ trait UnwindsTenancyMigrations
         '2026_09_30_020000_create_subscription_tables',
         // Writes the role and product caps onto the plans created just above.
         '2026_09_30_030000_apply_role_and_product_caps_to_plans',
+        // Record Sale submissions: composite keys onto users and sales (business_id, id), and
+        // the reciprocal key from sales.
+        '2026_10_17_010000_create_sale_requests_table',
+        // Discount-aware return values: snapshot columns and relaxed CHECKs on the return tables.
+        '2026_10_17_030000_add_discount_aware_return_values',
     ];
 
     /** Rolls back the tenancy migrations from $from (through $through, else the last), newest first. */

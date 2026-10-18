@@ -16,6 +16,7 @@ use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\SalePayment;
+use App\Reports\BusinessReports;
 use App\Support\CanonicalLoginIdentifier;
 use App\Support\ImageStore;
 use App\Support\PerPage;
@@ -232,33 +233,50 @@ class CustomerController extends Controller
     /**
      * The customer profile.
      *
-     * Three figures, a bounded purchase history and the real message history. Every number comes
-     * from completed sales — the same scope the Customer Performance report uses — so the profile
-     * and the report cannot disagree about what someone has spent.
+     * Three figures, what is still owed and recently paid, a bounded purchase history and the real
+     * message history. Every number comes from completed sales — the same scope the Customer
+     * Performance and Receivables reports use — so the profile and the reports cannot disagree.
      */
     public function show(Customer $customer): View
     {
         Gate::authorize('view', $customer);
 
-        $sales = Sale::query()->where('customer_id', $customer->id)
-            ->when(auth()->user()->role === UserRole::SalesRep, fn ($query) => $query->where('sold_by', auth()->id()));
-        $saleIds = (clone $sales)->pluck('id');
-        $recentPayments = SalePayment::query()->whereIn('sale_id', $saleIds)->with('sale:id,public_id,sale_number')
-            ->latest('paid_at')->limit(5)->get();
+        // A Sales Representative sees only the trade they recorded themselves, in every figure.
+        $ownSalesOnly = fn ($query) => $query->when(
+            auth()->user()->role === UserRole::SalesRep,
+            fn ($query) => $query->where('sold_by', auth()->id()),
+        );
+        $sales = Sale::query()->where('customer_id', $customer->id)->tap($ownSalesOnly);
 
         // Completed only: a voided sale is withdrawn and must not count toward what was spent.
         $completed = (clone $sales)->where('status', 'completed');
+
+        // What is owed now, narrowed from the Receivables report's own definition so the profile
+        // and the report cannot disagree. `balance_due` is already settled by payments, returns,
+        // refunds and corrections; nothing is recomputed here.
+        $outstanding = app(BusinessReports::class)->currentReceivables()
+            ->where('customer_id', $customer->id)->tap($ownSalesOnly);
+
+        // Customer-level collections count completed Sales only until a refund ledger can reverse
+        // a payment taken on a voided one, as in the Customer Performance report.
+        $payments = SalePayment::query()->whereIn('sale_id', (clone $completed)->select('id'));
 
         return view('customers.show', [
             'customer' => $customer->load(['creator:id,name', 'updater:id,name']),
             'canViewInternalDetails' => Gate::allows('viewInternalDetails', $customer),
             'receivables' => [
-                'sales_total' => bcadd((string) (clone $sales)->sum('total_amount'), '0', 2),
-                'paid_total' => bcadd((string) (clone $sales)->sum('amount_paid'), '0', 2),
-                'outstanding_total' => bcadd((string) (clone $sales)->sum('balance_due'), '0', 2),
-                'open_count' => (clone $sales)->whereIn('payment_status', ['unpaid', 'partial'])->count(),
+                'outstanding' => bcadd((string) (clone $outstanding)->sum('balance_due'), '0', 2),
+                'open_count' => (clone $outstanding)->count(),
+                'unpaid_count' => (clone $outstanding)->where('payment_status', 'unpaid')->count(),
+                'partial_count' => (clone $outstanding)->where('payment_status', 'partial')->count(),
+                // Oldest first, as a balance is chased. Bounded; the Receivables report is complete.
+                'sales' => (clone $outstanding)->orderBy('sale_date')->orderBy('id')->limit(10)
+                    ->get(['id', 'public_id', 'sale_number', 'sale_date', 'total_amount', 'amount_paid', 'balance_due', 'payment_status']),
             ],
-            'recentPayments' => $recentPayments,
+            'payments' => (clone $payments)->with('sale:id,public_id,sale_number')
+                ->latest('paid_at')->latest('id')->limit(10)
+                ->get(['id', 'sale_id', 'payment_number', 'amount', 'payment_method', 'paid_at']),
+            'paymentCount' => (clone $payments)->count(),
             // The three headline figures. `sale_date` is the trading day, matching every other
             // sales figure in the application.
             'stats' => [
@@ -416,7 +434,10 @@ class CustomerController extends Controller
      */
     private function duplicateFor(Request $request, ?Customer $customer = null): ?Customer
     {
-        $phone = CanonicalLoginIdentifier::normalizeNigerianPhone((string) $request->old('phone'));
+        // Old input is whatever was submitted, including an array-shaped `phone[]` that validation
+        // has already refused. Only a string is a phone number; anything else has no duplicate.
+        $old = $request->old('phone');
+        $phone = is_string($old) ? CanonicalLoginIdentifier::normalizeNigerianPhone($old) : null;
 
         if ($phone === null) {
             return null;

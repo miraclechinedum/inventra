@@ -8,6 +8,7 @@ use App\Actions\Sale\RecordSaleReturn;
 use App\Actions\Sale\VoidSale;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Enums\ProductUnit;
 use App\Enums\SalePaymentType;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
@@ -864,7 +865,8 @@ class ReturnRefundFoundationTest extends TestCase
     private function fixture(string $paid, ?User $actor = null): array
     {
         $actor ??= User::factory()->create(['role' => UserRole::Admin]);
-        $product = Product::factory()->create(['current_stock' => '10.000']);
+        // Measured in litres: the return matrix exercises fractional quantities.
+        $product = Product::factory()->create(['current_stock' => '10.000', 'unit' => ProductUnit::Litre]);
         $sale = Sale::factory()->create(['subtotal' => '100000.00', 'total_amount' => '100000.00', 'amount_paid' => $paid, 'balance_due' => bcsub('100000.00', $paid, 2), 'payment_status' => $paid === '0.00' ? PaymentStatus::Unpaid : ($paid === '100000.00' ? PaymentStatus::Paid : PaymentStatus::Partial)]);
         $item = new SaleItem;
         foreach (['business_id' => $sale->business_id, 'sale_id' => $sale->id, 'product_id' => $product->id, 'product_sku_snapshot' => $product->sku, 'product_name_snapshot' => $product->name, 'unit_snapshot' => $product->unit->value, 'quantity' => '2.000', 'unit_price' => '50000.00', 'line_total' => '100000.00', 'created_at' => now()] as $key => $value) {

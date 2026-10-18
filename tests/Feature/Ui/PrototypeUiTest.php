@@ -37,15 +37,31 @@ class PrototypeUiTest extends TestCase
         }
     }
 
-    public function test_sale_entry_keeps_eight_server_submitted_lines_and_search_contract(): void
+    /**
+     * The Record Sale cart submits the operator's choices and nothing that prices them.
+     *
+     * The fixed eight-row form was replaced by the `recordSale` cart: lines are posted as product id
+     * and quantity only, and the screen no longer asks for a payment method or notes.
+     */
+    public function test_sale_entry_posts_choices_only_and_never_a_price(): void
     {
         $user = User::factory()->create(['role' => UserRole::SalesRep]);
         $response = $this->actingAs($user)->get(route('sales.create'))->assertOk()
-            ->assertSee('data-sale-product-search', false)->assertSee('data-sale-entry', false)
-            ->assertSee('name="customer_id"', false)->assertSee('name="amount_paid"', false)
-            ->assertSee('name="payment_method"', false)->assertSee('name="notes"', false);
-        $this->assertSame(8, substr_count($response->getContent(), 'aria-label="Quantity for product '));
-        $response->assertDontSee('name="total_amount"', false)->assertDontSee('name="unit_price"', false);
+            ->assertSee('x-data="recordSale"', false)
+            ->assertSee('data-products-url="'.route('sales.create').'"', false);
+
+        foreach (['customer_id', 'is_walk_in', 'sale_date', 'amount_paid', 'sale_draft_id'] as $field) {
+            $response->assertSee('name="'.$field.'"', false);
+        }
+
+        // Each cart line posts exactly its product and quantity.
+        $response->assertSee("x-bind:name=\"'products[' + index + '][product_id]'\"", false)
+            ->assertSee("x-bind:name=\"'products[' + index + '][quantity]'\"", false);
+
+        foreach (['unit_price', 'line_total', 'subtotal', 'discount_amount', 'total_amount', 'balance_due', 'payment_status', 'sold_by'] as $authoritative) {
+            $response->assertDontSee('name="'.$authoritative.'"', false)
+                ->assertDontSee("[{$authoritative}]", false);
+        }
     }
 
     public function test_no_alpine_directive_uses_a_multi_statement_expression(): void

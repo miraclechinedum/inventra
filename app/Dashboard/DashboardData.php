@@ -161,9 +161,12 @@ class DashboardData
             ->whereBetween('sale_date', [$filters->from, $filters->to])
             ->selectRaw('COALESCE(SUM(total_amount), 0) total, COUNT(*) sale_count')->first();
         // Seller-attributed collections: receipts against Sales this representative sold,
-        // matching the Staff Performance report rather than inventing a new attribution.
+        // matching the Staff Performance report rather than inventing a new attribution. Like that
+        // report, staff collections are limited to completed Sales until a refund ledger can
+        // reverse what was collected on a voided one.
         $collections = (string) DB::table('sale_payments')->where('sale_payments.business_id', $this->businessId())
             ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
+            ->where('sales.status', 'completed')
             ->where('sales.sold_by', $user->id)->whereBetween('sale_payments.paid_at', [$start, $end])
             ->selectRaw('COALESCE(SUM(sale_payments.amount), 0) total')->value('total');
         $receivables = DB::table('sales')->where('sales.business_id', $this->businessId())->where('status', 'completed')->where('sold_by', $user->id)

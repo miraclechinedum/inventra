@@ -73,6 +73,14 @@ final readonly class ReportFilters
     {
         $value = self::scalar($request, $key);
 
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) && CarbonImmutable::hasFormat($value, 'Y-m-d') ? $value : $default;
+        // `checkdate`, not a format check: Carbon reads "2026-02-31" as 3 March, which would leave
+        // DATE columns filtered to the literal string and timestamp bounds rolled into the next
+        // month. An impossible date is refused like any other malformed value.
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $parts) !== 1
+            || ! checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {
+            return $default;
+        }
+
+        return $value;
     }
 }

@@ -19,13 +19,29 @@ use Illuminate\Validation\ValidationException;
  */
 class RequestSaleDiscount
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly ExpireSaleDiscountRequest $expire,
+    ) {}
 
     /**
      * @param  array{amount: string, reason: string}  $data
      */
     public function execute(User $actor, Sale $sale, array $data): SaleDiscountRequest
     {
+        // A request past its lifetime still holds the Sale's pending guard until its expiry is
+        // recorded. Recording it first, in its own transaction and in the request-then-Sale lock
+        // order every decision uses, frees the Sale for this request without waiting for the
+        // scheduler.
+        $stale = $sale->discountRequests()
+            ->where('status', DiscountRequestStatus::Pending->value)
+            ->where('requested_at', '<=', now()->subHours(SaleDiscountRequest::PENDING_LIFETIME_HOURS))
+            ->first();
+
+        if ($stale !== null) {
+            $this->expire->execute($stale);
+        }
+
         return DB::transaction(function () use ($actor, $sale, $data): SaleDiscountRequest {
             $locked = Sale::query()->lockForUpdate()->findOrFail($sale->id);
 

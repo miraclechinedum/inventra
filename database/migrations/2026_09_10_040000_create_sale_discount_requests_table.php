@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\DiscountRequestStatus;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +30,9 @@ return new class extends Migration
             // What was asked for, and why.
             $table->decimal('requested_amount', 15, 2);
             $table->string('reason', 500);
-            $table->enum('status', array_column(DiscountRequestStatus::cases(), 'value'))
-                ->default(DiscountRequestStatus::Pending->value);
+            // The statuses as they stood when this ran. Later states are added by their own
+            // migration, so a fresh install builds the same history as a long-running one.
+            $table->enum('status', ['pending', 'approved', 'declined'])->default('pending');
 
             $table->foreignId('requested_by')->constrained('users')->restrictOnDelete();
             $table->string('requested_by_name_snapshot', 120);

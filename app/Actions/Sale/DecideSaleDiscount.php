@@ -12,6 +12,7 @@ use App\Services\AuditLogger;
 use App\Support\Money;
 use App\Support\SaleDiscountEligibility;
 use App\Support\SaleFinancials;
+use App\Support\SoleAdministrator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -34,7 +35,10 @@ use Illuminate\Validation\ValidationException;
  */
 class DecideSaleDiscount
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly SoleAdministrator $soleAdministrator,
+    ) {}
 
     public function approve(User $actor, SaleDiscountRequest $request, ?string $note = null): SaleDiscountRequest
     {
@@ -43,7 +47,7 @@ class DecideSaleDiscount
         }
 
         return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
-            [$locked, $sale] = $this->lockPending($actor, $request);
+            [$locked, $sale, $selfApproved] = $this->lockPending($actor, $request, approving: true);
 
             // Eligibility is re-tested against the Sale as it is now, not as it was when asked.
             if (($blocked = SaleDiscountEligibility::blockedReasonForApproval($sale)) !== null) {
@@ -89,6 +93,7 @@ class DecideSaleDiscount
                 'balance_after' => $state['balance'],
                 'refundable_credit_after' => $state['credit'],
                 'pending_sale_guard' => null,
+                'self_approved' => $selfApproved,
             ]);
 
             $this->audit->record('sale_discount_approved', $locked, $actor,
@@ -102,6 +107,7 @@ class DecideSaleDiscount
                     'balance_due' => $state['balance'],
                     'refundable_credit' => $state['credit'],
                     'payment_status' => $state['status']->value,
+                    'self_approved' => $selfApproved,
                 ],
                 explicitDiff: true,
             );
@@ -117,7 +123,7 @@ class DecideSaleDiscount
         }
 
         return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
-            [$locked, $sale] = $this->lockPending($actor, $request);
+            [$locked, $sale] = $this->lockPending($actor, $request, approving: false);
 
             // Declining is purely a status change. Nothing financial is read or written, which is
             // why it stays available even on a Sale that has since become ineligible.
@@ -151,7 +157,7 @@ class DecideSaleDiscount
     private function approveDraft(User $actor, SaleDiscountRequest $request, ?string $note): SaleDiscountRequest
     {
         return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
-            [$locked, $draft] = $this->lockPendingDraft($actor, $request);
+            [$locked, $draft, $selfApproved] = $this->lockPendingDraft($actor, $request, approving: true);
 
             $this->assertDraftUnspent($draft);
 
@@ -162,6 +168,7 @@ class DecideSaleDiscount
                 'decided_at' => now(),
                 'decision_note' => $note,
                 'pending_draft_guard' => null,
+                'self_approved' => $selfApproved,
             ]);
 
             $this->audit->record('sale_discount_approved', $locked, $actor, newValues: [
@@ -169,6 +176,7 @@ class DecideSaleDiscount
                 'requested_amount' => $locked->requested_amount,
                 'cart_subtotal' => $draft->subtotal_snapshot,
                 'decision_note' => $note,
+                'self_approved' => $selfApproved,
             ]);
 
             return $locked;
@@ -178,7 +186,7 @@ class DecideSaleDiscount
     private function declineDraft(User $actor, SaleDiscountRequest $request, string $note): SaleDiscountRequest
     {
         return DB::transaction(function () use ($actor, $request, $note): SaleDiscountRequest {
-            [$locked, $draft] = $this->lockPendingDraft($actor, $request);
+            [$locked, $draft] = $this->lockPendingDraft($actor, $request, approving: false);
 
             $locked->recordDecision([
                 'status' => DiscountRequestStatus::Declined->value,
@@ -209,19 +217,26 @@ class DecideSaleDiscount
     }
 
     /**
-     * @return array{0: SaleDiscountRequest, 1: SaleDraft}
+     * @return array{0: SaleDiscountRequest, 1: SaleDraft, 2: bool}
      */
     /**
-     * The one rule that must hold however the decision is reached: nobody decides their own request,
-     * and only an Administrator decides at all.
+     * The rules that must hold however the decision is reached: only an Administrator decides, and
+     * nobody approves their own request.
      *
      * SaleDiscountRequestPolicy says the same thing, and the controller enforces it on every HTTP
      * route. It is restated here because it is a financial-integrity invariant rather than a screen
      * concern: a queued job, a console command or a new controller that forgets the Gate would
      * otherwise let an Administrator quietly grant themselves a discount. Checked under the row lock
      * taken by the callers below, so a concurrent decision cannot slip past it.
+     *
+     * Declining moves no money, so an Administrator may close their own request, as the policy
+     * allows. Approving needs a second person, with one audited exception: an Administrator who is
+     * the Business's only Administrator, verified under the staffing lock so no second one can be
+     * added between the check and the approval.
+     *
+     * @return bool whether this is that sole-Administrator self-approval
      */
-    private function assertMayDecide(User $actor, SaleDiscountRequest $locked): void
+    private function assertMayDecide(User $actor, SaleDiscountRequest $locked, bool $approving): bool
     {
         if ($actor->role !== UserRole::Admin) {
             throw ValidationException::withMessages([
@@ -229,32 +244,33 @@ class DecideSaleDiscount
             ]);
         }
 
-        if ($locked->requested_by === $actor->id) {
-            throw ValidationException::withMessages([
-                'request' => 'You cannot decide your own discount request.',
-            ]);
+        if (! $approving || (int) $locked->requested_by !== (int) $actor->id) {
+            return false;
         }
-    }
 
-    private function lockPendingDraft(User $actor, SaleDiscountRequest $request): array
-    {
-        $locked = SaleDiscountRequest::query()->lockForUpdate()->findOrFail($request->id);
-
-        if ($locked->status !== DiscountRequestStatus::Pending) {
+        if (! $this->soleAdministrator->isSoleUnderLock($actor)) {
             throw ValidationException::withMessages([
-                'request' => 'This discount request has already been '.$locked->status->label().'.',
+                'request' => 'You cannot approve your own discount request.',
             ]);
         }
 
-        $this->assertMayDecide($actor, $locked);
-
-        return [$locked, SaleDraft::query()->lockForUpdate()->findOrFail($locked->sale_draft_id)];
+        return true;
     }
 
     /**
-     * @return array{0: SaleDiscountRequest, 1: Sale}
+     * A pending request past its lifetime is closed even before the scheduler records it, so it
+     * can no longer be decided either way.
      */
-    private function lockPending(User $actor, SaleDiscountRequest $request): array
+    private function assertNotExpired(SaleDiscountRequest $locked): void
+    {
+        if ($locked->isPendingExpired()) {
+            throw ValidationException::withMessages([
+                'request' => 'This discount request expired '.$locked->pendingExpiresAt()->timezone(config('business.timezone'))->format('j M Y, g:i A').' and can no longer be decided. Raise a new request if it is still needed.',
+            ]);
+        }
+    }
+
+    private function lockPendingDraft(User $actor, SaleDiscountRequest $request, bool $approving): array
     {
         $locked = SaleDiscountRequest::query()->lockForUpdate()->findOrFail($request->id);
 
@@ -264,8 +280,28 @@ class DecideSaleDiscount
             ]);
         }
 
-        $this->assertMayDecide($actor, $locked);
+        $this->assertNotExpired($locked);
+        $selfApproved = $this->assertMayDecide($actor, $locked, $approving);
 
-        return [$locked, Sale::query()->lockForUpdate()->findOrFail($locked->sale_id)];
+        return [$locked, SaleDraft::query()->lockForUpdate()->findOrFail($locked->sale_draft_id), $selfApproved];
+    }
+
+    /**
+     * @return array{0: SaleDiscountRequest, 1: Sale, 2: bool}
+     */
+    private function lockPending(User $actor, SaleDiscountRequest $request, bool $approving): array
+    {
+        $locked = SaleDiscountRequest::query()->lockForUpdate()->findOrFail($request->id);
+
+        if ($locked->status !== DiscountRequestStatus::Pending) {
+            throw ValidationException::withMessages([
+                'request' => 'This discount request has already been '.$locked->status->label().'.',
+            ]);
+        }
+
+        $this->assertNotExpired($locked);
+        $selfApproved = $this->assertMayDecide($actor, $locked, $approving);
+
+        return [$locked, Sale::query()->lockForUpdate()->findOrFail($locked->sale_id), $selfApproved];
     }
 }
